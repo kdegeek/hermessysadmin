@@ -618,10 +618,10 @@ Expected: all pass (`tests/test_plugin_api.py`: 13 passed).
 hermes plugins enable hermes-sysadmin
 hermes gateway restart          # backend routes mount at startup
 PORT=$(hermes dashboard --print-port 2>/dev/null || echo 9119)
-curl -s "http://127.0.0.1:$PORT/api/plugins/hermes-sysadmin/health" | python3 -m json.tool
-curl -s "http://127.0.0.1:$PORT/api/plugins/hermes-sysadmin/overview" | python3 -m json.tool | head -40
+curl -s "http://127.0.0.1:$PORT/api/plugins/hermes-sysadmin/health" | jq .
+curl -s "http://127.0.0.1:$PORT/api/plugins/hermes-sysadmin/overview" | jq . | head -40
 curl -s -X POST "http://127.0.0.1:$PORT/api/plugins/hermes-sysadmin/ops/ad_user_unlock" \
-  -H 'content-type: application/json' -d '{"args":{"identity":"zz-hermes-test-1"}}' | python3 -m json.tool
+  -H 'content-type: application/json' -d '{"args":{"identity":"zz-hermes-test-1"}}' | jq .
 ```
 Expected:
 - `/health` shows `"configured": true` and a DC `status`.
