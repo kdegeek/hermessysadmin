@@ -25,7 +25,7 @@ No existing catalog plugin covers AD/WinRM administration (closest: `dashboard-a
 | Backup | Windows Server Backup (`wbadmin` / `WindowsServerBackup` module) |
 | RDP scope | Session management, RDP/NLA/Remote Desktop Users access control, `.rdp` Connect from dashboard. RDS infrastructure out of scope |
 | GPO scope (V1) | Visibility + lifecycle (create/delete, link/unlink, enforce, enable/disable, security filtering, remote gpupdate, backup/restore). Settings editing and GPO diff out of scope |
-| Connectivity | Jump-host model: one WinRM endpoint (DC or RSAT management server); per-host work fans out via `Invoke-Command` |
+| Connectivity | Jump-host model: one WinRM endpoint, which **must be a domain controller** (GroupPolicy cmdlets take no `-Credential`, so AD/GPO work stays local on the DC, avoiding the NTLM double hop). Per-host work fans out via `Invoke-Command` with an explicit PSCredential |
 | Auth | NTLM default; HTTPS 5986 default, HTTP 5985 with message encryption as fallback; Kerberos selectable. Transport is pluggable for a future direct-to-host mode |
 | UI | Hermes Desktop only (V1). Backend at `/api/plugins/hermes-sysadmin/` is reusable for a future web-dashboard tab |
 | Safety | Tiered policy (strict) by default; permissive and read-only modes in settings |
@@ -63,7 +63,7 @@ hermes-sysadmin/
 
 ### 3.2 Data flow
 
-Agent tool **or** dashboard action → `ops/*` → `policy.check()` → `runner.run_script()` → pypsrp → jump host → PowerShell (AD/GPO cmdlets locally; per-host work via `Invoke-Command -ThrottleLimit`) → JSON → normalised result → audit entry (writes) → `broadcast_plugin_event("hermes-sysadmin", "changed", {...})`.
+Agent tool **or** dashboard action → `Service.call()` → `policy.decide()` → cache → `runner.run()` → pypsrp → jump host → PowerShell (AD/GPO cmdlets locally; per-host work via `Invoke-Command -ThrottleLimit`) → JSON → normalised result → audit entry (writes) → `broadcast_plugin_event("hermes-sysadmin", "changed", {...})`.
 
 **Key boundary:** `ops/` is the single source of truth and has no Hermes dependency. Tools and API routes are thin wrappers, so the agent and dashboard cannot drift, and `ops/` is testable with a fake runner.
 
@@ -71,7 +71,8 @@ Agent tool **or** dashboard action → `ops/*` → `policy.check()` → `runner.
 
 - Each operation is a `.ps1` file with a `param()` block. Inputs are passed as serialized parameters via pypsrp `add_parameter` — **never string-interpolated**.
 - Scripts set `$ErrorActionPreference = 'Stop'`, wrap their body in try/catch, and emit exactly one JSON object: `{"ok": true, "data": ...}` or `{"ok": false, "error": {"type", "message", "category", "target"}}` via `ConvertTo-Json -Depth 6 -Compress`.
-- Write scripts accept `-WhatIf` and return a preview description when invoked with it.
+- Write scripts that support previews accept `-Preview` (not `-WhatIf`, which many AD/GP cmdlets interpret themselves) and return `{summary, changes, current}` without making a change.
+- A session prelude runs once per runspace pool: it defines the shared helpers, sets `$PSDefaultParameterValues` for `Invoke-Command:Credential` / `*-AD*:Credential`, and pins `*-GP*:Server` to the local DC.
 
 ### 3.4 Configuration (`config_schema`, auto-rendered in Settings → Plugins)
 
@@ -88,12 +89,17 @@ Every tool and API action declares a tier in one table in `policy.py`.
 |---|---|---|---|---|
 | R — read | list, get, report, status | run | run | run |
 | W — write | reset password, unlock, disable, link GPO, logoff session, start backup | approval | run | block |
-| H — high-risk | delete object, privileged-group change, GPO delete/restore, RDP disable on a DC, backup policy change, `ad_powershell` | approval + WhatIf preview | approval + WhatIf preview | block |
+| H — high-risk | delete object, privileged-group change, GPO delete/restore, RDP disable on a DC, backup policy change, `ad_powershell` | approval + preview | approval + preview | block |
 | Protected | any write targeting krbtgt, built-in Administrator, DC computer objects, configured denylist | block | block | block |
 
-- **Escalation:** `ad_group_add_member` / `ad_group_remove_member` escalate W→H when the group is privileged (Domain Admins, Enterprise Admins, Schema Admins, Administrators, Account/Server/Backup/Print Operators, Group Policy Creator Owners, DnsAdmins + configured). `rdp_set_enabled` escalates to H when the target is a DC.
-- **Agent path:** `pre_tool_call` hook returns `{"action": "approve", "message": ..., "rule_key": "hermes-sysadmin:<tool>"}` or `{"action": "block", ...}`. For H-tier, the hook runs the WhatIf preview and includes it in the approval message. Hook exceptions fail closed (Hermes default).
-- **Dashboard path:** same `policy.check()`. UI shows `ConfirmDialog`; H-tier shows WhatIf text and requires typing the object name. API write routes require `confirm: true` (and for H-tier, `confirm_name` matching the target), so a bare request cannot bypass the dialog.
+- **Escalation:**
+  - `ad_group_add_member` and `ad_group_remove_member` escalate W→H when the group is privileged. Privileged groups are Domain Admins, Enterprise Admins, Schema Admins, Administrators, Account/Server/Backup/Print Operators, Group Policy Creator Owners and DnsAdmins, plus any configured ones.
+  - `rdp_set_enabled`, `rdp_set_nla`, `rdp_users_add` and `rdp_users_remove` escalate when a target is a DC. An unknown DC list counts as a DC.
+  - `rdp_set_nla` also escalates when it disables NLA.
+  - `gpo_link`, `gpo_unlink` and `gpo_set_link` escalate at the domain root, the Domain Controllers OU or a site.
+  - `gpo_set_status` and `gpo_set_security_filter` escalate for the Default Domain and Default Domain Controllers policies.
+- **Agent path:** `pre_tool_call` hook returns `{"action": "approve", "message": ..., "rule_key": ...}`. For W-tier, `rule_key` is `hermes-sysadmin:<tool>`, so "always allow" can cover a W tool. For H-tier, it is `hermes-sysadmin:<tool>:once:<uuid>`, so an "always" never matches a later high-risk call. Blocks are left to the handler (`Service.call`), which audits them once. For H-tier, the hook runs the `-Preview` and includes it in the approval message. Hook exceptions fail closed (Hermes default).
+- **Dashboard path:** same `policy.decide()`. UI shows `ConfirmDialog`; H-tier shows the preview and requires typing the object name. API write routes require `confirm: true` (and for H-tier, `confirm_name` matching the target), so a bare request cannot bypass the dialog.
 - **Headless runs** (cron / single-query / unattended): Hermes denies approvals by default; tools return a clear "requires interactive approval" error.
 - Permissive mode only skips the plugin's own W-tier approval request; it never auto-approves, never disables Hermes guards (catalog rule 12).
 - **Audit:** every W/H attempt (allowed, denied, blocked, failed) is logged: timestamp, actor (`agent:<session_id>` or `dashboard`), tool, target, redacted params, tier, decision, result summary.
@@ -107,6 +113,7 @@ All return JSON strings; never raise. Toolsets let users disable surfaces.
 - R `ad_domain_overview` — domain/forest functional levels, FSMO holders, DC list, object counts.
 - R `ad_dc_health` — per DC: replication summary, uptime, NTDS/DNS/Netlogon/KDC service state, SYSVOL share, time skew.
 - R `ad_search` — LDAP filter or name search across users/groups/computers/OUs, paged.
+- R `ad_dc_list` (cached; feeds DC escalation), `ad_connection_test` (modules present, rights probe, privileged memberships of the service account, warnings).
 
 ### `ad_users`
 - R `ad_user_get` (groups, lockout, password expiry, last logon), `ad_user_list` (filters: OU, disabled, locked, stale N days, password expired, never-expires, privileged), `ad_lockout_source` (event 4740 on PDC emulator → caller computer).
@@ -117,7 +124,7 @@ All return JSON strings; never raise. Toolsets let users disable surfaces.
 - R `ad_recycle_bin_list`; W `ad_recycle_bin_restore` (requires Recycle Bin enabled; reports clearly if not).
 
 ### `ad_gpo`
-- R `gpo_list` (links, enforced, status), `gpo_get`, `gpo_report` (XML report parsed into key settings summary), `gpo_health` (unlinked, empty, all-settings-disabled, AD/SYSVOL version mismatch), `gpo_rsop` (user/computer).
+- R `gpo_list` (links, enforced, status), `gpo_get`, `gpo_report` (XML report parsed into key settings summary), `gpo_health` (unlinked, empty, all-settings-disabled, AD/SYSVOL version mismatch), `gpo_rsop` (user/computer), `gpo_backups` (backups taken by the plugin, stored on the DC under `%ProgramData%\HermesSysadmin\GpoBackups`).
 - W `gpo_create`, `gpo_link`, `gpo_unlink`, `gpo_set_link` (enforce/enable), `gpo_set_status`, `gpo_set_security_filter`, `gpo_backup`, `gpo_update_hosts` (remote gpupdate by host list or OU).
 - H `gpo_delete`, `gpo_restore` — both take an automatic backup first.
 
@@ -133,7 +140,7 @@ All return JSON strings; never raise. Toolsets let users disable surfaces.
 - Restores are out of V1; covered by guidance skill.
 
 ### Escape hatch and meta
-- H `ad_powershell` — registered only when `enable_powershell_escape` is true; approval every call; full script shown in the approval message.
+- H `ad_powershell` — hidden from the agent (`check_fn`) and blocked by policy unless `enable_powershell_escape` is true; approval every call; full script shown in the approval message.
 - R `sysadmin_audit_log` — query recent changes.
 
 ## 6. Skills
@@ -154,6 +161,8 @@ Deterministic, no LLM round-trip: `/ad status`, `/ad user <name>`, `/ad unlock <
 
 ## 8. Desktop dashboard
 
+**Approved UI reference:** [`docs/superpowers/mockups/dashboard.html`](../mockups/dashboard.html) (interactive; open in a browser). The implementation must match its layout, tab set, drawer, dialogs (W confirm, H preview + type-to-confirm, reset-password one-time reveal), first-run card, and status-bar item. Mock tokens approximate `--ui-*`; the plugin uses the host's real variables.
+
 Registered via `desktop/plugin.js`: one `SIDEBAR_NAV_AREA` entry "Active Directory" + `ROUTES_AREA` page; a status-bar health dot (green/amber/red from `ad_dc_health`); palette entries ("AD: Find user…", "AD: Unlock user…", "AD: Sessions").
 
 Tabs:
@@ -166,15 +175,27 @@ Tabs:
 6. **Audit** — full write log with actor, session, tool, redacted params, decision, result, time.
 
 Behaviour:
-- Data via React Query over `ctx.rest`; backend snapshot cache with 30–60 s TTL; manual refresh always available.
+- Data via the SDK's query helpers over `ctx.rest`; backend snapshot cache with 30–60 s TTL; manual refresh always available.
 - Live updates: backend broadcasts `plugin.hermes-sysadmin.changed` after writes; dashboard invalidates affected queries. Polling fallback when sockets are unavailable.
-- Writes use `ConfirmDialog`; H-tier shows WhatIf preview and type-to-confirm.
+- Writes use `ConfirmDialog`; H-tier shows the `-Preview` result and type-to-confirm.
 - Styling only via `var(--ui-*)` theme variables.
 - First-run: setup card linking to Settings plus Test connection.
 
 ### Backend API (`dashboard/plugin_api.py`)
 
-Async FastAPI routes mounted at `/api/plugins/hermes-sysadmin/`, each calling `ops/` via `asyncio.to_thread`: `GET /health`, `POST /test-connection`, `GET /overview`, `GET /users`, `GET /users/{sam}`, `POST /users/{sam}/{action}`, `GET /gpos`, `GET /gpos/{id}`, `POST /gpos/{id}/{action}`, `GET /rdp/sessions`, `GET /rdp/hosts`, `POST /rdp/...`, `GET /rdp/connect/{host}`, `GET /backups`, `POST /backups/{host}/{action}`, `GET /audit`. Write routes enforce the confirm contract in §4.
+Async FastAPI routes mounted at `/api/plugins/hermes-sysadmin/`, each running `sysadmin/api.py` via `asyncio.to_thread`. One generic op route replaces per-resource routes, so the API can never drift from the op registry:
+
+- `GET /health`
+- `POST /test-connection`
+- `GET /ops` (catalog)
+- `POST /ops/{name}/decision` (`action`, `tier`, `reason`, `needs_preview`, `target`, `confirm_name`)
+- `POST /ops/{name}/preview`
+- `POST /ops/{name}`, with body `{args, confirm, confirm_name}`
+- `GET /overview` (KPIs, DC health, last 10 audit rows, per-section errors)
+- `GET /audit`
+- `POST /refresh`
+
+Write routes enforce the confirm contract in §4. Every response is HTTP 200 with `{ok, data}` or `{ok: false, error}`.
 
 ## 9. Error handling
 
@@ -210,13 +231,13 @@ Async FastAPI routes mounted at `/api/plugins/hermes-sysadmin/`, each calling `o
 
 1. Desktop → AD dashboard: DCs green, 3 locked users.
 2. Chat: "Bob says he's locked out again — figure out why." → lockout triage finds a stale RDP session on SRV-APP02 → approval → logoff + unlock → Bob's row turns green live.
-3. "Add Bob to Domain Admins." → H-tier approval with WhatIf preview → deny.
+3. "Add Bob to Domain Admins." → H-tier approval with preview → deny.
 4. "Roll out the screensaver-lock GPO to the Finance OU." → backup, link, gpupdate, RSoP verify, visible in GPO tab.
 5. Backups tab: SRV-FS01 system-state 9 days old (red) → Back up now → job progress → Audit tab.
 
 ## 13. Prerequisites from the user
 
-- WinRM-enabled jump host (DC or RSAT management server) reachable from the Hermes host.
+- WinRM-enabled **domain controller** as the jump host, reachable from the Hermes host; WinRM enabled on member servers used for RDP/backup/gpupdate fan-out.
 - Service account, ideally delegated admin rather than Domain Admin.
 - Dedicated test OU for live tests.
 - Hermes Agent + Hermes Desktop installed locally for validation.
@@ -227,4 +248,4 @@ GPO settings editing and diff; RDS infrastructure (Gateway, collections, licensi
 
 ## 15. Catalog disclosures (rule 13)
 
-Network: WinRM to the configured jump host only. Shell: no local shell; PowerShell executes remotely. Reads outside plugin data: none. Credentials: stored via Hermes secrets only. Background processes: none (dashboard polling is client-driven; backups are server-side jobs).
+Network: WinRM to the configured jump host only. Shell: no local shell; PowerShell executes remotely. Reads outside plugin data: none. Writes outside plugin data: GPO backups on the DC under `%ProgramData%\HermesSysadmin\GpoBackups`; a `.rdp` file in a user-chosen folder from the Connect button. Credentials: stored via Hermes secrets only. Background processes: none (dashboard polling is client-driven; backups are server-side jobs).
