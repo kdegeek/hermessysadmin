@@ -778,6 +778,11 @@ async function runWrite(o, options) {
     return { state: 'handed-off' };
   }
   const dec = d.data;
+  if (dec.action !== 'allow' && dec.action !== 'approve') {
+    // Fail closed: anything the page does not recognise is treated as a block.
+    openDialog(BlockedDialog, { o, dec, opts });
+    return { state: 'handed-off' };
+  }
   if (dec.action === 'block') {
     openDialog(BlockedDialog, { o, dec, opts });
     return { state: 'handed-off' };
