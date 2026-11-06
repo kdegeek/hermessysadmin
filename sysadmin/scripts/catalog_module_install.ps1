@@ -39,8 +39,10 @@ Invoke-Op {
 
     if ($Preview) {
         $rootNote = @()
-        if (-not (Test-Path -LiteralPath $root)) { $rootNote = @("Create $root with an administrators-only ACL") }
-        else { try { Assert-HermesModuleRoot } catch { $rootNote = @("Existing module root fails the safety check: $($_.Exception.Message)") } }
+        $st = Get-HermesModuleRootState
+        if ($st.state -eq 'missing') { $rootNote = @("Create $root with an administrators-only ACL") }
+        elseif ($st.state -eq 'broad') { $rootNote = @("Existing module root will be re-secured (administrators-only ACL): $($st.reason)") }
+        elseif ($st.state -eq 'foreign') { $rootNote = @("Existing module root fails the safety check and the install will refuse to run: $($st.reason)") }
         $lines = @(foreach ($n in $order) {
             $m = $byName[$n]
             $dest = Join-Path $root (Join-Path $m.name $m.version)

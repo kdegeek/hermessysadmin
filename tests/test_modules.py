@@ -94,7 +94,7 @@ def test_module_root_is_protected_before_any_write():
         # the first write after the preview branch comes after the ACL gate
         assert install.index(write, install.index("LoadWithPartialName")) > create
     assert install.index("Assert-HermesModuleRoot\n", create) > create
-    assert "Assert-HermesModuleRoot" in _script("catalog_module_status") and "root_safe" in _script("catalog_module_status")
+    assert "Get-HermesModuleRootState" in _script("catalog_module_status") and "root_safe" in _script("catalog_module_status")
     use = prelude[prelude.index("function Global:Use-HermesModule"):]
     assert "Assert-HermesModuleRoot" in use and "-Create" not in use
 
@@ -106,3 +106,20 @@ def test_verification_is_by_file_hash_and_safer_staging():
     assert "-cne $m.package_hash" in install and ".part" in install and "$ProgressPreference = 'SilentlyContinue'" in install
     assert install.index("Copy-Item -LiteralPath $staged") < install.index("Get-FileHash -LiteralPath $work") < install.index("ExtractToDirectory($work")
     assert "Use staged package" in install and "dependency cycle" in install and "^\\d+(\\.\\d+){1,3}$" in install
+
+
+def test_parent_reparse_and_ownership_checks():
+    prelude, status, install = _script("_prelude"), _script("catalog_module_status"), _script("catalog_module_install")
+    state = prelude[prelude.index("function Global:Get-HermesModuleRootState"):prelude.index("function Global:Assert-HermesModuleRoot")]
+    assert "foreach ($p in @($base, $root))" in state and "ReparsePoint" in state and "Test-HermesTrustedOwner" in state
+    assert "'foreign'" in state and "'broad'" in state and "'missing'" in state
+    owner = prelude[prelude.index("function Global:Test-HermesTrustedOwner"):prelude.index("function Global:Get-HermesModuleRootState")]
+    assert "GetOwner([System.Security.Principal.SecurityIdentifier])" in owner and "S-1-5-32-544" in owner and "S-1-5-18" in owner
+    assert_ = prelude[prelude.index("function Global:Assert-HermesModuleRoot"):prelude.index("function Global:Get-HermesModuleRecord")]
+    assert "foreach ($dir in @($base, $root))" in assert_ and "ReparsePoint" in assert_ and "Test-HermesTrustedOwner $dir" in assert_
+    verified = prelude[prelude.index("function Global:Test-HermesModuleVerified"):prelude.index("function Global:Use-HermesModule")]
+    assert "foreach ($owned in @($recordFile, $dir))" in verified and "Test-HermesTrustedOwner $owned" in verified
+    assert "root_reason" in status and "$rootSafe = $null" in status and "-eq $true" in status
+    assert "will be re-secured" in install and "fails the safety check" in install
+    assert "will be re-secured" in install[install.index("'broad'"):install.index("'foreign'")]
+    assert "fails the safety check" in install[install.index("'foreign'"):]

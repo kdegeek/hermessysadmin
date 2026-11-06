@@ -271,56 +271,72 @@ function Global:Invoke-HermesCatalogFanout {
     return @{ items = $items; errors = $failed; summary = @{ hosts = $Computers.Count; ok = $okHosts; failed = $failed.Count } }
 }
 
+function Global:Test-HermesTrustedOwner {
+    # True when the owner of $Path is Administrators or SYSTEM, compared by SID.
+    param([Parameter(Mandatory)][string]$Path)
+    $o = (Get-Acl -LiteralPath $Path).GetOwner([System.Security.Principal.SecurityIdentifier])
+    return ($null -ne $o -and @('S-1-5-32-544', 'S-1-5-18') -contains $o.Value)
+}
+
+function Global:Get-HermesModuleRootState {
+    # Inspect HermesSysadmin and HermesSysadmin\Modules. state: ok | missing | broad (admin-owned, but an ACE
+    # grants write to someone else; fixable) | foreign (foreign owner or a reparse point; never trusted).
+    $base = Join-Path $env:ProgramData 'HermesSysadmin'
+    $root = Join-Path $base 'Modules'
+    $trusted = @('S-1-5-32-544', 'S-1-5-18')
+    $writeMask = 0x500D0156  # write, append, create, delete, change-permissions, take-ownership, generic write/all
+    $missing = $null
+    $broad = $null
+    foreach ($p in @($base, $root)) {
+        if (-not (Test-Path -LiteralPath $p)) { if (-not $missing) { $missing = "$p does not exist." }; continue }
+        if (((Get-Item -LiteralPath $p -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            return @{ state = 'foreign'; reason = "$p is a reparse point (junction or symlink)." }
+        }
+        if (-not (Test-HermesTrustedOwner $p)) {
+            return @{ state = 'foreign'; reason = "$p is not owned by Administrators or SYSTEM." }
+        }
+        foreach ($ace in @((Get-Acl -LiteralPath $p).GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))) {
+            if ("$($ace.AccessControlType)" -ne 'Allow' -or $trusted -contains $ace.IdentityReference.Value) { continue }
+            if (([int]$ace.FileSystemRights -band $writeMask) -ne 0 -and -not $broad) { $broad = "$p grants write access to $($ace.IdentityReference.Value)." }
+        }
+    }
+    if ($missing) { return @{ state = 'missing'; reason = $missing } }
+    if ($broad) { return @{ state = 'broad'; reason = $broad } }
+    return @{ state = 'ok'; reason = '' }
+}
+
 function Global:Assert-HermesModuleRoot {
     # The pinned-module folder is code that runs as the admin account, so only SYSTEM and Administrators
-    # may own or write to it. -Create makes it (and its parent) with a protected, administrators-only ACL;
-    # an existing root is re-ACLed only when an administrator already owns it. Without -Create this only checks.
+    # may own or write to it OR to its parent (whoever can delete-child in the parent can swap Modules for a
+    # junction). -Create makes both folders with a protected administrators-only ACL; an existing folder is
+    # re-ACLed only when an administrator already owns it and it is not a reparse point. Without -Create this
+    # only checks.
     param([switch]$Create)
     $base = Join-Path $env:ProgramData 'HermesSysadmin'
     $root = Join-Path $base 'Modules'
-    $sidType = [System.Security.Principal.SecurityIdentifier]
-    $admins = New-Object $sidType 'S-1-5-32-544'
-    $system = New-Object $sidType 'S-1-5-18'
-    $trusted = @($admins.Value, $system.Value)
-    $lockDown = {
-        param([string]$Path)
-        $acl = Get-Acl -LiteralPath $Path
-        $acl.SetAccessRuleProtection($true, $false)
-        foreach ($r in @($acl.Access)) { [void]$acl.RemoveAccessRule($r) }
-        foreach ($sid in @($admins, $system)) {
-            $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
-            $acl.AddAccessRule($rule)
-        }
-        $acl.SetOwner($admins)
-        Set-Acl -LiteralPath $Path -AclObject $acl
-    }
-    $ownerOk = {
-        param([string]$Path)
-        $o = (Get-Acl -LiteralPath $Path).GetOwner($sidType)
-        return ($null -ne $o -and $trusted -contains $o.Value)
-    }
+    $admins = New-Object System.Security.Principal.SecurityIdentifier 'S-1-5-32-544'
+    $system = New-Object System.Security.Principal.SecurityIdentifier 'S-1-5-18'
     if ($Create) {
         foreach ($dir in @($base, $root)) {
-            if (-not (Test-Path -LiteralPath $dir)) {
+            if (Test-Path -LiteralPath $dir) {
+                if (((Get-Item -LiteralPath $dir -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw "UnsafeModuleRoot: $dir is a reparse point (junction or symlink)." }
+                if (-not (Test-HermesTrustedOwner $dir)) { throw "UnsafeModuleRoot: $dir exists but is not owned by Administrators or SYSTEM; remove it or take ownership as an administrator." }
+            } else {
                 New-Item -ItemType Directory -Path $dir -Force | Out-Null
-                & $lockDown $dir
-            } elseif ($dir -eq $root) {
-                if (-not (& $ownerOk $dir)) { throw "UnsafeModuleRoot: $dir exists but is not owned by Administrators or SYSTEM; remove it or take ownership as an administrator." }
-                & $lockDown $dir
             }
+            $acl = Get-Acl -LiteralPath $dir
+            $acl.SetAccessRuleProtection($true, $false)
+            foreach ($r in @($acl.Access)) { [void]$acl.RemoveAccessRule($r) }
+            foreach ($sid in @($admins, $system)) {
+                $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+                $acl.AddAccessRule($rule)
+            }
+            $acl.SetOwner($admins)
+            Set-Acl -LiteralPath $dir -AclObject $acl
         }
     }
-    if (-not (Test-Path -LiteralPath $root)) { throw "UnsafeModuleRoot: $root does not exist." }
-    if (-not (& $ownerOk $root)) { throw "UnsafeModuleRoot: $root is not owned by Administrators or SYSTEM." }
-    # write, append, create, delete, change-permissions, take-ownership, generic write/all
-    $writeMask = 0x500D0156
-    foreach ($ace in @((Get-Acl -LiteralPath $root).GetAccessRules($true, $true, $sidType))) {
-        if ("$($ace.AccessControlType)" -ne 'Allow') { continue }
-        if ($trusted -contains $ace.IdentityReference.Value) { continue }
-        if (([int]$ace.FileSystemRights -band $writeMask) -ne 0) {
-            throw "UnsafeModuleRoot: $root grants write access to $($ace.IdentityReference.Value)."
-        }
-    }
+    $st = Get-HermesModuleRootState
+    if ($st.state -ne 'ok') { throw "UnsafeModuleRoot: $($st.reason)" }
 }
 
 function Global:Get-HermesModuleRecord {
@@ -351,12 +367,15 @@ function Global:Get-HermesFileHashMap {
 }
 
 function Global:Test-HermesModuleVerified {
-    # True only when the root is safe, installed.json records this exact version and package hash, and the
+    # True only when the root is safe, installed.json and the module folder are admin-owned, installed.json records this exact version and package hash, and the
     # files on disk are exactly the files (and SHA256 hashes) recorded at install time.
     param([Parameter(Mandatory)][string]$Name, [Parameter(Mandatory)][string]$Version, [Parameter(Mandatory)][string]$PackageHash)
     try { Assert-HermesModuleRoot } catch { return $false }
     $dir = Join-Path (Join-Path $env:ProgramData 'HermesSysadmin\Modules') (Join-Path $Name $Version)
     if (-not (Test-Path -LiteralPath $dir)) { return $false }
+    $recordFile = Join-Path (Join-Path $env:ProgramData 'HermesSysadmin\Modules') 'installed.json'
+    if (-not (Test-Path -LiteralPath $recordFile)) { return $false }
+    foreach ($owned in @($recordFile, $dir)) { if (-not (Test-HermesTrustedOwner $owned)) { return $false } }
     $rec = (Get-HermesModuleRecord)[$Name]
     if ($null -eq $rec -or $rec.version -ne $Version -or $rec.package_hash -cne $PackageHash -or $rec.files.Count -eq 0) { return $false }
     $actual = Get-HermesFileHashMap -Dir $dir
