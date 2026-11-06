@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Request
 
 _ROOT = Path(__file__).resolve().parent.parent
 _CORE = "hermes_sysadmin_core"
@@ -28,7 +28,13 @@ def _load_core() -> None:
     spec = importlib.util.spec_from_file_location(_CORE, pkg_dir / "__init__.py", submodule_search_locations=[str(pkg_dir)])
     module = importlib.util.module_from_spec(spec)
     sys.modules[_CORE] = module
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        # Never leave a half-initialised package registered for the next load.
+        for key in [k for k in sys.modules if k == _CORE or k.startswith(_CORE + ".")]:
+            sys.modules.pop(key, None)
+        raise
 
 
 _load_core()
@@ -41,13 +47,28 @@ router = APIRouter()
 
 async def _with_service(fn_name: str, *args: Any, **kwargs: Any) -> dict[str, Any]:
     def work() -> dict[str, Any]:
-        try:
-            service = _runtime.get_service()
-        except Exception as exc:  # never surface a 500 to the Desktop page
+        try:  # never surface a 500 to the Desktop page
+            return getattr(_api, fn_name)(_runtime.get_service(), *args, **kwargs)
+        except Exception as exc:
             return _errors.error_result(exc)
-        return getattr(_api, fn_name)(service, *args, **kwargs)
 
     return await asyncio.to_thread(work)
+
+
+async def _body(request: Request) -> dict[str, Any]:
+    """The JSON object body, or {} for an empty, malformed or non-object body."""
+    try:
+        data = await request.json()
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _limit(value: Optional[str]) -> int:
+    try:
+        return min(max(int(value), 1), 1000)
+    except (TypeError, ValueError):
+        return 100
 
 
 @router.get("/health")
@@ -62,22 +83,28 @@ async def test_connection() -> dict[str, Any]:
 
 @router.get("/ops")
 async def list_ops() -> dict[str, Any]:
-    return await asyncio.to_thread(_api.list_ops)
+    def work() -> dict[str, Any]:
+        try:
+            return _api.list_ops()
+        except Exception as exc:
+            return _errors.error_result(exc)
+
+    return await asyncio.to_thread(work)
 
 
 @router.post("/ops/{name}/decision")
-async def op_decision(name: str, body: Optional[dict] = Body(default=None)) -> dict[str, Any]:
-    return await _with_service("decision", name, body or {})
+async def op_decision(name: str, request: Request) -> dict[str, Any]:
+    return await _with_service("decision", name, await _body(request))
 
 
 @router.post("/ops/{name}/preview")
-async def op_preview(name: str, body: Optional[dict] = Body(default=None)) -> dict[str, Any]:
-    return await _with_service("preview", name, body or {})
+async def op_preview(name: str, request: Request) -> dict[str, Any]:
+    return await _with_service("preview", name, await _body(request))
 
 
 @router.post("/ops/{name}")
-async def op_run(name: str, body: Optional[dict] = Body(default=None)) -> dict[str, Any]:
-    return await _with_service("run_op", name, body or {})
+async def op_run(name: str, request: Request) -> dict[str, Any]:
+    return await _with_service("run_op", name, await _body(request))
 
 
 @router.get("/overview")
@@ -87,11 +114,11 @@ async def overview() -> dict[str, Any]:
 
 @router.get("/audit")
 async def audit(
-    limit: int = Query(100, ge=1, le=1000),
+    limit: Optional[str] = None,
     actor: Optional[str] = None,
     decision: Optional[str] = None,
 ) -> dict[str, Any]:
-    return await _with_service("audit", limit=limit, actor=actor, decision=decision)
+    return await _with_service("audit", limit=_limit(limit), actor=actor, decision=decision)
 
 
 @router.post("/refresh")

@@ -82,3 +82,31 @@ def test_post_without_body_is_ok(client):
     http, seen = client
     assert http.post("/api/plugins/hermes-sysadmin/ops/ad_search").json()["ok"] is True
     assert seen[-1][1] == ("ad_search", {})
+
+
+P = "/api/plugins/hermes-sysadmin"
+
+
+@pytest.mark.parametrize("content", [b"{not json", b"[1, 2]", b'"x"', b""])
+def test_bad_bodies_are_treated_as_empty(client, content):
+    c, seen = client
+    r = c.post(f"{P}/ops/ad_user_unlock", content=content, headers={"content-type": "application/json"})
+    assert r.status_code == 200 and seen[-1] == ("run_op", ("ad_user_unlock", {}), {})
+
+
+@pytest.mark.parametrize("raw, expected", [("abc", 100), ("0", 1), ("5000", 1000), ("25", 25)])
+def test_audit_limit_is_clamped_not_rejected(client, raw, expected):
+    c, seen = client
+    assert c.get(f"{P}/audit", params={"limit": raw}).status_code == 200
+    assert seen[-1][2]["limit"] == expected
+
+
+def test_unexpected_api_exception_is_an_ok_false_200(client, monkeypatch):
+    c, _ = client
+
+    def boom(*a, **k):
+        raise RuntimeError("kaput")
+
+    monkeypatch.setattr(sys.modules["hermes_sysadmin_core.api"], "overview", boom)
+    r = c.get(f"{P}/overview")
+    assert r.status_code == 200 and r.json()["ok"] is False
