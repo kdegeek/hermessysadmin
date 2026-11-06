@@ -1,0 +1,92 @@
+name: hermes-sysadmin
+label: "Sysadmin · Active Directory"
+version: 0.1.0
+manifest_version: 2
+description: >-
+  Manage an on-prem Active Directory domain over WinRM: users, groups and lockouts, Group Policy,
+  RDP sessions and access, and Windows Server Backup. Typed tools with tiered approvals, protected
+  objects, a local audit log, workflow skills, /ad commands and a Hermes Desktop dashboard.
+author: Nate Crawford
+kind: general
+license: MIT
+tags: [active-directory, windows, winrm, group-policy, rdp, backup, sysadmin]
+requires_hermes: ">=0.22.2"
+python_dependencies:
+  - "pypsrp>=0.8.1,<0.9"
+provides_tools:
+  - ad_connection_test
+  - ad_dc_health
+  - ad_dc_list
+  - ad_domain_overview
+  - ad_search
+provides_hooks:
+  - pre_tool_call
+  - post_tool_call
+provides_middleware: []
+config_schema:
+  host:
+    type: str
+    label: Jump host (domain controller)
+    description: FQDN of the domain controller Hermes connects to over WinRM, e.g. dc01.corp.example.local.
+    required: true
+  port:
+    type: int
+    default: 5986
+    label: WinRM port
+    description: 5986 for HTTPS, 5985 for HTTP (traffic is still encrypted with NTLM/Kerberos).
+  use_https:
+    type: bool
+    default: true
+    label: Use HTTPS
+  auth:
+    type: str
+    choices: [ntlm, kerberos]
+    default: ntlm
+    label: Authentication
+  username:
+    type: str
+    label: Username
+    description: DOMAIN\user or user@domain. Prefer a delegated admin account over a Domain Admin.
+    required: true
+  password:
+    type: secret
+    env: SYSADMIN_WINRM_PASSWORD
+    label: Password
+    description: Password for the WinRM account. Stored in Hermes secrets, never in config.yaml.
+    required: true
+  verify_tls:
+    type: bool
+    default: true
+    label: Verify TLS certificate
+    description: Turn off only for a lab with a self-signed WinRM certificate.
+  server_search_base:
+    type: str
+    default: ""
+    label: Servers OU
+    description: Distinguished name of the OU searched when an action targets "all servers". Empty means every Windows Server computer object.
+  backup_stale_days:
+    type: int
+    default: 7
+    label: Backup stale after (days)
+    description: A system-state backup older than this is flagged red.
+  mode:
+    type: str
+    choices: [strict, permissive, read-only]
+    default: strict
+    label: Safety mode
+    description: strict asks before every write; permissive asks only for high-risk changes; read-only blocks all writes.
+  protected_objects:
+    type: list
+    default: []
+    label: Protected objects
+    description: Extra accounts or groups that can never be changed (krbtgt and Administrator are always protected).
+  privileged_groups:
+    type: list
+    default: []
+    label: Extra privileged groups
+    description: Groups treated like Domain Admins; membership changes become high-risk.
+  enable_powershell_escape:
+    type: bool
+    default: false
+    label: Enable raw PowerShell tool
+    description: Registers ad_powershell, which runs arbitrary PowerShell on the jump host after approval every time.
