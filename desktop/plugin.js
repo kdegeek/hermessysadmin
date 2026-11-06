@@ -3409,7 +3409,7 @@ export default {
   id: PLUGIN_ID,
   name: 'Active Directory',
   description: 'Hermes Sysadmin: users, Group Policy, Remote Desktop and backups for an Active Directory domain.',
-  defaultEnabled: false,
+  defaultEnabled: true,
   register(ctx) {
     CTX = ctx;
     ctx.registerMany([
