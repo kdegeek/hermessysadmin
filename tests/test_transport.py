@@ -170,3 +170,57 @@ def test_unexpected_exception_is_not_reported_as_connection_failure():
     assert not isinstance(ei.value, ConnectionFailed)
     assert ei.value.type == "Error"
     assert "KeyError" in ei.value.message
+
+
+def _unreachable_transport(clock):
+    opened = []
+
+    def pool_factory(settings):
+        pool = FakePool(lambda ps: [])
+        opened.append(pool)
+
+        def fail():
+            raise requests.exceptions.ConnectTimeout("timed out")
+
+        pool.open = fail
+        return pool
+
+    https = Settings(host="dc01", username="CORP\\svc", password="pw", use_https=True)
+    return PsrpTransport(https, "PRELUDE", pool_factory=pool_factory, ps_factory=FakePS, clock=clock), opened
+
+
+def test_failed_connect_fails_fast_during_cooldown_then_retries():
+    now = [0.0]
+    t, opened = _unreachable_transport(lambda: now[0])
+    with pytest.raises(Timeout) as first:
+        t.invoke("S", {})
+    assert "Use HTTPS" in first.value.hint
+    now[0] = 10.0
+    with pytest.raises(Timeout):
+        t.invoke("S", {})
+    assert len(opened) == 1  # no second 10-second connect attempt
+    now[0] = 31.0
+    with pytest.raises(Timeout):
+        t.invoke("S", {})
+    assert len(opened) == 2
+
+
+def test_successful_connect_clears_cooldown():
+    calls = {"n": 0}
+    now = [0.0]
+
+    def pool_factory(settings):
+        pool = FakePool(lambda ps: ["{}"] if ps.script != "PRELUDE" else [])
+        calls["n"] += 1
+        if calls["n"] == 1:
+            def fail():
+                raise requests.exceptions.ConnectionError("refused")
+            pool.open = fail
+        return pool
+
+    t = PsrpTransport(SETTINGS, "PRELUDE", pool_factory=pool_factory, ps_factory=FakePS, clock=lambda: now[0])
+    with pytest.raises(ConnectionFailed):
+        t.invoke("S", {})
+    now[0] = 31.0
+    assert t.invoke("S", {}) == ["{}"]
+    assert t._connect_failure is None

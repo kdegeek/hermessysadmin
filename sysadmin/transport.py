@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from contextlib import suppress
 from typing import Any, Callable, Mapping, Protocol
 
@@ -11,6 +12,9 @@ from .config import Settings
 from .errors import ConnectionFailed, NotConfigured, RemoteScriptError, SysadminError, Timeout
 
 log = logging.getLogger(__name__)
+#: After a failed connect, calls fail immediately for this long instead of each waiting out
+#: the connection timeout in turn (a dashboard fires several requests at once).
+CONNECT_COOLDOWN = 30.0
 
 
 class Transport(Protocol):
@@ -40,7 +44,7 @@ def _default_pool_factory(settings: Settings) -> Any:
         password=settings.password,
         cert_validation=settings.verify_tls,
         encryption="auto",
-        connection_timeout=15,
+        connection_timeout=10,
         operation_timeout=60,
         read_timeout=90,
     )
@@ -96,6 +100,7 @@ class PsrpTransport:
         *,
         pool_factory: Callable[[Settings], Any] | None = None,
         ps_factory: Callable[[Any], Any] | None = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._settings = settings
         self._prelude = prelude
@@ -103,6 +108,8 @@ class PsrpTransport:
         self._ps_factory = ps_factory or _default_ps_factory
         self._lock = threading.RLock()
         self._pool: Any = None
+        self._clock = clock
+        self._connect_failure: tuple[float, SysadminError] | None = None
 
     def _open(self) -> Any:
         pool = self._pool_factory(self._settings)
@@ -128,17 +135,38 @@ class PsrpTransport:
             with suppress(Exception):
                 pool.close()
 
+    def _connect(self) -> None:
+        failed = self._connect_failure
+        if failed is not None and self._clock() - failed[0] < CONNECT_COOLDOWN:
+            err = failed[1]
+            raise type(err)(err.message, hint=err.hint)
+        try:
+            self._pool = self._open()
+        except RemoteScriptError:
+            raise
+        except Exception as exc:
+            err = _map_exception(exc, self._settings.host)
+            if isinstance(err, (ConnectionFailed, Timeout)):
+                if self._settings.use_https:
+                    err.hint = (
+                        f"{err.hint} If WinRM over HTTPS (port 5986) is not set up on {self._settings.host}, "
+                        "turn off 'Use HTTPS' to use port 5985 (NTLM/Kerberos still encrypt the traffic)."
+                    ).strip()
+                self._connect_failure = (self._clock(), err)
+            raise err from exc
+        self._connect_failure = None
+
     def invoke(self, script: str, params: Mapping[str, Any]) -> list[Any]:
         with self._lock:
             try:
                 if self._pool is None:
-                    self._pool = self._open()
+                    self._connect()
                 ps = self._ps_factory(self._pool)
                 ps.add_script(script)
                 for name, value in params.items():
                     ps.add_parameter(name, value)
                 out = ps.invoke()
-            except RemoteScriptError:
+            except SysadminError:
                 self._drop()
                 raise
             except Exception as exc:
