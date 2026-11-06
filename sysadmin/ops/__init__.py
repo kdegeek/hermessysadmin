@@ -1,3 +1,3 @@
 """Importing this package registers every operation in sysadmin.registry.OPS."""
 
-from . import domain, gpo, rdp, users  # noqa: F401
+from . import backup, domain, gpo, rdp, users  # noqa: F401
