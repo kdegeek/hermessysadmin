@@ -50,9 +50,9 @@ def test_open_audit_without_hermes_uses_memory_db():
 
 def test_oversized_params_stay_valid_json():
     log = make()
-    log.record(actor="agent", session="", tool="ad_powershell", target="", tier="H", decision="approved", result="ok", params={"script": "x" * 10000})
+    log.record(actor="agent", session="", tool="ad_powershell", target="", tier="H", decision="approved", result="ok", params={"script": "x" * 30000})
     params = log.query()[0]["params"]
-    assert set(params) == {"_truncated"} and len(params["_truncated"]) < 4000
+    assert set(params) == {"_truncated"} and len(params["_truncated"]) < 24000
 
 
 def test_redact_recurses_and_normalizes_keys():

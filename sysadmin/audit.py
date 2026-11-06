@@ -51,7 +51,8 @@ def redact(args: Mapping[str, Any] | None) -> dict[str, Any]:
     return _redact_value(args or {})
 
 
-MAX_PARAMS_JSON = 4000
+# Large enough to keep a full ad_powershell script (meta.MAX_SCRIPT = 20000) in the audit row.
+MAX_PARAMS_JSON = 24000
 
 
 def _params_json(params: Mapping[str, Any] | None) -> str:

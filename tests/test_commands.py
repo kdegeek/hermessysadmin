@@ -114,3 +114,10 @@ def test_command_never_raises(monkeypatch):
 
     monkeypatch.setattr(runtime, "get_service", boom)
     assert commands.make_command(Ctx())("status").startswith("⚠️ /ad status failed")
+
+
+@pytest.mark.parametrize("text, identity", [(r"unlock CORP\bob", r"CORP\bob"), ('unlock "Bob Lee"', "Bob Lee"), ("unlock  bob lee ", "bob lee")])
+def test_unlock_keeps_identity_verbatim(run, runner, text, identity):
+    run(text, Ctx("unlock"))
+    assert runner.calls[-1][0] == "ad_user_unlock"
+    assert runner.calls[-1][1]["Identity"] == identity

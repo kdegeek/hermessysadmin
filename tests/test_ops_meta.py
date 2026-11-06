@@ -53,3 +53,13 @@ def test_audit_log_tool_queries_rows(make_service, audit):
     assert out["ok"] and len(out["data"]["items"]) == 2
     only = svc.call("sysadmin_audit_log", {"actor": "dashboard"}, actor="agent")
     assert [r["actor"] for r in only["data"]["items"]] == ["dashboard"]
+
+
+def test_long_powershell_script_is_audited_in_full():
+    from sysadmin.audit import AuditLog
+    import sqlite3
+
+    log = AuditLog(sqlite3.connect(":memory:", check_same_thread=False))
+    script = "Get-Process\n" * 1500 + "Write-Output END"
+    log.record(actor="agent", session="", tool="ad_powershell", target="", tier="H", decision="approved", result="ok", params={"script": script})
+    assert log.query()[0]["params"]["script"].endswith("Write-Output END")

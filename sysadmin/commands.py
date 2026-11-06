@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shlex
 from typing import Any, Callable
 
 from . import runtime
@@ -128,15 +127,22 @@ _SUBCOMMANDS: dict[str, Callable[[Any, list[str], Any, str], str]] = {
 }
 
 
+def _unquote(text: str) -> str:
+    text = text.strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
+        return text[1:-1].strip()
+    return text
+
+
 def make_command(ctx: Any) -> Callable[..., str]:
     def ad(raw_args: str = "", **context: Any) -> str:
-        try:
-            parts = shlex.split(raw_args or "")
-        except ValueError:
-            parts = (raw_args or "").split()
+        parts = (raw_args or "").strip().split(None, 1)
         if not parts or parts[0].lower() in ("help", "-h", "--help"):
             return USAGE
-        sub, rest = parts[0].lower(), parts[1:]
+        sub = parts[0].lower()
+        # Every subcommand takes at most one argument: the whole remainder, verbatim, so
+        # "CORP\bob" keeps its backslash and "Bob Lee" stays one name.
+        rest = [_unquote(parts[1])] if len(parts) > 1 else []
         handler = _SUBCOMMANDS.get(sub)
         if handler is None:
             return f"Unknown subcommand '{sub}'.\n\n{USAGE}"
