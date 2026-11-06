@@ -17,9 +17,20 @@ log = logging.getLogger(__name__)
 PREFIX = "[hermes-sysadmin]"
 
 
-def format_preview(data: Any) -> str:
+PREVIEW_LIMIT = 1500
+
+
+def _clip(text: str, limit: int | None) -> str:
+    if limit is None or len(text) <= limit:
+        return text
+    return text[:limit] + f"\n  [TRUNCATED: {len(text) - limit} more characters not shown]"
+
+
+def format_preview(data: Any, limit: int | None = PREVIEW_LIMIT) -> str:
+    """Human-readable approval text. Secrets are redacted; truncation is always marked."""
+    data = redact(data) if isinstance(data, dict) else data
     if not isinstance(data, dict):
-        return json.dumps(data, default=str)[:1500]
+        return _clip(json.dumps(data, default=str), limit)
     lines: list[str] = []
     if data.get("summary"):
         lines.append(str(data["summary"]))
@@ -32,7 +43,7 @@ def format_preview(data: Any) -> str:
             lines.append(f"  {key}: {shown}")
     if data.get("details"):
         lines.append("  " + json.dumps(data["details"], default=str))
-    return "\n".join(lines)[:1500]
+    return _clip("\n".join(lines), limit)
 
 
 def pre_tool_call(tool_name: str = "", args: dict | None = None, **kwargs: Any) -> dict | None:
@@ -52,10 +63,12 @@ def pre_tool_call(tool_name: str = "", args: dict | None = None, **kwargs: Any) 
         lines = [f"{PREFIX} {label}: {op.name} → {target_of(op, clean) or '(no target)'}", decision.reason]
         if decision.needs_preview:
             preview = service.preview(op.name, clean)
-            body = format_preview(preview["data"]) if preview.get("ok") else f"unavailable — {preview['error']['message']}"
+            error = (preview.get("error") or {}).get("message", "unknown error")
+            body = format_preview(preview.get("data")) if preview.get("ok") else f"unavailable — {error}"
             lines.append("Preview (no change made yet):\n" + body)
         elif decision.tier == "H":
-            lines.append("Arguments:\n" + format_preview({"details": redact(clean)}))
+            # No preview: the human must see every argument they approve, untruncated.
+            lines.append("Arguments:\n" + format_preview({"details": redact(clean)}, limit=None))
         rule_key = (
             f"hermes-sysadmin:{op.name}"
             if decision.tier == "W"
@@ -66,7 +79,7 @@ def pre_tool_call(tool_name: str = "", args: dict | None = None, **kwargs: Any) 
         log.exception("hermes-sysadmin: pre_tool_call failed for %s", tool_name)
         return {
             "action": "approve",
-            "message": f"{PREFIX} {tool_name}: the safety policy could not evaluate this call ({exc}). "
+            "message": f"{PREFIX} {tool_name}: the safety policy could not evaluate this call ({type(exc).__name__}). "
                        "Approve only if you intended this change.",
             "rule_key": f"hermes-sysadmin:{tool_name}:once:{uuid.uuid4().hex}",
         }

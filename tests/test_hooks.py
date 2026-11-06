@@ -85,3 +85,19 @@ def test_post_tool_call_records_denials(svc, audit):
 
 def test_format_preview_handles_non_dict():
     assert hooks.format_preview(["a", 1]) == '["a", 1]'
+
+
+def test_long_script_without_preview_is_shown_in_full(svc):
+    script = "Write-Output ok\n" * 200 + "Remove-ADUser evil"
+    d = hooks.pre_tool_call(tool_name="t_h_high_np", args={"script": script})
+    assert "Remove-ADUser evil" in d["message"] and "TRUNCATED" not in d["message"]
+
+
+def test_long_preview_is_marked_truncated_and_redacted(svc, runner):
+    runner.responses["t_h_high"] = {"changes": [f"change {i}" for i in range(400)], "details": {"new_password": "S3cret!"}}
+    d = hooks.pre_tool_call(tool_name="t_h_high", args={"identity": "bob"})
+    assert "TRUNCATED" in d["message"] and "S3cret!" not in d["message"]
+
+
+def test_format_preview_redacts_secrets():
+    assert "hunter2" not in hooks.format_preview({"details": {"password": "hunter2"}})
