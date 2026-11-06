@@ -1,0 +1,85 @@
+"""pre_tool_call escalates writes to Hermes's human-approval gate; post_tool_call audits denials."""
+
+from __future__ import annotations
+
+import json
+import logging
+import uuid
+from typing import Any
+
+from . import runtime
+from .audit import redact
+from .errors import InvalidArguments
+from .policy import decide
+from .registry import OPS, coerce_args, target_of
+
+log = logging.getLogger(__name__)
+PREFIX = "[hermes-sysadmin]"
+
+
+def format_preview(data: Any) -> str:
+    if not isinstance(data, dict):
+        return json.dumps(data, default=str)[:1500]
+    lines: list[str] = []
+    if data.get("summary"):
+        lines.append(str(data["summary"]))
+    for change in data.get("changes") or []:
+        lines.append(f"  • {change}")
+    current = data.get("current")
+    if isinstance(current, dict):
+        for key, value in current.items():
+            shown = ", ".join(map(str, value)) if isinstance(value, list) else value
+            lines.append(f"  {key}: {shown}")
+    if data.get("details"):
+        lines.append("  " + json.dumps(data["details"], default=str))
+    return "\n".join(lines)[:1500]
+
+
+def pre_tool_call(tool_name: str = "", args: dict | None = None, **kwargs: Any) -> dict | None:
+    op = OPS.get(tool_name)
+    if op is None or op.tier == "R":
+        return None
+    try:
+        service = runtime.get_service()
+        try:
+            clean = coerce_args(op, args)
+        except InvalidArguments:
+            return None
+        decision = decide(op, clean, service.settings, service.facts)
+        if decision.action != "approve":
+            return None
+        label = "HIGH-RISK" if decision.tier == "H" else "Write"
+        lines = [f"{PREFIX} {label}: {op.name} → {target_of(op, clean) or '(no target)'}", decision.reason]
+        if decision.needs_preview:
+            preview = service.preview(op.name, clean)
+            body = format_preview(preview["data"]) if preview.get("ok") else f"unavailable — {preview['error']['message']}"
+            lines.append("Preview (no change made yet):\n" + body)
+        elif decision.tier == "H":
+            lines.append("Arguments:\n" + format_preview({"details": redact(clean)}))
+        rule_key = (
+            f"hermes-sysadmin:{op.name}"
+            if decision.tier == "W"
+            else f"hermes-sysadmin:{op.name}:once:{uuid.uuid4().hex}"
+        )
+        return {"action": "approve", "message": "\n".join(lines), "rule_key": rule_key}
+    except Exception as exc:
+        log.exception("hermes-sysadmin: pre_tool_call failed for %s", tool_name)
+        return {
+            "action": "approve",
+            "message": f"{PREFIX} {tool_name}: the safety policy could not evaluate this call ({exc}). "
+                       "Approve only if you intended this change.",
+            "rule_key": f"hermes-sysadmin:{tool_name}:once:{uuid.uuid4().hex}",
+        }
+
+
+def post_tool_call(tool_name: str = "", args: dict | None = None, result: Any = None, status: str = "", **kwargs: Any) -> None:
+    if tool_name not in OPS or str(status).lower() != "blocked":
+        return None
+    try:
+        reason = str(result or "").strip()[:160] or "by user"
+        runtime.get_service().record_denied(
+            tool_name, args, actor="agent", session=str(kwargs.get("session_id") or ""), reason=reason
+        )
+    except Exception:
+        log.exception("hermes-sysadmin: post_tool_call audit failed")
+    return None
