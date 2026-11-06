@@ -36,6 +36,12 @@ provides_tools:
   - ad_user_reset_password
   - ad_user_unlock
   - ad_user_update
+  - backup_cancel
+  - backup_jobs
+  - backup_set_policy
+  - backup_start
+  - backup_status
+  - backup_versions
   - gpo_backup
   - gpo_backups
   - gpo_create
