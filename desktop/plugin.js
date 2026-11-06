@@ -3005,9 +3005,16 @@ function BackupProgress({ hostName, job }) {
   const q = useOp(op('backup_jobs', { host: hostName }), { refetchInterval: POLL.job, staleTime: 0 });
   const live = q.res && q.res.ok ? q.res.data.current : job;
   const running = !!(live && live.running);
+  // Treat the job as ended only after this card has itself seen it running: a cached or
+  // too-early backup_jobs result (job not registered yet) must not count as "finished".
+  const seenRunning = useRef(false);
   const ended = useRef(false);
   useEffect(() => {
-    if (q.res && q.res.ok && !running && !ended.current) {
+    if (!(q.res && q.res.ok)) return;
+    if (running) {
+      seenRunning.current = true;
+      ended.current = false;
+    } else if (seenRunning.current && !ended.current) {
       ended.current = true;
       api.refresh().then(() => invalidateAll());
     }
