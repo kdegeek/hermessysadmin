@@ -29,6 +29,17 @@ CREATE INDEX IF NOT EXISTS audit_ts ON audit(ts);
 """
 
 
+MAX_PARAMS_JSON = 4000
+
+
+def _params_json(params: Mapping[str, Any] | None) -> str:
+    """Redacted params as JSON, kept valid when it exceeds MAX_PARAMS_JSON."""
+    text = json.dumps(redact(params), default=str)
+    if len(text) <= MAX_PARAMS_JSON:
+        return text
+    return json.dumps({"_truncated": text[: MAX_PARAMS_JSON - 100]})
+
+
 def redact(args: Mapping[str, Any] | None) -> dict[str, Any]:
     return {k: ("[redacted]" if k.lower() in SECRET_KEYS else v) for k, v in (args or {}).items()}
 
@@ -54,7 +65,7 @@ class AuditLog:
             tier,
             decision,
             str(result)[:500],
-            json.dumps(redact(params), default=str)[:4000],
+            _params_json(params),
         )
         with self._lock:
             self._conn.execute(

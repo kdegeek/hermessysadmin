@@ -45,3 +45,11 @@ def test_open_audit_without_hermes_uses_memory_db():
     log = open_audit()
     log.record(actor="agent", session="", tool="t", target="", tier="W", decision="approved", result="ok", params={})
     assert log.query()[0]["tool"] == "t"
+
+
+
+def test_oversized_params_stay_valid_json():
+    log = make()
+    log.record(actor="agent", session="", tool="ad_powershell", target="", tier="H", decision="approved", result="ok", params={"script": "x" * 10000})
+    params = log.query()[0]["params"]
+    assert set(params) == {"_truncated"} and len(params["_truncated"]) < 4000
