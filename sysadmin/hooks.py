@@ -106,7 +106,10 @@ def post_tool_call(tool_name: str = "", args: dict | None = None, result: Any = 
         return None
     try:
         if tool_name == "catalog_run":
-            tool_name, args = catalog.run_target(args)
+            try:
+                tool_name, args = catalog.run_target(args)
+            except InvalidArguments:
+                return None  # bad id: nothing ran and nothing to attribute the denial to
         elif tool_name not in OPS:
             return None
         reason = str(result or "").strip()[:160] or "by user"

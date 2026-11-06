@@ -84,3 +84,24 @@ def test_ad_catalog_and_run(monkeypatch, make_service, runner):
     assert "PC1: days=3" in out and "PC2: unreachable" in out
     _, params, _ = runner.calls[-1]
     assert params["MaxDays"] == 5 and params["Computers"] == ["PC1", "PC2"]
+
+
+import pytest
+
+
+@pytest.mark.parametrize("extra", [{"ou": "OU=x,DC=corp"}, {"computers": [f"PC{i}" for i in range(11)]}, {}])
+def test_hook_escalates_fleet_wide_catalog_writes(monkeypatch, make_service, extra):
+    from sysadmin.registry import Op, Param
+    op = Op("cat.t.catwrite2", "catalog", "W", "x", "d",
+            params=(Param("computers", "array", "c"), Param("ou", "string", "o")), catalog=True,
+            meta={"id": "t.catwrite2", "title": "Cat write"})
+    from sysadmin.catalog import _fleet_escalate
+    op = Op(**{**op.__dict__, "escalate": _fleet_escalate})
+    OPS["cat.t.catwrite2"] = op
+    try:
+        svc = make_service()
+        monkeypatch.setattr(runtime, "get_service", lambda: svc)
+        res = hooks.pre_tool_call("catalog_run", {"id": "t.catwrite2", **extra})
+        assert res["action"] == "approve" and "HIGH-RISK" in res["message"]
+    finally:
+        OPS.pop("cat.t.catwrite2", None)
