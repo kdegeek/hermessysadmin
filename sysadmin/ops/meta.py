@@ -31,7 +31,7 @@ def _audit_log(service: Any, args: Mapping[str, Any]) -> Any:
 
 
 register(Op(
-    name="ad_powershell", toolset=TOOLSET, tier="H", script="",
+    name="ad_powershell", toolset=TOOLSET, tier="H", destructive=True, script="",
     description=(
         "LAST RESORT: run arbitrary PowerShell on the jump-host domain controller (ActiveDirectory and GroupPolicy "
         "modules loaded; Get-HermesFanout available). Prefer a typed tool whenever one exists. Every call needs "

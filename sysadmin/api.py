@@ -99,6 +99,7 @@ def decision(service: Any, name: str, body: Mapping[str, Any] | None) -> dict[st
         return {"ok": True, "data": {
             "action": d.action, "tier": d.tier, "reason": d.reason, "needs_preview": d.needs_preview,
             "target": target_of(op, clean), "confirm_name": confirm_name_of(op, clean),
+            "type_to_confirm": d.action == "approve" and op.destructive,
         }}
 
     return _safe(go)
@@ -128,11 +129,12 @@ def run_op(service: Any, name: str, body: Mapping[str, Any] | None) -> dict[str,
                     f"{name} must be confirmed in the dashboard dialog.",
                     hint="Send confirm: true after the user approves.",
                     tier=d.tier, needs_preview=d.needs_preview, confirm_name=expected,
+                    type_to_confirm=op.destructive,
                 )
-            if d.tier == "H":
+            if op.destructive:
                 typed = str((body or {}).get("confirm_name") or "").strip().lower()
                 if typed != expected.lower():
-                    raise InvalidArguments(f"Type '{expected}' to confirm this high-risk change.", confirm_name=expected)
+                    raise InvalidArguments(f"Type '{expected}' to confirm this destructive change.", confirm_name=expected)
         return service.call(name, args, actor=ACTOR, session=session, approved=d.tier if d.action == "approve" else False)
 
     return _safe(go)

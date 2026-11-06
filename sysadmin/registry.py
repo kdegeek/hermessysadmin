@@ -48,6 +48,7 @@ class Op:
     inject: Callable[[Any], Mapping[str, Any]] | None = None  # extra PS params derived from Settings
     local: Callable[[Any, Mapping[str, Any]], Any] | None = None  # run in Python as local(service, args) instead of a script
     enabled: Callable[[Any], bool] | None = None  # enabled(settings) False -> decide() blocks the op
+    destructive: bool = False  # irreversible (delete/overwrite/arbitrary code): dashboard requires typing the name
 
 
 OPS: dict[str, Op] = {}

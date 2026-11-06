@@ -63,7 +63,7 @@ def test_decision_describes_the_dialog(make_service):
     out = api.decision(make_service(), "ad_user_delete", {"args": {"identity": "bob"}})
     assert out["data"] == {
         "action": "approve", "tier": "H", "reason": "High-risk change: requires approval with a preview.",
-        "needs_preview": True, "target": "bob", "confirm_name": "bob",
+        "needs_preview": True, "target": "bob", "confirm_name": "bob", "type_to_confirm": True,
     }
 
 
@@ -126,12 +126,18 @@ def test_audit_and_refresh(make_service, audit):
     assert api.refresh(svc) == {"ok": True, "data": {"refreshed": True}}
 
 
-def test_escalated_write_needs_typed_name(make_service, runner):
+def test_escalated_non_destructive_write_needs_confirm_but_no_typed_name(make_service, runner):
     svc = make_service()
-    body = {"args": {"group": "Domain Admins", "members": ["bob"]}, "confirm": True}
-    out = api.run_op(svc, "ad_group_add_member", body)
-    assert out["ok"] is False and out["error"]["confirm_name"] == "Domain Admins" and runner.calls == []
-    assert api.run_op(svc, "ad_group_add_member", {**body, "confirm_name": "Domain Admins"})["ok"] is True
+    args = {"group": "Domain Admins", "members": ["bob"]}
+    out = api.run_op(svc, "ad_group_add_member", {"args": args})
+    assert out["ok"] is False and out["error"]["tier"] == "H" and runner.calls == []
+    assert api.decision(svc, "ad_group_add_member", {"args": args})["data"]["type_to_confirm"] is False
+    assert api.run_op(svc, "ad_group_add_member", {"args": args, "confirm": True})["ok"] is True
+
+
+def test_destructive_ops_are_exactly_the_irreversible_ones():
+    assert sorted(n for n, o in OPS.items() if o.destructive) == ["ad_powershell", "ad_user_delete", "gpo_delete", "gpo_restore"]
+    assert all(OPS[n].tier == "H" for n in OPS if OPS[n].destructive)
 
 
 def test_high_risk_without_typed_name_is_refused(make_service, runner):

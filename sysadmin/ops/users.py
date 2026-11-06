@@ -245,7 +245,7 @@ register(Op(
 ))
 
 register(Op(
-    name="ad_user_delete", toolset=TOOLSET, tier="H", script="ad_user_delete",
+    name="ad_user_delete", toolset=TOOLSET, tier="H", destructive=True, script="ad_user_delete",
     description="Delete a user account. High-risk: shows a preview with current groups and Recycle Bin state first.",
     params=(IDENTITY,), identities=("identity",), preview=True,
 ))

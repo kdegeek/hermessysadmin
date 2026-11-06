@@ -713,7 +713,7 @@ function SearchBox({ value, onChange, placeholder, focusSignal }) {
 // One dialog at a time, held in $dialog. Every write goes through runWrite():
 //   decision → allow: run · block: show the reason, no run button ·
 //   approve W: confirm dialog (or the form that collected the args) → run with confirm:true ·
-//   approve H: server preview + type-to-confirm → run with confirm:true + confirm_name.
+//   approve H: server preview → run with confirm:true; destructive ops also type the name (confirm_name).
 function DialogHost() {
   const cur = useValue($dialog);
   if (!cur) return null;
@@ -880,9 +880,12 @@ function PreviewBody({ q, args }) {
 function HighRiskDialog({ seq, o, dec, opts }) {
   const pv = useApi(KEY.preview(o, seq), () => api.preview(o), { staleTime: Infinity });
   const [typed, setTyped] = useState('');
+  // Only destructive changes (delete, overwrite, raw PowerShell) make the user type the name;
+  // other high-risk changes are approved from the preview with one click.
+  const needType = dec.type_to_confirm === true;
   const expected = String(dec.confirm_name || '');
-  const match = expected !== '' && typed.trim().toLowerCase() === expected.trim().toLowerCase();
-  const s = useSubmit(seq, o, { confirm: true, confirm_name: typed.trim() }, opts);
+  const match = !needType || (expected !== '' && typed.trim().toLowerCase() === expected.trim().toLowerCase());
+  const s = useSubmit(seq, o, needType ? { confirm: true, confirm_name: typed.trim() } : { confirm: true }, opts);
   const title = opts.title || 'High-risk change';
   return jsx(Modal, {
     seq,
@@ -905,13 +908,13 @@ function HighRiskDialog({ seq, o, dec, opts }) {
         opts.body ? jsx('p', { className: 'hs-p', children: opts.body }) : null,
         jsx('div', { className: 'hs-muted hs-small', children: `${dec.reason} Preview from the server (-Preview). Nothing has changed yet.` }),
         jsx(PreviewBody, { q: pv, args: o.args }),
-        jsxs('label', {
+        needType ? jsxs('label', {
           className: 'hs-field',
           children: [
             jsxs('span', { children: ['Type ', jsx('b', { className: 'hs-mono', style: { color: 'var(--ui-text-primary)' }, children: expected }), ' to confirm'] }),
             jsx(TextInput, { value: typed, onChange: setTyped, mono: true, autoFocus: true, onEnter: () => { if (match && !s.busy) s.submit(); } }),
           ],
-        }),
+        }) : null,
         s.error ? jsx(ErrorBox, { error: s.error }) : null,
       ],
     }),
