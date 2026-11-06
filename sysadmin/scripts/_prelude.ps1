@@ -178,7 +178,9 @@ function Global:Get-HermesTargets {
     if ($Ou) {
         $t += @(Get-ADComputer -Filter "Enabled -eq 'True'" -SearchBase $Ou -Properties DNSHostName | ForEach-Object { $_.DNSHostName } | Where-Object { $_ })
     }
-    if ($t.Count -eq 0) {
+    # Fall back to every domain server ONLY when neither -Computers nor -Ou was supplied;
+    # a supplied OU that yields nothing stays an empty list.
+    if ($t.Count -eq 0 -and -not $Ou -and @($Computers | Where-Object { $_ }).Count -eq 0) {
         $splat = @{ Filter = "OperatingSystem -like '*Server*' -and Enabled -eq 'True'"; Properties = 'DNSHostName' }
         if ($SearchBase) { $splat.SearchBase = $SearchBase }
         $t = @(Get-ADComputer @splat | ForEach-Object { $_.DNSHostName } | Where-Object { $_ })

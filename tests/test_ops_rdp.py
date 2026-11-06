@@ -160,3 +160,44 @@ def test_host_maps_to_computer_name_and_search_base_is_injected():
     s = Settings(server_search_base="OU=Servers,DC=corp,DC=local")
     for name in ("rdp_sessions", "rdp_host_status"):
         assert OPS[name].inject(s) == {"ServerSearchBase": "OU=Servers,DC=corp,DC=local"}
+
+
+@pytest.mark.parametrize("dcs", [None, []])
+def test_unknown_or_empty_dc_list_escalates(dcs):
+    assert decide(OPS["rdp_set_enabled"], {"hosts": ["srv1"], "enabled": True}, Settings(), DCs(dcs)).tier == "H"
+    assert decide(OPS["rdp_users_add"], {"host": "srv1", "members": ["a"]}, Settings(), DCs(dcs)).tier == "H"
+
+
+@pytest.mark.parametrize("host", ["10.0.0.5", "::1", "fe80::1", "2001:db8::1", "localhost", "LOCALHOST", ".", "127.0.0.1"])
+def test_ip_literals_and_loopback_escalate(host):
+    assert decide(OPS["rdp_set_enabled"], {"hosts": [host], "enabled": True}, Settings(), DC).tier == "H"
+    assert decide(OPS["rdp_users_remove"], {"host": host, "members": ["a"]}, Settings(), DC).tier == "H"
+
+
+@pytest.mark.parametrize("hosts", [["srv1", 5], ["srv1", None], "srv1", {"a": "b"}, 7])
+def test_malformed_hosts_escalate(hosts):
+    assert decide(OPS["rdp_set_enabled"], {"hosts": hosts, "enabled": True}, Settings(), DC).tier == "H"
+
+
+def test_empty_string_hosts_are_dropped():
+    assert decide(OPS["rdp_set_enabled"], {"hosts": ["", "srv1"], "enabled": True}, Settings(), DC).tier == "W"
+
+
+def test_connect_filename_sanitised():
+    f = OPS["rdp_connect_file"].post
+    assert f({"host": "../evil"}, {}, Settings())["filename"] == "rdp-host.rdp"
+    assert f({"host": "a/b c.corp"}, {}, Settings())["filename"] == "a_b_c.rdp"
+    assert f({"host": ""}, {}, Settings())["filename"] == "rdp-host.rdp"
+    assert f({"host": "///"}, {}, Settings())["filename"] == "___.rdp"
+
+
+def test_quser_maps_disconnected_word():
+    rows = parse_quser([" bob  4  Disconnected  1:02  11/3/2026 4:15 PM"])
+    assert rows[0]["state"] == "disconnected"
+
+
+@pytest.mark.parametrize("wanted", ["bob@corp.local", "CORP\\bob", "BOB@CORP"])
+def test_sessions_user_filter_strips_upn_and_domain(wanted):
+    data = {"hosts": [{"host": "SRV1", "lines": QUSER}], "errors": []}
+    out = OPS["rdp_sessions"].post(data, {"user": wanted}, Settings())
+    assert [i["user"] for i in out["items"]] == ["bob"]

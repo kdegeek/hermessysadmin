@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from typing import Any, Mapping
 from urllib.parse import quote
@@ -18,7 +19,7 @@ SESSION = Param("session_id", "integer", "Session ID from rdp_sessions.", requir
 MEMBERS = Param("members", "array", "Users or groups (sAMAccountName or DOMAIN\\name).", required=True)
 
 _QUSER = re.compile(r"^[\s>]*(\S+)\s+(?:(\S+)\s+)?(\d+)\s+(\S+)\s+(\S+)\s+(.+?)\s*$")
-_STATES = {"active": "active", "disc": "disconnected"}
+_STATES = {"active": "active", "disc": "disconnected", "disconnected": "disconnected"}
 
 
 def _search_base(settings: Any) -> dict[str, Any]:
@@ -101,11 +102,32 @@ def rdp_uri(host: str, username: str = "") -> str:
     return "rdp://" + "&".join(parts)
 
 
-def _hosts_of(args: Mapping[str, Any]) -> list[str]:
-    hosts = [h for h in (args.get("hosts") or []) if isinstance(h, str) and h]
-    if isinstance(args.get("host"), str) and args["host"]:
-        hosts.append(args["host"])
-    return hosts
+_LOOPBACK = {"localhost", ".", "::1"}
+
+
+def _hosts_of(args: Mapping[str, Any]) -> list[Any]:
+    """Target hosts; non-string entries / containers are kept so callers can fail closed."""
+    raw: list[Any] = []
+    for key in ("hosts", "host"):
+        value = args.get(key)
+        if value is None:
+            continue
+        if key == "hosts" and not isinstance(value, list):
+            raw.append(object())  # wrong container type: uninterpretable, fail closed
+        else:
+            raw.extend(value if isinstance(value, list) else [value])
+    return [h for h in raw if h != ""]
+
+
+def _is_ip_or_loopback(host: str) -> bool:
+    h = host.strip().strip("[]")
+    if h.lower() in _LOOPBACK:
+        return True
+    try:
+        ipaddress.ip_address(h.split("%", 1)[0])
+    except ValueError:
+        return False
+    return True
 
 
 def _touches_dc(args: Mapping[str, Any], settings: Any, facts: Any) -> bool:
@@ -113,9 +135,14 @@ def _touches_dc(args: Mapping[str, Any], settings: Any, facts: Any) -> bool:
     if not hosts:
         return False
     dcs = facts.domain_controllers()
-    if dcs is None:
+    if not dcs:
         return True
-    return any(is_domain_controller_name(h, dcs) for h in hosts)
+    for h in hosts:
+        if not isinstance(h, str) or _is_ip_or_loopback(h):
+            return True
+        if is_domain_controller_name(h, dcs):
+            return True
+    return False
 
 
 def _nla_escalate(args: Mapping[str, Any], settings: Any, facts: Any) -> bool:
@@ -127,7 +154,7 @@ def _post_sessions(data: Any, args: Mapping[str, Any], settings: Any) -> Any:
     hosts = data.get("hosts") or []
     errors = list(data.get("errors") or [])
     items = [{"host": h.get("host", ""), **s} for h in hosts for s in parse_quser(h.get("lines") or [])]
-    wanted = str(args.get("user") or "").strip().lower().split("\\")[-1]
+    wanted = str(args.get("user") or "").strip().lower().split("\\")[-1].split("@")[0]
     if wanted:
         items = [i for i in items if wanted in i["user"].lower()]
     return {
@@ -166,9 +193,10 @@ def _post_host_status(data: Any, args: Mapping[str, Any], settings: Any) -> Any:
 def _post_connect(data: Any, args: Mapping[str, Any], settings: Any) -> Any:
     host = str((data or {}).get("host") or args.get("host") or "")
     username = _clean(args.get("username"))
+    stem = re.sub(r"[^A-Za-z0-9_-]", "_", host.split(".", 1)[0].lower()) or "rdp-host"
     return {
         "host": host,
-        "filename": f"{host.split('.', 1)[0].lower()}.rdp",
+        "filename": f"{stem}.rdp",
         "content": rdp_file(host, username, _clean(args.get("gateway"))),
         "uri": rdp_uri(host, username),
     }

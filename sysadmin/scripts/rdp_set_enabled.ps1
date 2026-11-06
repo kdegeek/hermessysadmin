@@ -18,6 +18,7 @@ Invoke-Op {
     }
     $remote = Get-HermesFanout -Computers $Hosts -ArgumentList @($Enabled) -Script {
         param($On)
+        $ErrorActionPreference = 'Stop'
         Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value ([int](-not $On))
         if ($On) { Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28752' } else { Disable-NetFirewallRule -Group '@FirewallAPI.dll,-28752' }
         [pscustomobject]@{ enabled = [bool]$On }
