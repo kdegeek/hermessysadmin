@@ -15,17 +15,17 @@ params:
 #>
 param([string[]]$Computers = @(), [string]$Ou, [string]$Name, [switch]$Preview)
 Invoke-Op {
-    if ($Name -notmatch '^[A-Za-z0-9_.-]{1,256}$') { throw "Name must be 1-256 characters of letters, digits, '_', '.' or '-'" }
+    if ($Name -cnotmatch '\A[A-Za-z0-9_.-]{1,256}\z') { throw "Name must be 1-256 characters of letters, digits, '_', '.' or '-'" }
     if (@('winrm', 'rpcss', 'lsm', 'termservice') -contains $Name.ToLowerInvariant()) {
         throw "Refusing to restart '$Name': it would drop the management session or destabilise the machine."
     }
     $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Workstation
-    $read = Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($Name) -Script {
-        param($n)
-        $s = Get-Service -Name $n -ErrorAction SilentlyContinue
-        [pscustomobject]@{ name = $n; before = if ($s) { "$($s.Status)" } else { 'NotInstalled' } }
-    }
     if ($Preview) {
+        $read = Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($Name) -Script {
+            param($n)
+            $s = Get-Service -Name $n -ErrorAction SilentlyContinue
+            [pscustomobject]@{ name = $n; before = if ($s) { "$($s.Status)" } else { 'NotInstalled' } }
+        }
         $cur = @{}; foreach ($r in $read.items) { $cur[$r['host']] = $r['before'] }
         return @{ summary = "Restart service $Name on $($targets.Count) computer(s)"
                   changes = @($read.items | ForEach-Object { "$($_['host']): restart $Name (currently $($_['before']))" }) + @($read.errors | ForEach-Object { "$($_.host): unreachable ($($_.message))" })

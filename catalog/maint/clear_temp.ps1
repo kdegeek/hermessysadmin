@@ -21,17 +21,27 @@ Invoke-Op {
         param($days, $delete)
         $ErrorActionPreference = 'Continue'
         $cutoff = (Get-Date).AddDays(-$days)
-        $roots = @('C:\Windows\Temp')
-        $roots += @(Get-ChildItem -LiteralPath 'C:\Users' -Directory -Force -Attributes '!ReparsePoint' -ErrorAction SilentlyContinue |
-            ForEach-Object { Join-Path $_.FullName 'AppData\Local\Temp' })
+        # A root is used only if every component from the drive down to it is free of reparse points.
+        function Test-PlainChain([string[]]$Chain) {
+            foreach ($p in $Chain) {
+                $i = Get-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue
+                if (-not $i -or -not $i.PSIsContainer -or ($i.Attributes -band [IO.FileAttributes]::ReparsePoint)) { return $false }
+            }
+            return $true
+        }
+        $roots = @()
+        if (Test-PlainChain @('C:\Windows', 'C:\Windows\Temp')) { $roots += 'C:\Windows\Temp' }
+        foreach ($u in @(Get-ChildItem -LiteralPath 'C:\Users' -Directory -Force -Attributes '!ReparsePoint' -ErrorAction SilentlyContinue)) {
+            $chain = @('C:\Users', $u.FullName, (Join-Path $u.FullName 'AppData'), (Join-Path $u.FullName 'AppData\Local'), (Join-Path $u.FullName 'AppData\Local\Temp'))
+            if (Test-PlainChain $chain) { $roots += $chain[-1] }
+        }
         $files = 0; $bytes = [int64]0
         $pending = New-Object System.Collections.Generic.Stack[string]
-        foreach ($root in $roots) {
-            $item = Get-Item -LiteralPath $root -Force -ErrorAction SilentlyContinue
-            if ($item -and $item.PSIsContainer -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { $pending.Push($root) }
-        }
+        foreach ($root in $roots) { $pending.Push($root) }
         while ($pending.Count -gt 0) {
             $dir = $pending.Pop()
+            $di = Get-Item -LiteralPath $dir -Force -ErrorAction SilentlyContinue
+            if (-not $di -or ($di.Attributes -band [IO.FileAttributes]::ReparsePoint)) { continue }
             # Files that are not reparse points; directories are walked manually so junctions are never entered.
             foreach ($f in @(Get-ChildItem -LiteralPath $dir -File -Force -Attributes '!ReparsePoint' -ErrorAction SilentlyContinue)) {
                 if ($f.LastWriteTime -ge $cutoff) { continue }

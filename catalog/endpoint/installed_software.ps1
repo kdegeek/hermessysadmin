@@ -21,7 +21,7 @@ Invoke-Op {
         $paths = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
         Get-ItemProperty -Path $paths -ErrorAction SilentlyContinue |
             Where-Object { $_.DisplayName -and (-not $_.SystemComponent) -and ((-not $filter) -or $_.DisplayName.IndexOf($filter, [StringComparison]::OrdinalIgnoreCase) -ge 0) } |
-            Sort-Object DisplayName -Unique | Select-Object -First 200 | ForEach-Object {
+            Sort-Object DisplayName, DisplayVersion -Unique | Select-Object -First 200 | ForEach-Object {
                 $d = "$($_.InstallDate)"
                 $iso = if ($d -match '^(\d{4})(\d{2})(\d{2})$') { "$($Matches[1])-$($Matches[2])-$($Matches[3])" } else { '' }
                 [pscustomobject]@{ name = "$($_.DisplayName)"; version = "$($_.DisplayVersion)"; publisher = "$($_.Publisher)"; installed = $iso }

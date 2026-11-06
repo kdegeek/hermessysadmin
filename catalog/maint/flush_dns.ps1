@@ -14,10 +14,10 @@ source: In-box Clear-DnsClientCache
 param([string[]]$Computers = @(), [string]$Ou, [switch]$Preview)
 Invoke-Op {
     $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Workstation
-    $read = Invoke-HermesCatalogFanout -Computers $targets -Script {
-        [pscustomobject]@{ before = @(Get-DnsClientCache -ErrorAction SilentlyContinue).Count }
-    }
     if ($Preview) {
+        $read = Invoke-HermesCatalogFanout -Computers $targets -Script {
+            [pscustomobject]@{ before = @(Get-DnsClientCache -ErrorAction SilentlyContinue).Count }
+        }
         $cur = @{}; foreach ($r in $read.items) { $cur[$r['host']] = $r['before'] }
         return @{ summary = "Flush the DNS cache on $($targets.Count) computer(s)"
                   changes = @($read.items | ForEach-Object { "$($_['host']): clear $($_['before']) cached DNS entries" }) + @($read.errors | ForEach-Object { "$($_.host): unreachable ($($_.message))" })

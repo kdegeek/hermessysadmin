@@ -18,8 +18,8 @@ Invoke-Op {
             $key = "HKLM:\SYSTEM\CurrentControlSet\Services\$($_.Name)"
             $delayed = [int]((Get-ItemProperty $key -Name DelayedAutostart -ErrorAction SilentlyContinue).DelayedAutostart) -eq 1
             $trigger = Test-Path (Join-Path $key 'TriggerInfo')
-            if (-not (($delayed -or $trigger) -and [int]$_.ExitCode -eq 0)) {
-                [pscustomobject]@{ name = $_.Name; display = $_.DisplayName; exit_code = [int]$_.ExitCode }
+            if (-not (($delayed -or $trigger) -and [int64]$_.ExitCode -eq 0)) {
+                [pscustomobject]@{ name = $_.Name; display = $_.DisplayName; exit_code = [int64]$_.ExitCode }
             }
         } | Select-Object -First 200
     }
