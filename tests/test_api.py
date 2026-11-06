@@ -124,3 +124,44 @@ def test_audit_and_refresh(make_service, audit):
     svc = make_service()
     assert api.audit(svc, limit=10, actor="dashboard", decision=None)["data"]["items"][0]["target"] == "bob"
     assert api.refresh(svc) == {"ok": True, "data": {"refreshed": True}}
+
+
+def test_escalated_write_needs_typed_name(make_service, runner):
+    svc = make_service()
+    body = {"args": {"group": "Domain Admins", "members": ["bob"]}, "confirm": True}
+    out = api.run_op(svc, "ad_group_add_member", body)
+    assert out["ok"] is False and out["error"]["confirm_name"] == "Domain Admins" and runner.calls == []
+    assert api.run_op(svc, "ad_group_add_member", {**body, "confirm_name": "Domain Admins"})["ok"] is True
+
+
+def test_high_risk_without_typed_name_is_refused(make_service, runner):
+    out = api.run_op(make_service(), "ad_user_delete", {"args": {"identity": "bob"}, "confirm": True})
+    assert out["ok"] is False and runner.calls == []
+
+
+def test_confirm_must_be_literal_true(make_service, runner):
+    svc = make_service()
+    for confirm in ("true", 1, "yes"):
+        out = api.run_op(svc, "ad_user_unlock", {"args": {"identity": "bob"}, "confirm": confirm})
+        assert out["ok"] is False
+    assert runner.calls == []
+
+
+def test_disabled_escape_hatch_never_runs(make_service, runner):
+    body = {"args": {"script": "Get-Process", "reason": "test"}, "confirm": True, "confirm_name": "Get-Process"}
+    out = api.run_op(make_service(), "ad_powershell", body)
+    assert out["ok"] is False and out["error"]["type"] == "PolicyBlocked" and runner.calls == []
+
+
+def test_read_only_mode_blocks_confirmed_writes(make_service, settings, runner):
+    svc = make_service(settings=replace(settings, mode="read-only"))
+    out = api.run_op(svc, "ad_user_unlock", {"args": {"identity": "bob"}, "confirm": True})
+    assert out["error"]["type"] == "PolicyBlocked" and runner.calls == []
+
+
+def test_test_ops_and_unknown_names_are_rejected(make_service, scratch_ops):
+    from sysadmin.registry import Op
+
+    scratch_ops(Op("t_api_hidden", "t", "R", "t_api_hidden", "d"))
+    for name in ("t_api_hidden", "nope"):
+        assert api.run_op(make_service(), name, {"args": {}})["ok"] is False
