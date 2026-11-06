@@ -109,7 +109,7 @@ def test_write_without_preview_shows_arguments(svc):
 
 
 def test_ad_powershell_credential_reference_is_warned(monkeypatch, make_service):
-    service = make_service(enable_powershell_escape=True)
+    service = make_service(settings=Settings(host="h", username="u", password="p", enable_powershell_escape=True))
     monkeypatch.setattr(runtime, "get_service", lambda: service)
     bad = hooks.pre_tool_call(tool_name="ad_powershell", args={"script": "$x = $Global:hermescred", "reason": "r"})
     ok = hooks.pre_tool_call(tool_name="ad_powershell", args={"script": "Get-Date", "reason": "r"})
