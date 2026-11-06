@@ -57,7 +57,9 @@ def get_service() -> Service:
 
 
 def reset() -> None:
+    global _audit
     with _lock:
+        _audit = None
         current = _state["service"]
         if current is not None:
             with suppress(Exception):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import threading
@@ -14,6 +15,7 @@ from .policy import Decision, decide
 from .registry import OPS, Op, coerce_args, ps_params, target_of
 
 log = logging.getLogger(__name__)
+FACTS_TTL = 300.0
 _NOT_AUDITED = (InvalidArguments, ApprovalRequired)
 
 
@@ -28,18 +30,26 @@ class _Facts:
 
     def __init__(self, service: "Service") -> None:
         self._service = service
-        self._dcs: list[str] | None = None
-        self._loaded = False
+        self._dcs: tuple[float, list[str]] | None = None
+
+    def clear(self) -> None:
+        self._dcs = None
 
     def domain_controllers(self) -> list[str] | None:
-        if not self._loaded:
-            self._loaded = True
-            try:
-                data = self._service._run_cached(self._service._op("ad_dc_list"), {})
-                self._dcs = [str(d["name"]) for d in (data or {}).get("items", [])]
-            except Exception:
-                self._dcs = None
-        return self._dcs
+        svc = self._service
+        now = svc._clock()
+        cached = self._dcs
+        if cached is not None and now - cached[0] < FACTS_TTL:
+            return list(cached[1])
+        gen = svc._generation
+        try:
+            data = svc._run_cached(svc._op("ad_dc_list"), {})
+            dcs = [str(d["name"]) for d in (data or {}).get("items", [])]
+        except Exception:
+            return None  # unknown; do not latch, retry next call
+        if svc._generation == gen:
+            self._dcs = (now, dcs)
+        return list(dcs)
 
 
 class Service:
@@ -58,6 +68,7 @@ class Service:
         self._clock = clock
         self._cache: dict[str, tuple[float, Any]] = {}
         self._lock = threading.Lock()
+        self._generation = 0
         self.facts = _Facts(self)
 
     # ---- public API -------------------------------------------------------
@@ -84,10 +95,13 @@ class Service:
                 raise PolicyBlocked(d.reason)
             if d.action == "approve" and not approved:
                 raise ApprovalRequired(f"{op.name} needs approval before it can run.")
-            data = self._execute(op, clean)
+            try:
+                data = self._execute(op, clean)
+            finally:
+                if op.tier != "R":
+                    self.invalidate()
             if op.tier != "R":
                 self._audit(op, clean, actor, session, d.tier, word, "ok")
-                self.invalidate()
                 self._safe_notify("changed", {"op": op.name, "target": target_of(op, clean), "actor": actor})
             return {"ok": True, "data": data}
         except PolicyBlocked as exc:
@@ -98,6 +112,8 @@ class Service:
             return error_result(exc)
         except Exception as exc:
             log.exception("hermes-sysadmin: %s failed", name)
+            if op is not None and op.tier != "R":
+                self._audit(op, clean, actor, session, tier, word, f"failed: {type(exc).__name__}")
             return error_result(exc)
 
     def preview(self, name: str, args: Mapping[str, Any] | None = None) -> dict[str, Any]:
@@ -109,7 +125,7 @@ class Service:
                 raise PolicyBlocked(d.reason)
             if not op.preview:
                 return {"ok": True, "data": {"summary": f"{op.name} on {target_of(op, clean) or 'target'}", "details": redact(clean)}}
-            data = self.runner.run(op.script, {**self._params(op, clean), "Preview": True}, retry=True)
+            data = self.runner.run(op.script, {**self._params(op, clean), "Preview": True}, retry=op.tier == "R")
             return {"ok": True, "data": data}
         except SysadminError as exc:
             return error_result(exc)
@@ -130,6 +146,8 @@ class Service:
     def invalidate(self) -> None:
         with self._lock:
             self._cache.clear()
+            self._generation += 1
+            self.facts.clear()
 
     # ---- internals --------------------------------------------------------
 
@@ -162,10 +180,13 @@ class Service:
         with self._lock:
             hit = self._cache.get(key)
         if hit is not None and now - hit[0] < op.cache_ttl:
-            return hit[1]
+            return copy.deepcopy(hit[1])
+        with self._lock:
+            gen = self._generation
         data = self._run(op, clean)
         with self._lock:
-            self._cache[key] = (now, data)
+            if self._generation == gen:
+                self._cache[key] = (now, copy.deepcopy(data))
         return data
 
     def _audit(self, op: Op, clean: dict[str, Any], actor: str, session: str, tier: str, decision: str, result: str) -> None:

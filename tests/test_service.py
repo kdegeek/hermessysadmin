@@ -119,7 +119,7 @@ def test_inject_adds_settings_derived_params(scratch_ops, make_service, runner):
 def test_preview_runs_script_with_preview_switch(ops, make_service, runner):
     runner.responses["t_s_high"] = {"summary": "Delete bob"}
     assert make_service().preview("t_s_high", {"identity": "bob"}) == {"ok": True, "data": {"summary": "Delete bob"}}
-    assert runner.calls == [("t_s_high", {"Identity": "bob", "Preview": True}, True)]
+    assert runner.calls == [("t_s_high", {"Identity": "bob", "Preview": True}, False)]
 
 
 def test_preview_for_op_without_script_preview_describes_args(ops, make_service, runner):
@@ -151,8 +151,98 @@ def test_unexpected_exception_becomes_internal_error(ops, make_service, runner):
     assert make_service().call("t_s_read2", {"identity": "b"}, actor="agent")["error"]["type"] == "InternalError"
 
 
-def test_facts_domain_controllers_none_when_lookup_unavailable(ops, make_service, runner):
+@pytest.fixture
+def dc_op(monkeypatch):
+    from sysadmin.registry import OPS
+
+    monkeypatch.setitem(OPS, "ad_dc_list", Op("ad_dc_list", "t", "R", "ad_dc_list", "d"))
+
+
+def test_facts_failure_is_not_latched_and_success_is_cached(dc_op, make_service, runner):
     from sysadmin.errors import ConnectionFailed
 
-    runner.responses["ad_dc_list"] = ConnectionFailed("down")  # used once ad_dc_list exists (Phase 2)
-    assert make_service().facts.domain_controllers() is None
+    now = {"t": 0.0}
+    svc = make_service(clock=lambda: now["t"])
+    runner.responses["ad_dc_list"] = ConnectionFailed("down")
+    assert svc.facts.domain_controllers() is None
+    assert len(runner.calls) == 1
+    assert svc.facts.domain_controllers() is None  # retried, not latched
+    assert len(runner.calls) == 2
+    runner.responses["ad_dc_list"] = {"items": [{"name": "dc01"}, {"name": "dc02"}]}
+    assert svc.facts.domain_controllers() == ["dc01", "dc02"]
+    assert len(runner.calls) == 3
+    assert svc.facts.domain_controllers() == ["dc01", "dc02"]
+    assert len(runner.calls) == 3  # cached
+    now["t"] = 301
+    svc.facts.domain_controllers()
+    assert len(runner.calls) == 4  # TTL expired
+
+
+def test_invalidate_clears_facts(dc_op, make_service, runner):
+    runner.responses["ad_dc_list"] = {"items": [{"name": "dc01"}]}
+    svc = make_service()
+    svc.facts.domain_controllers()
+    svc.invalidate()
+    svc.facts.domain_controllers()
+    assert len(runner.calls) == 2
+
+
+def test_escalation_can_consult_facts(dc_op, scratch_ops, make_service, runner, audit):
+    scratch_ops(Op(
+        "t_s_fesc", "t", "W", "t_s_fesc", "d", params=(Param("identity", "string", "x", required=True),),
+        escalate=lambda a, s, f: a["identity"] in (f.domain_controllers() or []),
+    ))
+    runner.responses["ad_dc_list"] = {"items": [{"name": "dc01"}]}
+    runner.responses["t_s_fesc"] = {}
+    svc = make_service()
+    svc.call("t_s_fesc", {"identity": "dc01"}, actor="agent", approved=True)
+    svc.call("t_s_fesc", {"identity": "bob"}, actor="agent", approved=True)
+    assert [r["tier"] for r in reversed(audit.query())] == ["H", "W"]
+
+
+def test_runner_exception_in_write_is_audited(ops, make_service, runner, audit):
+    runner.responses["t_s_write"] = RuntimeError("boom")
+    result = make_service().call("t_s_write", {"identity": "bob"}, actor="agent", approved=True)
+    assert result["error"]["type"] == "InternalError"
+    row = audit.query()[0]
+    assert row["result"] == "failed: RuntimeError" and row["decision"] == "approved"
+
+
+def test_post_exception_in_write_is_audited(scratch_ops, make_service, runner, audit):
+    def bad(data, args, s):
+        raise ValueError("x")
+
+    scratch_ops(Op("t_s_wpost", "t", "W", "t_s_wpost", "d", post=bad))
+    runner.responses["t_s_wpost"] = {}
+    make_service().call("t_s_wpost", {}, actor="agent", approved=True)
+    assert audit.query()[0]["result"] == "failed: ValueError"
+
+
+def test_failed_write_invalidates_cache(ops, make_service, runner):
+    runner.responses["t_s_read"] = {"v": 1}
+    runner.responses["t_s_write"] = NotFound("nope")
+    svc = make_service()
+    svc.call("t_s_read", {"identity": "bob"}, actor="agent")
+    svc.call("t_s_write", {"identity": "bob"}, actor="agent", approved=True)
+    svc.call("t_s_read", {"identity": "bob"}, actor="agent")
+    assert [c[0] for c in runner.calls].count("t_s_read") == 2
+
+
+def test_read_overlapping_invalidate_is_not_cached(ops, make_service, runner):
+    svc = make_service()
+
+    def racing(params):
+        svc.invalidate()
+        return {"v": 1}
+
+    runner.responses["t_s_read"] = racing
+    svc.call("t_s_read", {"identity": "bob"}, actor="agent")
+    runner.responses["t_s_read"] = {"v": 2}
+    assert svc.call("t_s_read", {"identity": "bob"}, actor="agent")["data"] == {"v": 2}
+
+
+def test_cached_value_is_isolated_from_caller_mutation(ops, make_service, runner):
+    runner.responses["t_s_read"] = {"v": [1]}
+    svc = make_service()
+    svc.call("t_s_read", {"identity": "bob"}, actor="agent")["data"]["v"].append(2)
+    assert svc.call("t_s_read", {"identity": "bob"}, actor="agent")["data"] == {"v": [1]}

@@ -1,6 +1,5 @@
 from sysadmin import runtime
 from sysadmin.config import Settings
-from sysadmin.transport import PsrpTransport, UnconfiguredTransport
 
 
 def test_get_service_caches_per_settings_and_rebuilds_on_change(monkeypatch):
@@ -9,13 +8,23 @@ def test_get_service_caches_per_settings_and_rebuilds_on_change(monkeypatch):
     monkeypatch.setattr(runtime, "load_settings", lambda: current["s"])
     a = runtime.get_service()
     assert runtime.get_service() is a
-    assert isinstance(a.runner._transport, PsrpTransport)
+    assert a.settings.configured
     current["s"] = Settings()
     b = runtime.get_service()
     assert b is not a
-    assert isinstance(b.runner._transport, UnconfiguredTransport)
+    assert not b.settings.configured
     runtime.reset()
 
 
 def test_notify_never_raises_without_hermes():
     runtime.notify("changed", {"op": "x"})
+
+
+def test_reset_drops_audit_singleton(monkeypatch):
+    runtime.reset()
+    monkeypatch.setattr(runtime, "load_settings", lambda: Settings())
+    first = runtime.get_service().audit
+    assert runtime.get_service().audit is first
+    runtime.reset()
+    assert runtime.get_service().audit is not first
+    runtime.reset()
