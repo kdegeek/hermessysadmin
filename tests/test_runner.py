@@ -93,6 +93,7 @@ def test_real_prelude_defines_helpers():
         "function Global:Get-CnName", "function Global:Get-ParentDn", "function Global:New-HermesPassword",
         "function Global:ConvertTo-HermesSecure", "function Global:Assert-Hermes",
         "function Global:ConvertTo-LdapValue", "function Global:Get-HermesGpo", "function Global:Get-XmlText",
+        "function Global:Get-HermesTargets", "function Global:Invoke-HermesOne",
         "$Global:HermesCred", "'*-AD*:Credential'", "'*-GP*:Server'",
     ):
         assert name in text

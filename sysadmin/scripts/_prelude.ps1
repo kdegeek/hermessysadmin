@@ -167,3 +167,33 @@ function Global:Get-HermesFanout {
     })
     return @{ results = $results; errors = $failed }
 }
+
+function Global:Get-HermesTargets {
+    param(
+        [string[]]$Computers = @(),
+        [string]$Ou,
+        [string]$SearchBase
+    )
+    $t = @($Computers | Where-Object { $_ })
+    if ($Ou) {
+        $t += @(Get-ADComputer -Filter "Enabled -eq 'True'" -SearchBase $Ou -Properties DNSHostName | ForEach-Object { $_.DNSHostName } | Where-Object { $_ })
+    }
+    if ($t.Count -eq 0) {
+        $splat = @{ Filter = "OperatingSystem -like '*Server*' -and Enabled -eq 'True'"; Properties = 'DNSHostName' }
+        if ($SearchBase) { $splat.SearchBase = $SearchBase }
+        $t = @(Get-ADComputer @splat | ForEach-Object { $_.DNSHostName } | Where-Object { $_ })
+    }
+    return @($t | Sort-Object -Unique | Select-Object -First 200)
+}
+
+function Global:Invoke-HermesOne {
+    param(
+        [Parameter(Mandatory)][string]$Computer,
+        [Parameter(Mandatory)][scriptblock]$Script,
+        [object[]]$ArgumentList = @()
+    )
+    $r = Get-HermesFanout -Computers @($Computer) -Script $Script -ArgumentList $ArgumentList
+    if ($r.errors.Count -gt 0) { throw "$($r.errors[0].host): $($r.errors[0].message)" }
+    if ($r.results.Count -eq 0) { throw "$Computer returned no result." }
+    return $r.results[0]
+}
