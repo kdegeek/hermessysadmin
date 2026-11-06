@@ -19,8 +19,9 @@ Invoke-Op {
     if ([string]::IsNullOrWhiteSpace($Reason)) { throw 'Reason is required.' }
     if ($Reason.Length -gt 512) { throw 'Reason must be 512 characters or fewer.' }
     if ($Reason -match '[\r\n]') { throw 'Reason must not contain line breaks.' }
-    $text = $Reason.Replace('"', "'")
-    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Any
+    $text = $Reason.Replace('"', "'").TrimEnd('\')
+    if ([string]::IsNullOrWhiteSpace($text)) { throw 'Reason is empty after trimming trailing backslashes.' }
+    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Workstation
     if ($Preview) {
         $read = Invoke-HermesCatalogFanout -Computers $targets -Script {
             $users = @()
@@ -36,6 +37,7 @@ Invoke-Op {
     }
     Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($text, $DelaySeconds) -Script {
         param($why, $delay)
+        $ErrorActionPreference = 'Stop'
         & shutdown.exe /r /t $delay /c $why /d p:0:0
         if ($LASTEXITCODE -ne 0) { throw "shutdown.exe exited with code $LASTEXITCODE" }
         [pscustomobject]@{ restart_scheduled = $true }

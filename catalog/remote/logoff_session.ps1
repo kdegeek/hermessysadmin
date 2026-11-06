@@ -15,7 +15,7 @@ params:
 #>
 param([string[]]$Computers = @(), [string]$Ou, [int]$SessionId, [switch]$Preview)
 Invoke-Op {
-    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Any
+    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Workstation
     $read = Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($SessionId) -Script {
         param($id)
         foreach ($line in @(quser 2>$null)) {
@@ -32,6 +32,7 @@ Invoke-Op {
     }
     Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($SessionId) -Script {
         param($id)
+        $ErrorActionPreference = 'Stop'
         $user = ''
         foreach ($line in @(quser 2>$null)) {
             if ("$line" -match '^\s*>?(\S+)\s+(?:(\S+)\s+)?(\d+)\s+\S+') {

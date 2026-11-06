@@ -76,3 +76,17 @@ def test_remote_fix_entries_registered():
             "remote.lock_workstation", "remote.logoff_session", "remote.restart_computer"} <= ids
     assert OPS["cat.remote.restart_computer"].tier == "H"
     assert OPS["cat.remote.restart_computer"].preview
+
+
+def test_no_consent_shadow_needs_confirm_in_dashboard_flow(make_service, audit):
+    from sysadmin import api
+
+    svc = make_service()
+    body = {"args": {"computer": "PC1", "session_id": 1, "consent": False}}
+    first = api.run_op(svc, "remote_shadow_command", body)
+    assert not first["ok"] and first["error"]["type"] == "ApprovalRequired"
+    assert audit.query() == []
+    done = api.run_op(svc, "remote_shadow_command", {**body, "confirm": True})
+    assert done["ok"] and len(audit.query()) == 1
+    d = api.decision(svc, "remote_shadow_command", body)["data"]
+    assert d["tier"] == "H" and d["type_to_confirm"] is False

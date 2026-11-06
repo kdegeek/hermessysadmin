@@ -115,3 +115,26 @@ def test_ad_powershell_credential_reference_is_warned(monkeypatch, make_service)
     ok = hooks.pre_tool_call(tool_name="ad_powershell", args={"script": "Get-Date", "reason": "r"})
     assert "service credential" in bad["message"]
     assert "service credential" not in ok["message"]
+
+
+def test_escalated_read_op_is_gated_and_audited(svc, audit):
+    import json
+
+    from sysadmin import tools
+
+    args = {"computer": "PC1", "session_id": 2, "consent": False}
+    d = hooks.pre_tool_call(tool_name="remote_shadow_command", args=args)
+    assert d["action"] == "approve" and "HIGH-RISK" in d["message"]
+    assert d["rule_key"].startswith("hermes-sysadmin:remote_shadow_command:once:")
+    assert audit.query() == []
+    out = json.loads(tools.make_handler("remote_shadow_command")(args))
+    assert out["ok"] and "/noConsentPrompt" in out["data"]["command"]
+    rows = audit.query()
+    assert len(rows) == 1 and rows[0]["tool"] == "remote_shadow_command"
+
+
+def test_consenting_shadow_is_not_gated_or_audited(svc, audit):
+    args = {"computer": "PC1", "session_id": 2, "consent": True}
+    assert hooks.pre_tool_call(tool_name="remote_shadow_command", args=args) is None
+    assert svc.call("remote_shadow_command", args, actor="agent", approved=True)["ok"]
+    assert audit.query() == []

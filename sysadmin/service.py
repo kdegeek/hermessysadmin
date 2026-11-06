@@ -87,6 +87,7 @@ class Service:
         word = "attempted"
         try:
             op = self._op(name)
+            tier = op.tier
             clean = coerce_args(op, args)
             d = decide(op, clean, self.settings, self.facts)
             tier, word = d.tier, _decision_word(d, actor)
@@ -107,21 +108,21 @@ class Service:
                 self._audit(op, clean, actor, session, tier, f"blocked: {exc.message}", "-")
                 raise
             finally:
-                if op.tier != "R":
+                if d.tier != "R":
                     self.invalidate()
-            if op.tier != "R":
+            if d.tier != "R":
                 self._audit(op, clean, actor, session, d.tier, word, "ok")
                 self._safe_notify("changed", {"op": op.name, "target": target_of(op, clean), "actor": actor})
             return {"ok": True, "data": data}
         except PolicyBlocked as exc:
             return error_result(exc)
         except SysadminError as exc:
-            if op is not None and op.tier != "R" and not isinstance(exc, _NOT_AUDITED):
+            if op is not None and tier != "R" and not isinstance(exc, _NOT_AUDITED):
                 self._audit(op, clean, actor, session, tier, word, f"failed: {exc.message}")
             return error_result(exc)
         except Exception as exc:
             log.exception("hermes-sysadmin: %s failed", name)
-            if op is not None and op.tier != "R":
+            if op is not None and tier != "R":
                 self._audit(op, clean, actor, session, tier, word, f"failed: {type(exc).__name__}")
             return error_result(exc)
 

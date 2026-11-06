@@ -172,9 +172,14 @@ async def remote_shadow(
         sid = int(session_id)
     except (TypeError, ValueError):
         sid = -1  # rejected by the op as invalid
-    return await _with_service(
-        "remote_shadow", computer, session_id=sid, control=_flag(control, True), consent=_flag(consent, True)
-    )
+    if not _flag(consent, True):
+        # A no-consent shadow is a high-risk decision: it must go through the confirm flow, not a bare GET.
+        return {"ok": False, "error": {
+            "type": "ApprovalRequired",
+            "message": "Shadowing without the user's consent needs approval.",
+            "hint": "POST /ops/remote_shadow_command with the same arguments and confirm: true after the user approves.",
+        }}
+    return await _with_service("remote_shadow", computer, session_id=sid, control=_flag(control, True), consent=True)
 
 
 @router.get("/remote/{computer}/assist")

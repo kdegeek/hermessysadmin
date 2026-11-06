@@ -15,7 +15,7 @@ params:
 #>
 param([string[]]$Computers = @(), [string]$Ou, [bool]$Unsolicited = $true, [switch]$Preview)
 Invoke-Op {
-    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Any
+    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Workstation
     $want = [int]$Unsolicited
     $read = Invoke-HermesCatalogFanout -Computers $targets -Script {
         $a = $null; $u = $null
@@ -31,6 +31,7 @@ Invoke-Op {
     }
     Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($want) -Script {
         param($v)
+        $ErrorActionPreference = 'Stop'
         $ra = 'HKLM:\SYSTEM\CurrentControlSet\Control\Remote Assistance'
         $pol = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
         if (-not (Test-Path $pol)) { New-Item -Path $pol -Force | Out-Null }

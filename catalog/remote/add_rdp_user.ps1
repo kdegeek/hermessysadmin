@@ -20,7 +20,7 @@ Invoke-Op {
     foreach ($m in $list) {
         if ($m -notmatch '^[A-Za-z0-9 ._\\@-]+$') { throw "Member '$m' contains characters that are not allowed." }
     }
-    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Any
+    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Workstation
     $read = Invoke-HermesCatalogFanout -Computers $targets -Script {
         [pscustomobject]@{ members = @(Get-LocalGroupMember -SID 'S-1-5-32-555' | ForEach-Object { "$($_.Name)" }) }
     }
@@ -32,13 +32,16 @@ Invoke-Op {
     }
     Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @(, $list) -Script {
         param($names)
-        $have = @(Get-LocalGroupMember -SID 'S-1-5-32-555' | ForEach-Object { "$($_.Name)".ToLower() })
+        $ErrorActionPreference = 'Stop'
+        $have = @(Get-LocalGroupMember -SID 'S-1-5-32-555' | ForEach-Object { "$($_.SID.Value)" })
         $added = @(); $skipped = @()
         foreach ($m in @($names)) {
-            $short = $m.ToLower().Split('\')[-1]
-            if ($have -contains $m.ToLower() -or @($have | Where-Object { $_.Split('\')[-1] -eq $short }).Count -gt 0) { $skipped += $m; continue }
+            $sid = $null
+            try { $sid = (New-Object System.Security.Principal.NTAccount($m)).Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { throw "Cannot resolve '$m' to an account on this computer." }
+            if ($have -contains $sid) { $skipped += $m; continue }
             Add-LocalGroupMember -SID 'S-1-5-32-555' -Member $m
             $added += $m
+            $have += $sid
         }
         [pscustomobject]@{ added = $added; skipped = $skipped }
     }

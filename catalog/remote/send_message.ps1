@@ -19,8 +19,10 @@ Invoke-Op {
     if ([string]::IsNullOrWhiteSpace($Message)) { throw 'Message is required.' }
     if ($Message.Length -gt 255) { throw 'Message must be 255 characters or fewer.' }
     if ($Message -match '[\r\n]') { throw 'Message must not contain line breaks.' }
-    $text = $Message.Replace('"', "'")
-    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Any
+    if ($Message.TrimStart().StartsWith('/')) { throw 'Message must not start with a slash.' }
+    $text = $Message.Replace('"', "'").TrimEnd('\')
+    if ([string]::IsNullOrWhiteSpace($text)) { throw 'Message is empty after trimming trailing backslashes.' }
+    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Workstation
     if ($Preview) {
         return @{ summary = "Send a message to all sessions on $($targets.Count) computer(s) for $Seconds seconds"
                   changes = @($targets | ForEach-Object { "${_}: show '$text' for $Seconds seconds" })
@@ -28,6 +30,7 @@ Invoke-Op {
     }
     Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($text, $Seconds) -Script {
         param($msg, $sec)
+        $ErrorActionPreference = 'Stop'
         & msg.exe '*' "/TIME:$sec" $msg
         [pscustomobject]@{ sent = ($LASTEXITCODE -eq 0) }
     }

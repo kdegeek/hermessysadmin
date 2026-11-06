@@ -15,7 +15,7 @@ params:
 #>
 param([string[]]$Computers = @(), [string]$Ou, [bool]$Required = $true, [switch]$Preview)
 Invoke-Op {
-    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Any
+    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Workstation
     $want = [int]$Required
     $read = Invoke-HermesCatalogFanout -Computers $targets -Script {
         [pscustomobject]@{ before = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp').UserAuthentication }
@@ -28,6 +28,7 @@ Invoke-Op {
     }
     Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($want) -Script {
         param($v)
+        $ErrorActionPreference = 'Stop'
         $k = 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
         $before = (Get-ItemProperty $k).UserAuthentication
         Set-ItemProperty -Path $k -Name UserAuthentication -Value $v

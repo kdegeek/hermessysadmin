@@ -15,7 +15,7 @@ params:
 #>
 param([string[]]$Computers = @(), [string]$Ou, [bool]$Enabled = $true, [switch]$Preview)
 Invoke-Op {
-    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Any
+    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Workstation
     $want = if ($Enabled) { 0 } else { 1 }
     if ($Preview) {
         $read = Invoke-HermesCatalogFanout -Computers $targets -Script {
@@ -28,6 +28,7 @@ Invoke-Op {
     }
     Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($want) -Script {
         param($v)
+        $ErrorActionPreference = 'Stop'
         $k = 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server'
         $before = (Get-ItemProperty $k).fDenyTSConnections
         Set-ItemProperty -Path $k -Name fDenyTSConnections -Value $v

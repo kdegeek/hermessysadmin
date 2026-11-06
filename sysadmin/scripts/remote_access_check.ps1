@@ -12,7 +12,7 @@ Invoke-Op {
         $users = @()
         try { $users = @(Get-LocalGroupMember -SID 'S-1-5-32-555' -ErrorAction Stop | ForEach-Object { "$($_.Name)" }) } catch { }
         $shadow = $null
-        try { $shadow = [int](Get-ItemProperty $pol -ErrorAction Stop).Shadow } catch { }
+        try { $sv = (Get-ItemProperty $pol -ErrorAction Stop).Shadow; if ($null -ne $sv) { $shadow = [int]$sv } } catch { }
         $unsol = $null
         try { $unsol = ([int](Get-ItemProperty $pol -ErrorAction Stop).fAllowUnsolicited) -eq 1 } catch { $unsol = $false }
         $raFw = $null

@@ -62,7 +62,7 @@ def pre_tool_call(tool_name: str = "", args: dict | None = None, **kwargs: Any) 
 
 
 def _gate(op: Any, raw_args: dict | None, display: str, tool_name: str) -> dict | None:
-    if op.tier == "R":
+    if op.tier == "R" and op.escalate is None:
         return None
     try:
         service = runtime.get_service()

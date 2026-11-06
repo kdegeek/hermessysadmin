@@ -15,7 +15,7 @@ params:
 #>
 param([string[]]$Computers = @(), [string]$Ou, [int]$Level = 2, [switch]$Preview)
 Invoke-Op {
-    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Any
+    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Workstation
     $read = Invoke-HermesCatalogFanout -Computers $targets -Script {
         $v = $null
         try { $v = (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -ErrorAction Stop).Shadow } catch { }
@@ -29,6 +29,7 @@ Invoke-Op {
     }
     Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($Level) -Script {
         param($v)
+        $ErrorActionPreference = 'Stop'
         $k = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
         if (-not (Test-Path $k)) { New-Item -Path $k -Force | Out-Null }
         $before = $null

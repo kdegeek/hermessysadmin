@@ -14,7 +14,7 @@ params: []
 #>
 param([string[]]$Computers = @(), [string]$Ou, [switch]$Preview)
 Invoke-Op {
-    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Any
+    $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Workstation
     if ($Preview) {
         $read = Invoke-HermesCatalogFanout -Computers $targets -Script {
             [pscustomobject]@{ enabled = @(Get-NetFirewallRule -DisplayGroup 'Remote Desktop' | Where-Object { $_.Enabled -eq 'True' }).Count; total = @(Get-NetFirewallRule -DisplayGroup 'Remote Desktop').Count }
@@ -25,6 +25,7 @@ Invoke-Op {
                   current = $cur }
     }
     Invoke-HermesCatalogFanout -Computers $targets -Script {
+        $ErrorActionPreference = 'Stop'
         $before = @(Get-NetFirewallRule -DisplayGroup 'Remote Desktop' | Where-Object { $_.Enabled -eq 'True' }).Count
         Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'
         [pscustomobject]@{ enabled_before = $before; enabled_after = @(Get-NetFirewallRule -DisplayGroup 'Remote Desktop' | Where-Object { $_.Enabled -eq 'True' }).Count }
