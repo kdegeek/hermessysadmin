@@ -44,6 +44,8 @@ provides_tools:
   - backup_status
   - backup_versions
   - catalog_get
+  - catalog_module_install
+  - catalog_module_status
   - catalog_run
   - catalog_search
   - gpo_backup

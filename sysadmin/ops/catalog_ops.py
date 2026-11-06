@@ -60,12 +60,28 @@ def entry_detail(op: Op) -> dict[str, Any]:
             "params": params, "module_installed": None}
 
 
+def _module_installed(service: Any, module: str) -> bool | None:
+    """True/false for a gallery:<name>@<version> entry from a (cached) status call; None when unknown."""
+    if not module.startswith("gallery:"):
+        return None
+    name, _, version = module[len("gallery:"):].partition("@")
+    try:
+        data = service._run_cached(service._op("catalog_module_status"), {})
+        for row in (data or {}).get("items", []):
+            if row.get("name") == name and row.get("version") == version:
+                return bool(row.get("installed"))
+    except Exception:
+        return None
+    return None
+
+
 def _get(service: Any, args: Mapping[str, Any]) -> Any:
     entry_id = str(args.get("id") or "")
     op = next((o for o in catalog.entries() if (o.meta or {}).get("id") == entry_id), None)
     if op is None:
         raise InvalidArguments(f"Unknown catalog entry '{entry_id}'. Use catalog_search to find ids.")
     detail = entry_detail(op)
+    detail["module_installed"] = _module_installed(service, str((op.meta or {}).get("module") or ""))
     example: dict[str, Any] = {
         "id": entry_id,
         "params": {p.name: p.default for p in op.params if p.default is not None and p.name not in ("computers", "ou")},

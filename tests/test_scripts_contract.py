@@ -16,8 +16,19 @@ FORBIDDEN = re.compile(
     r"|\[scriptblock\]::Create|NewScriptBlock|InvokeScript|\bInvoke-Command\b",
     re.IGNORECASE,
 )
+NETWORK = re.compile(r"\bInvoke-WebRequest\b|\biwr\b|\bInvoke-RestMethod\b|\birm\b", re.IGNORECASE)
+WEB_ALLOWED = {"catalog_module_install"}  # the only script that downloads (pinned, hash-verified Gallery packages)
 # Windows PowerShell 5.1 is the target; pwsh 7 parses these but 5.1 does not.
 PS7_ONLY = re.compile(r"\?\?|\?\.|&&|\|\|")
+
+
+def _forbidden(text: str, stem: str = "", core: bool = False) -> bool:
+    code = _code(text)
+    if FORBIDDEN.search(code):
+        return True
+    if core and stem in WEB_ALLOWED:
+        return bool(re.search(r"\biwr\b|\bInvoke-RestMethod\b|\birm\b", code, re.IGNORECASE))
+    return bool(NETWORK.search(code))
 
 
 def _code(text: str) -> str:
@@ -49,7 +60,7 @@ def test_every_catalog_script_conforms(path):
     body = _code(text).lstrip()[len(block):].lstrip()
     assert body.startswith("Invoke-Op {"), "the script body must be a single Invoke-Op { ... } block"
     assert body.rstrip().endswith("}"), "nothing may follow the Invoke-Op block"
-    assert not FORBIDDEN.search(_code(text)), "forbidden construct"
+    assert not _forbidden(text), "forbidden construct"
     assert not PS7_ONLY.search(_code(text)), "PowerShell 7-only operator (target is 5.1)"
 
 
@@ -62,7 +73,7 @@ def test_every_op_has_a_contract_conforming_script(op):
     body = _code(text).lstrip()[len(block):].lstrip()
     assert body.startswith("Invoke-Op {"), "the script body must be a single Invoke-Op { ... } block"
     assert body.rstrip().endswith("}"), "nothing may follow the Invoke-Op block"
-    assert not FORBIDDEN.search(_code(text)), "forbidden construct"
+    assert not _forbidden(text, op.script, core=True), "forbidden construct"
     assert not PS7_ONLY.search(_code(text)), "PowerShell 7-only operator (target is 5.1)"
     for p in op.params:
         assert re.search(rf"\${p.ps_name}\b", block, re.IGNORECASE), f"param ${p.ps_name} not declared"
@@ -95,3 +106,12 @@ def test_group_member_scripts_resolve_uniquely_and_change_resolved_objects():
         text = (SCRIPTS_DIR / f"{name}.ps1").read_text(encoding="utf-8")
         assert "Resolve-HermesMember" in text and "cn=" not in text
         assert f"{cmd} -Identity $g -Members $dns" in text
+
+
+def test_web_download_is_confined_to_the_module_installer():
+    carriers = [p.stem for p in SCRIPTS_DIR.glob("*.ps1") if re.search(r"\bInvoke-WebRequest\b", _code(p.read_text(encoding="utf-8")), re.I)]
+    assert carriers == ["catalog_module_install"]
+    assert _forbidden("Invoke-WebRequest -Uri x", "some_other_script", core=True)
+    assert _forbidden("Invoke-WebRequest -Uri x", "catalog_module_install", core=False)
+    assert _forbidden("irm x", "catalog_module_install", core=True)
+    assert not _forbidden("Invoke-WebRequest -Uri x", "catalog_module_install", core=True)
