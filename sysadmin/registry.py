@@ -49,6 +49,8 @@ class Op:
     local: Callable[[Any, Mapping[str, Any]], Any] | None = None  # run in Python as local(service, args) instead of a script
     enabled: Callable[[Any], bool] | None = None  # enabled(settings) False -> decide() blocks the op
     destructive: bool = False  # irreversible (delete/overwrite/arbitrary code): dashboard requires typing the name
+    catalog: bool = False  # a cat.<id> entry from catalog/; reachable through catalog_run, not its own agent tool
+    meta: Mapping[str, Any] | None = None  # catalog metadata for search and the UI
 
 
 OPS: dict[str, Op] = {}

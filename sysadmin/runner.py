@@ -12,6 +12,8 @@ from .transport import Transport
 
 SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
 _SCRIPT_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
+CATALOG_DIR = Path(__file__).resolve().parent.parent / "catalog"
+_CATALOG_REL = re.compile(r"^[a-z0-9_]+/[a-z0-9_]+\.ps1$")
 
 
 def load_prelude(scripts_dir: Path = SCRIPTS_DIR) -> str:
@@ -52,6 +54,16 @@ class Runner:
         self._transport.close()
 
     def load_script(self, name: str) -> str:
+        if name.startswith("catalog:"):
+            rel = name[len("catalog:"):]
+            if not _CATALOG_REL.match(rel):
+                raise InvalidArguments(f"Invalid catalog script {rel!r}.")
+            if name not in self._cache:
+                path = CATALOG_DIR / rel
+                if not path.is_file():
+                    raise InvalidArguments(f"No catalog script {rel!r}.")
+                self._cache[name] = path.read_text(encoding="utf-8")
+            return self._cache[name]
         if not _SCRIPT_NAME.match(name):
             raise InvalidArguments(f"Invalid script name {name!r}.")
         if name not in self._cache:

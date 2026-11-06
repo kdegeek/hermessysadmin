@@ -1,6 +1,6 @@
 param([Parameter(Mandatory)][string]$Path)
 $bad = 0
-Get-ChildItem -Path $Path -Filter *.ps1 | ForEach-Object {
+Get-ChildItem -Path $Path -Filter *.ps1 -Recurse | ForEach-Object {
     $tokens = $null
     $errors = $null
     [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null

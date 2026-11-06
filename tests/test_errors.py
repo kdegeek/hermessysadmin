@@ -36,5 +36,5 @@ def test_error_types_are_indexed_by_type_string():
     assert ERROR_TYPES["ConnectionError"] is ConnectionFailed
     assert set(ERROR_TYPES) == {
         "NotConfigured", "ConnectionError", "PermissionDenied", "NotFound", "PolicyBlocked",
-        "ApprovalRequired", "RemoteScriptError", "Timeout", "InvalidArguments",
+        "ApprovalRequired", "RemoteScriptError", "Timeout", "InvalidArguments", "NotInstalled", "PartialResult",
     }

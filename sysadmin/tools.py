@@ -43,7 +43,7 @@ def _escape_enabled() -> bool:
 def register_tools(ctx: Any) -> list[str]:
     names: list[str] = []
     for op in sorted(OPS.values(), key=lambda o: o.name):
-        if op.name.startswith("t_"):
+        if op.name.startswith("t_") or op.catalog:
             continue
         ctx.register_tool(
             name=op.name,

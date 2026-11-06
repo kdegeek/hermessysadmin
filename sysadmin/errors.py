@@ -76,11 +76,21 @@ class InvalidArguments(SysadminError):
     default_hint = "Fix the arguments and call the tool again."
 
 
+class NotInstalled(SysadminError):
+    type = "NotInstalled"
+    default_hint = "Install the pinned module with catalog_module_install."
+
+
+class PartialResult(SysadminError):
+    type = "PartialResult"
+    default_hint = "Some hosts did not answer; the rows that did are included."
+
+
 ERROR_TYPES: dict[str, type[SysadminError]] = {
     cls.type: cls
     for cls in (
         NotConfigured, ConnectionFailed, PermissionDenied, NotFound, PolicyBlocked,
-        ApprovalRequired, RemoteScriptError, Timeout, InvalidArguments,
+        ApprovalRequired, RemoteScriptError, Timeout, InvalidArguments, NotInstalled, PartialResult,
     )
 }
 

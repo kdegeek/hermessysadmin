@@ -10,7 +10,7 @@ from sysadmin.registry import OPS
 from sysadmin.runner import SCRIPTS_DIR
 
 ROOT = Path(__file__).resolve().parent.parent
-REAL_OPS = [op for op in OPS.values() if not op.name.startswith("t_") and op.local is None]
+REAL_OPS = [op for op in OPS.values() if not op.name.startswith("t_") and op.local is None and not op.catalog]
 FORBIDDEN = re.compile(
     r"Invoke-Expression|\biex\b|Add-Type|DownloadString|Start-Process"
     r"|\[scriptblock\]::Create|NewScriptBlock|InvokeScript|\bInvoke-Command\b",
@@ -37,6 +37,20 @@ def _param_block(text: str) -> str:
             if depth == 0:
                 return code[: i + 1]
     raise AssertionError("unterminated param block")
+
+
+CATALOG_FILES = sorted((ROOT / "catalog").glob("*/*.ps1"))
+
+
+@pytest.mark.parametrize("path", CATALOG_FILES, ids=lambda p: f"{p.parent.name}/{p.name}")
+def test_every_catalog_script_conforms(path):
+    text = path.read_text(encoding="utf-8")
+    block = _param_block(text)
+    body = _code(text).lstrip()[len(block):].lstrip()
+    assert body.startswith("Invoke-Op {"), "the script body must be a single Invoke-Op { ... } block"
+    assert body.rstrip().endswith("}"), "nothing may follow the Invoke-Op block"
+    assert not FORBIDDEN.search(_code(text)), "forbidden construct"
+    assert not PS7_ONLY.search(_code(text)), "PowerShell 7-only operator (target is 5.1)"
 
 
 @pytest.mark.parametrize("op", REAL_OPS, ids=lambda o: o.name)
@@ -67,9 +81,10 @@ def test_no_orphan_scripts():
 
 
 @pytest.mark.skipif(shutil.which("pwsh") is None, reason="pwsh not installed")
-def test_all_scripts_parse():
+@pytest.mark.parametrize("directory", [SCRIPTS_DIR, ROOT / "catalog"], ids=["scripts", "catalog"])
+def test_all_scripts_parse(directory):
     result = subprocess.run(
-        ["pwsh", "-NoProfile", "-File", str(ROOT / "scripts" / "ps_parse_check.ps1"), "-Path", str(SCRIPTS_DIR)],
+        ["pwsh", "-NoProfile", "-File", str(ROOT / "scripts" / "ps_parse_check.ps1"), "-Path", str(directory)],
         capture_output=True, text=True, timeout=120,
     )
     assert result.returncode == 0, result.stdout + result.stderr

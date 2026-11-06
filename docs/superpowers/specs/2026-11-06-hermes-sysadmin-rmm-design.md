@@ -68,7 +68,7 @@ module: inbox:Storage                   # inbox:<Module> | gallery:<Name>@<exact
 target: endpoint                        # dc | endpoint
 tier: R                                 # R | W | H
 destructive: false                      # true => dashboard asks to type the target name
-preview: none                           # none | whatif | plan (W/H entries must be whatif or plan)
+preview: none                           # none | plan (W/H entries must be plan)
 columns: [host, drive, size_gb, free_gb, free_pct, low]
 tags: [disk, storage, capacity]
 source: "In-box Storage module (Get-Volume)"   # or upstream repo URL + SPDX license when adapted
@@ -92,7 +92,7 @@ Invoke-Op {
 Rules:
 - `target: endpoint` entries automatically get `Computers` (array) and `Ou` (string) parameters. They fan out through the new prelude helper `Invoke-HermesCatalogFanout`, which flattens per-host rows, adds `host`, and returns `@{ items; errors; summary = @{ hosts; ok; failed } }`. Its PSSession options are OpenTimeout 5 s and OperationTimeout 60 s, ThrottleLimit 16. `Get-HermesTargets` gains `-Kind Workstation|Server|Any`. For endpoint catalog entries the default is Workstation; the existing callers keep their server default.
 - A `gallery:` entry calls `Use-HermesModule <Name> <Version>` before using the module. The helper imports `-RequiredVersion` from the plugin-managed path and throws `NotInstalled` with an install hint when the module is missing. Gallery modules run **on the DC only**. Endpoint entries use in-box cmdlets, CIM and COM inside the fan-out.
-- The **plan** preview means: when `-Preview` is set, return `@{ summary; changes = @(...); current }` before changing anything (the v0.1 contract). **whatif** means running the cmdlet with `-WhatIf` and returning the captured messages as `changes`.
+- The **plan** preview means: when `-Preview` is set, return `@{ summary; changes = @(...); current }` before changing anything (the v0.1 contract).
 - `catalog.py` validates every header at load: unique id, a known category, the `module` grammar, params that match the `param()` block names, the tier/preview pairing, and a `gallery:` module that exists in `modules.lock.json`. An invalid entry is skipped and logged. In tests an invalid entry is a failure.
 - Entries register as Ops named `cat.<id>`, flagged `catalog=True`. They are **not** registered as agent tools, so `provides_tools` lists only the three catalog tools. The dashboard's existing `/ops/{name}` routes run them unchanged.
 
@@ -151,7 +151,7 @@ Every tile and chart segment is clickable and opens the matching filtered Fleet,
 
 - **Layout:** the left rail lists categories with counts. The main pane has search and an entry list (title, tier badge, target, module).
 - **Entry detail:** description, source and license, module status with an Install button for a missing gallery module (an H op), a parameter form generated from metadata (`string`/`enum` as a select, `integer`, `boolean`, `array` as a chips input), and a target picker (DC; selected devices; OU; a fleet filter).
-- **Actions:** Preview, for whatif or plan entries, shows the server preview. Run goes through the existing W/H confirm dialogs.
+- **Actions:** Preview, for plan entries, shows the server preview. Run goes through the existing W/H confirm dialogs.
 - **Results:** a table built from `columns`, with a per-host error list, CSV export and copy-as-JSON.
 
 ### 3.9 Monitoring and alerts
@@ -201,7 +201,7 @@ Every tile and chart segment is clickable and opens the matching filtered Fleet,
 
 ## 5. Catalog contents (target 60–80 entries by Nov 10)
 
-Categories are fixed: Endpoint health, Security posture, Patching, Users & sessions, Remote access, Network, Printers, AD hygiene, Group Policy, DNS & DHCP, Certificates, Event logs, Maintenance.
+Categories are fixed: Endpoint health, Security posture, Patching, Users & sessions, Remote access, Network, Printers, AD hygiene, Group Policy, DNS & DHCP, Certificates, Event logs, File permissions, Maintenance.
 
 | Category | Entries (R unless marked) |
 |---|---|
@@ -217,6 +217,7 @@ Categories are fixed: Endpoint health, Security posture, Patching, Users & sessi
 | DNS & DHCP | zones & aging/scavenging; stale DNS records; DHCP scope utilization; leases for host |
 | Certificates | expiring machine certificates (fleet); ADCS template audit (Gallery, read-only) |
 | Event logs | failed logons (4625) summary; account lockouts (4740) with source; RDP logons (4624 type 10); service install events (7045); event search by ID/time |
+| File permissions | NTFS access, effective access, orphaned SIDs, inheritance (Gallery NTFSSecurity, see §5.1) |
 | Maintenance | gpupdate (W); restart service (W); flush DNS (W); clear temp folders (W, plan shows sizes); restart computer (H, plan) |
 
 ### 5.1 Gallery modules (pinned)

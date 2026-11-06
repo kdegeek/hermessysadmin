@@ -155,6 +155,7 @@ function Global:Get-HermesErrorType {
     $cat = "$($Err.CategoryInfo.Category)"
     $msg = "$($Err.Exception.Message)"
     if ($msg -match '^PolicyBlocked:') { return 'PolicyBlocked' }
+    if ($msg -match '^NotInstalled:') { return 'NotInstalled' }
     if ($name -match 'IdentityNotFound|NotFound' -or $cat -eq 'ObjectNotFound' -or $msg -match 'Cannot find an object|was not found|does not exist') { return 'NotFound' }
     if ($name -match 'UnauthorizedAccess' -or $cat -in @('PermissionDenied', 'SecurityError') -or $msg -match 'Access is denied|Insufficient access rights') { return 'PermissionDenied' }
     if ($cat -in @('InvalidArgument', 'InvalidData')) { return 'InvalidArguments' }
@@ -209,7 +210,8 @@ function Global:Get-HermesTargets {
     param(
         [string[]]$Computers = @(),
         [string]$Ou,
-        [string]$SearchBase
+        [string]$SearchBase,
+        [ValidateSet('Server','Workstation','Any')][string]$Kind = 'Server'
     )
     $t = @($Computers | Where-Object { $_ })
     if ($Ou) {
@@ -218,8 +220,13 @@ function Global:Get-HermesTargets {
     # Fall back to every domain server ONLY when neither -Computers nor -Ou was supplied;
     # a supplied OU that yields nothing stays an empty list.
     if ($t.Count -eq 0 -and -not $Ou -and @($Computers | Where-Object { $_ }).Count -eq 0) {
-        $splat = @{ Filter = "OperatingSystem -like '*Server*' -and Enabled -eq 'True'"; Properties = 'DNSHostName' }
-        if ($SearchBase) { $splat.SearchBase = $SearchBase }
+        $filter = switch ($Kind) {
+            'Server'      { "OperatingSystem -like '*Server*' -and Enabled -eq 'True'" }
+            'Workstation' { "OperatingSystem -notlike '*Server*' -and Enabled -eq 'True'" }
+            default       { "Enabled -eq 'True'" }
+        }
+        $splat = @{ Filter = $filter; Properties = 'DNSHostName' }
+        if ($SearchBase -and $Kind -eq 'Server') { $splat.SearchBase = $SearchBase }
         $t = @(Get-ADComputer @splat | ForEach-Object { $_.DNSHostName } | Where-Object { $_ })
     }
     return @($t | Sort-Object -Unique | Select-Object -First 200)
@@ -235,4 +242,42 @@ function Global:Invoke-HermesOne {
     if ($r.errors.Count -gt 0) { throw "$($r.errors[0].host): $($r.errors[0].message)" }
     if ($r.results.Count -eq 0) { throw "$Computer returned no result." }
     return $r.results[0]
+}
+
+function Global:Invoke-HermesCatalogFanout {
+    # Runs $Script on each computer; every object a host emits becomes one row with 'host' added.
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$Computers,
+        [Parameter(Mandatory)][scriptblock]$Script,
+        [object[]]$ArgumentList = @()
+    )
+    if ($Computers.Count -eq 0) { return @{ items = @(); errors = @(); summary = @{ hosts = 0; ok = 0; failed = 0 } } }
+    $opt = New-PSSessionOption -OpenTimeout 5000 -OperationTimeout 60000
+    $errs = $null
+    $raw = Invoke-Command -ComputerName $Computers -ScriptBlock $Script -ArgumentList $ArgumentList -SessionOption $opt -ThrottleLimit 16 -ErrorAction SilentlyContinue -ErrorVariable errs
+    $items = @(foreach ($r in @($raw)) {
+        $h = @{}
+        foreach ($p in $r.PSObject.Properties) {
+            if ($p.Name -notin @('PSComputerName', 'RunspaceId', 'PSShowComputerName')) { $h[$p.Name] = $p.Value }
+        }
+        $h['host'] = "$($r.PSComputerName)"
+        $h
+    })
+    $failed = @(foreach ($e in @($errs)) {
+        $hostName = if ($e.OriginInfo -and $e.OriginInfo.PSComputerName) { "$($e.OriginInfo.PSComputerName)" } else { "$($e.TargetObject)" }
+        @{ host = $hostName; message = "$($e.Exception.Message)" }
+    })
+    $okHosts = @($items | ForEach-Object { $_['host'] } | Sort-Object -Unique).Count
+    return @{ items = $items; errors = $failed; summary = @{ hosts = $Computers.Count; ok = $okHosts; failed = $failed.Count } }
+}
+
+function Global:Use-HermesModule {
+    # Import a pinned Gallery module from the plugin-owned folder (Task 4 installs it there).
+    param([Parameter(Mandatory)][string]$Name, [Parameter(Mandatory)][string]$Version)
+    $root = 'C:\ProgramData\HermesSysadmin\Modules'
+    if (-not (Test-Path (Join-Path $root "$Name\$Version"))) {
+        throw "NotInstalled: $Name $Version is not installed on the jump host. Install it with catalog_module_install (name: $Name)."
+    }
+    if (($env:PSModulePath -split ';') -notcontains $root) { $env:PSModulePath = "$root;$env:PSModulePath" }
+    Import-Module -Name $Name -RequiredVersion $Version -ErrorAction Stop -WarningAction SilentlyContinue | Out-Null
 }
