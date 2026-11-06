@@ -77,6 +77,10 @@ provides_tools:
   - rdp_set_nla
   - rdp_users_add
   - rdp_users_remove
+  - remote_access_check
+  - remote_assist_command
+  - remote_sessions
+  - remote_shadow_command
   - sysadmin_audit_log
 provides_hooks:
   - pre_tool_call

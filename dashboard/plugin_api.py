@@ -146,6 +146,42 @@ async def fleet_device(computer: str) -> dict[str, Any]:
     return await _with_service("fleet_device", computer)
 
 
+def _flag(value: Optional[str], default: bool) -> bool:
+    if value is None:
+        return default
+    return str(value).strip().lower() in ("1", "true", "yes")
+
+
+# Registered before /remote/{computer}/... so "sessions" is not taken for a computer name.
+@router.get("/remote/sessions")
+async def remote_sessions(computers: Optional[str] = None) -> dict[str, Any]:
+    names = [c.strip() for c in (computers or "").split(",") if c.strip()]
+    return await _with_service("remote_sessions", computers=names)
+
+
+@router.get("/remote/{computer}/check")
+async def remote_check(computer: str) -> dict[str, Any]:
+    return await _with_service("remote_check", computer)
+
+
+@router.get("/remote/{computer}/shadow")
+async def remote_shadow(
+    computer: str, session_id: Optional[str] = None, control: Optional[str] = None, consent: Optional[str] = None
+) -> dict[str, Any]:
+    try:
+        sid = int(session_id)
+    except (TypeError, ValueError):
+        sid = -1  # rejected by the op as invalid
+    return await _with_service(
+        "remote_shadow", computer, session_id=sid, control=_flag(control, True), consent=_flag(consent, True)
+    )
+
+
+@router.get("/remote/{computer}/assist")
+async def remote_assist(computer: str) -> dict[str, Any]:
+    return await _with_service("remote_assist", computer)
+
+
 @router.post("/refresh")
 async def refresh() -> dict[str, Any]:
     return await _with_service("refresh")

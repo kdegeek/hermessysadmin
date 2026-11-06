@@ -211,6 +211,23 @@ def fleet_history(service: Any, days: int = 30) -> dict[str, Any]:
     return _safe(lambda: service.call("fleet_history", {"days": days}, actor=ACTOR))
 
 
+def remote_check(service: Any, computer: str) -> dict[str, Any]:
+    return _safe(lambda: service.call("remote_access_check", {"computer": computer}, actor=ACTOR))
+
+
+def remote_sessions(service: Any, computers: list[str] | None = None) -> dict[str, Any]:
+    return _safe(lambda: service.call("remote_sessions", {"computers": computers or []}, actor=ACTOR))
+
+
+def remote_shadow(service: Any, computer: str, session_id: int, control: bool = True, consent: bool = True) -> dict[str, Any]:
+    args = {"computer": computer, "session_id": session_id, "control": control, "consent": consent}
+    return _safe(lambda: service.call("remote_shadow_command", args, actor=ACTOR))
+
+
+def remote_assist(service: Any, computer: str) -> dict[str, Any]:
+    return _safe(lambda: service.call("remote_assist_command", {"computer": computer}, actor=ACTOR))
+
+
 def refresh(service: Any) -> dict[str, Any]:
     def go() -> dict[str, Any]:
         service.invalidate()

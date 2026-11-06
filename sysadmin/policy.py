@@ -141,7 +141,14 @@ def decide(op: Any, args: Mapping[str, Any], settings: Any, facts: Facts | None 
     if getattr(op, "enabled", None) is not None and not op.enabled(settings):
         return Decision("block", op.tier, f"{op.name} is disabled in the hermes-sysadmin settings.")
     if op.tier == "R":
-        return Decision("allow", "R", "Read-only operation.")
+        # An R op may still escalate (e.g. a no-consent shadow); it is then decided as tier H.
+        try:
+            r_escalated = bool(op.escalate and op.escalate(args, settings, facts or NoFacts()))
+        except Exception:
+            log.exception("hermes-sysadmin: escalate check failed for %s", getattr(op, "name", "?"))
+            return _block_safety("H", "escalation check raised an error")
+        if not r_escalated:
+            return Decision("allow", "R", "Read-only operation.")
     hit = _protected_hit(op, args, settings)
     if hit:
         kind, item = hit

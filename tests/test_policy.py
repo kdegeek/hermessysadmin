@@ -185,3 +185,24 @@ def test_ordinary_group_sid_is_not_privileged():
     from sysadmin.policy import is_privileged_group
 
     assert not is_privileged_group("S-1-5-21-1111-2222-3333-1105", Settings())
+
+
+def test_read_op_with_escalate_true_is_decided_as_high():
+    op = Op("t_p_rescalate", "t", "R", "t", "d", params=(Param("flag", "boolean", "f"),),
+            escalate=lambda args, settings, facts: args.get("flag") is True)
+    assert decide(op, {"flag": False}, STRICT).action == "allow"
+    assert decide(op, {"flag": False}, STRICT).tier == "R"
+    d = decide(op, {"flag": True}, PERMISSIVE)
+    assert (d.action, d.tier) == ("approve", "H")
+    assert decide(op, {"flag": True}, READONLY).action == "block"
+
+
+def test_read_op_without_escalate_stays_allowed():
+    assert decide(READ, {"identity": "bob"}, READONLY).action == "allow"
+
+
+def test_read_op_escalate_error_fails_closed():
+    def boom(args, settings, facts):
+        raise RuntimeError("x")
+    op = Op("t_p_rboom", "t", "R", "t", "d", escalate=boom)
+    assert decide(op, {}, STRICT).action == "block"
