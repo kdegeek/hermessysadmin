@@ -63,7 +63,7 @@ def test_manifest_declares_exactly_what_register_registers():
     m = manifest()
     assert sorted(m["provides_tools"]) == sorted(ctx.tools) == sorted(n for n in OPS if not n.startswith("t_"))
     assert sorted(m["provides_hooks"]) == sorted(ctx.hooks) == ["post_tool_call", "pre_tool_call"]
-    assert m["provides_middleware"] == []
+    assert "provides_middleware" not in m and m["kind"] == "standalone"
 
 
 import re

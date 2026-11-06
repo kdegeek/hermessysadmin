@@ -7,7 +7,7 @@ description: >-
   RDP sessions and access, and Windows Server Backup. Typed tools with tiered approvals, protected
   objects, a local audit log, workflow skills, /ad commands and a Hermes Desktop dashboard.
 author: Nate Crawford
-kind: general
+kind: standalone
 license: MIT
 tags: [active-directory, windows, winrm, group-policy, rdp, backup, sysadmin]
 requires_hermes: ">=0.22.2"
@@ -73,7 +73,6 @@ provides_tools:
 provides_hooks:
   - pre_tool_call
   - post_tool_call
-provides_middleware: []
 config_schema:
   host:
     type: str
