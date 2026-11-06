@@ -42,15 +42,19 @@ Invoke-Op {
         if ($pair[1]) { $splat[$pair[0]] = $pair[1] }
     }
     $u = New-ADUser @splat
+    # The account now exists: nothing below may throw, or the one-time password would be lost.
     $copied = @()
     $skipped = @()
+    $failed = @()
     if ($tpl) {
         $deny = @($PrivilegedGroups | ForEach-Object { "$_".ToLower() })
         foreach ($g in @($tpl.MemberOf)) {
             $cn = Get-CnName $g
             if ($deny -contains $cn.ToLower()) { $skipped += $cn; continue }
-            Add-ADGroupMember -Identity $g -Members $u.SamAccountName
-            $copied += $cn
+            try {
+                Add-ADGroupMember -Identity $g -Members $u.SamAccountName
+                $copied += $cn
+            } catch { $failed += @{ group = $cn; error = "$($_.Exception.Message)" } }
         }
     }
     $out = @{
@@ -61,6 +65,7 @@ Invoke-Op {
         must_change     = $MustChange
         groups_copied   = $copied
         groups_skipped  = $skipped
+        groups_failed   = $failed
         password_source = $(if ($generated) { 'generated' } else { 'provided' })
     }
     if ($generated) { $out.password = $Password }
