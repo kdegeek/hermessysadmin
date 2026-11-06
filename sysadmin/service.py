@@ -79,7 +79,7 @@ class Service:
 
     def call(
         self, name: str, args: Mapping[str, Any] | None = None, *,
-        actor: str, session: str = "", approved: bool = False,
+        actor: str, session: str = "", approved: bool | str = False,
     ) -> dict[str, Any]:
         op: Op | None = None
         clean: dict[str, Any] = {}
@@ -95,6 +95,11 @@ class Service:
                 raise PolicyBlocked(d.reason)
             if d.action == "approve" and not approved:
                 raise ApprovalRequired(f"{op.name} needs approval before it can run.")
+            if d.action == "approve" and approved == "W" and d.tier == "H":
+                # The human approved a write-tier change; the live decision escalated to high-risk since.
+                raise ApprovalRequired(
+                    f"{op.name} became high-risk after it was approved; approve it again.", tier=d.tier,
+                )
             try:
                 data = self._execute(op, clean)
             finally:

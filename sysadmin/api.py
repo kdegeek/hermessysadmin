@@ -133,7 +133,7 @@ def run_op(service: Any, name: str, body: Mapping[str, Any] | None) -> dict[str,
                 typed = str((body or {}).get("confirm_name") or "").strip().lower()
                 if typed != expected.lower():
                     raise InvalidArguments(f"Type '{expected}' to confirm this high-risk change.", confirm_name=expected)
-        return service.call(name, args, actor=ACTOR, session=session, approved=d.action == "approve")
+        return service.call(name, args, actor=ACTOR, session=session, approved=d.tier if d.action == "approve" else False)
 
     return _safe(go)
 

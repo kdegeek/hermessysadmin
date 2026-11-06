@@ -246,3 +246,17 @@ def test_cached_value_is_isolated_from_caller_mutation(ops, make_service, runner
     svc = make_service()
     svc.call("t_s_read", {"identity": "bob"}, actor="agent")["data"]["v"].append(2)
     assert svc.call("t_s_read", {"identity": "bob"}, actor="agent")["data"] == {"v": [1]}
+
+
+def test_tier_ceiling_rejects_escalation_after_w_approval(ops, make_service, runner):
+    runner.responses["t_s_esc"] = {}
+    result = make_service().call("t_s_esc", {"identity": "bob"}, actor="dashboard", approved="W")
+    assert result["error"]["type"] == "ApprovalRequired"
+    assert runner.calls == []
+
+
+def test_tier_ceiling_allows_matching_tier(ops, make_service, runner):
+    runner.responses["t_s_write"] = {}
+    assert make_service().call("t_s_write", {"identity": "bob"}, actor="dashboard", approved="W")["ok"] is True
+    runner.responses["t_s_esc"] = {}
+    assert make_service().call("t_s_esc", {"identity": "bob"}, actor="dashboard", approved="H")["ok"] is True

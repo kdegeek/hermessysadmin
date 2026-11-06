@@ -85,7 +85,7 @@ def _unlock(service: Any, rest: list[str], ctx: Any, session: str) -> str:
         if choice != "unlock":
             service.record_denied("ad_user_unlock", args, actor="command", session=session, reason="cancelled in /ad")
             return f"Cancelled — {name} was not unlocked."
-    r = service.call("ad_user_unlock", args, actor="command", session=session, approved=True)
+    r = service.call("ad_user_unlock", args, actor="command", session=session, approved=d.tier)
     return f"✅ Unlocked {name}." if r["ok"] else _err(r)
 
 
