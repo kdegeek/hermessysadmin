@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Mapping
 
 from ..registry import Op, Param, register
@@ -17,13 +18,35 @@ _DEFAULT_POLICIES = {
 }
 
 
+_GUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE)
+
+
+def _rdns(dn: str) -> list[str]:
+    """Lower-cased RDNs with the whitespace RFC 4514 allows around '=' and ',' removed."""
+    parts = re.split(r"(?<!\\),", dn)
+    out = []
+    for part in parts:
+        attr, sep, value = part.partition("=")
+        out.append(f"{attr.strip().lower()}{sep}{' '.join(value.split()).lower()}")
+    return out
+
+
 def is_wide_scope(dn: str) -> bool:
-    text = dn.strip().lower()
-    return text.startswith("dc=") or text.startswith("ou=domain controllers,") or ",cn=sites," in text
+    rdns = _rdns(dn)
+    if not rdns or not rdns[0]:
+        return False
+    return (
+        rdns[0].startswith("dc=")
+        or (rdns[0] == "ou=domain controllers" and len(rdns) > 1 and rdns[1].startswith("dc="))
+        or "cn=sites" in rdns
+    )
 
 
 def is_default_policy(identity: str) -> bool:
-    return identity.strip().strip("{}").lower() in _DEFAULT_POLICIES
+    guid = _GUID_RE.search(identity)
+    if guid:
+        return guid.group(0).lower() in _DEFAULT_POLICIES
+    return " ".join(identity.split()).lower() in _DEFAULT_POLICIES
 
 
 def gpo_issues(gpo: Mapping[str, Any]) -> list[str]:

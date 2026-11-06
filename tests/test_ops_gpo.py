@@ -89,3 +89,35 @@ def test_default_policies_escalate_status_and_filter_changes():
 def test_protected_gpo_names_block_changes():
     s = Settings(protected_objects=("Workstation Baseline",))
     assert decide(OPS["gpo_delete"], {"identity": "workstation baseline"}, s).tier == "P"
+
+
+@pytest.mark.parametrize(
+    "dn",
+    [
+        "DC = corp,DC=local",
+        " dc=corp, dc=local",
+        "OU=Domain Controllers ,DC=corp,DC=local",
+        "OU = Domain Controllers,DC=corp,DC=local",
+        "CN=Default-First-Site-Name, CN=Sites,CN=Configuration,DC=corp,DC=local",
+        "CN=Default-First-Site-Name,CN=Sites ,CN=Configuration,DC=corp,DC=local",
+    ],
+)
+def test_wide_scope_tolerates_dn_whitespace(dn):
+    assert is_wide_scope(dn)
+
+
+def test_narrow_scope_is_not_wide():
+    assert not is_wide_scope("OU=Sales,DC=corp,DC=local")
+    assert not is_wide_scope("OU=Domain Controllers Archive,OU=Old,DC=corp,DC=local")
+
+
+@pytest.mark.parametrize(
+    "identity",
+    [
+        "{ 31B2F340-016D-11D2-945F-00C04FB984F9 }",
+        "cn={6AC1786C-016F-11D2-945F-00C04fB984F9},cn=policies,cn=system,dc=corp,dc=local",
+        "Default  Domain   Policy",
+    ],
+)
+def test_default_policy_spellings(identity):
+    assert is_default_policy(identity)
