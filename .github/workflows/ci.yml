@@ -29,5 +29,9 @@ jobs:
         run: pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
       - name: Unit, contract, parse and desktop lint tests
         run: python -m pytest -q
+      - name: Desktop bundle is up to date
+        run: python3 scripts/build_desktop.py --check
       - name: Desktop syntax check
         run: node --check desktop/plugin.js
+      - name: Desktop unit tests
+        run: node --test desktop/tests/

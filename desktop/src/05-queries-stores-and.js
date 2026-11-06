@@ -1,0 +1,100 @@
+// ============================================================================
+// §5 QUERIES, STORES AND HOOKS
+// ============================================================================
+// React Query (the app's shared QueryClient) caches, dedupes and polls; the backend's
+// change event invalidates everything under KEY.all (see §16).
+const KEY = {
+  all: [PLUGIN_ID],
+  health: [PLUGIN_ID, 'health'],
+  overview: [PLUGIN_ID, 'overview'],
+  audit: (q) => [PLUGIN_ID, 'audit', q],
+  op: (o) => [PLUGIN_ID, 'op', o.name, o.args],
+  decision: (o) => [PLUGIN_ID, 'decision', o.name, o.args],
+  preview: (o, seq) => [PLUGIN_ID, 'preview', o.name, o.args, seq],
+};
+
+function invalidateAll() {
+  queryClient.invalidateQueries({ queryKey: KEY.all });
+}
+
+function useApi(key, fetcher, opts) {
+  const o = opts || {};
+  const enabled = o.enabled !== false;
+  const q = useQuery({
+    queryKey: key,
+    queryFn: fetcher,
+    enabled,
+    refetchInterval: o.refetchInterval || false,
+    staleTime: o.staleTime === undefined ? 10000 : o.staleTime,
+    refetchOnWindowFocus: false,
+  });
+  return {
+    res: q.data || null,
+    loading: enabled && !q.data && q.isFetching,
+    fetching: q.isFetching,
+    updatedAt: q.dataUpdatedAt || 0,
+    refetch: q.refetch,
+  };
+}
+
+function useOp(o, opts) {
+  return useApi(KEY.op(o), () => api.read(o), opts);
+}
+
+function useHealth() {
+  return useApi(KEY.health, api.health, { refetchInterval: POLL.health });
+}
+
+function useOverview(enabled) {
+  return useApi(KEY.overview, api.overview, { refetchInterval: POLL.overview, enabled });
+}
+
+function useDebounced(value, ms) {
+  const [v, setV] = useState(value);
+  useEffect(() => CTX.setTimeout(() => setV(value), ms), [value, ms]);
+  return v;
+}
+
+function useTick(ms) {
+  const [, setN] = useState(0);
+  useEffect(() => CTX.setInterval(() => setN((n) => n + 1), ms), [ms]);
+}
+
+// Page state lives in atoms so palette commands can steer the page from outside React.
+const $tab = atom('overview');
+const $users = atom({ query: '', status: 'any', stale: false, expiring: false, privileged: false, limit: 200 });
+const $rdpView = atom('sessions');
+const $focusSearch = atom(0);
+const $drawer = atom(null);
+const $dialog = atom(null);
+let dialogSeq = 0;
+
+function openDialog(Component, props) {
+  dialogSeq += 1;
+  $dialog.set({ Component, props: props || {}, seq: dialogSeq });
+  return dialogSeq;
+}
+
+// Closes only the dialog with this seq, so a form that hands off to another dialog
+// (a password reveal, a high-risk preview) never closes its successor.
+function closeDialog(seq) {
+  const cur = $dialog.get();
+  if (cur && (seq === undefined || cur.seq === seq)) {
+    $dialog.set(null);
+  }
+}
+
+function goTab(key, patch) {
+  if (!TABS.some((t) => t.key === key)) return false;
+  if (patch && patch.users) $users.set({ ...$users.get(), ...patch.users });
+  if (patch && patch.rdpView) $rdpView.set(patch.rdpView);
+  if (key !== 'users') $drawer.set(null);
+  $tab.set(key);
+  return true;
+}
+
+function openPage(key, patch) {
+  if (!goTab(key, patch)) goTab('overview');
+  host.navigate(ROUTE);
+}
+
