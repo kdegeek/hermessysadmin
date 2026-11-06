@@ -126,6 +126,26 @@ async def audit(
     return await _with_service("audit", limit=_limit(limit), actor=actor, decision=decision)
 
 
+@router.get("/fleet")
+async def fleet(refresh: Optional[str] = None) -> dict[str, Any]:
+    return await _with_service("fleet", refresh=str(refresh).lower() in ("1", "true", "yes"))
+
+
+# Registered before /fleet/{computer} so "history" is not taken for a computer name.
+@router.get("/fleet/history")
+async def fleet_history(days: Optional[str] = None) -> dict[str, Any]:
+    try:
+        n = int(days)
+    except (TypeError, ValueError):
+        n = 30
+    return await _with_service("fleet_history", days=n)
+
+
+@router.get("/fleet/{computer}")
+async def fleet_device(computer: str) -> dict[str, Any]:
+    return await _with_service("fleet_device", computer)
+
+
 @router.post("/refresh")
 async def refresh() -> dict[str, Any]:
     return await _with_service("refresh")

@@ -13,6 +13,7 @@ USAGE = "\n".join([
     "- `/ad unlock <name>`: unlock an account (asks first)",
     "- `/ad sessions [host]`: RDP sessions (all servers when no host is given)",
     "- `/ad backups`: Windows Server Backup status per server",
+    "- `/ad fleet [offline|reboot|disk|patch|<text>]`: fleet summary and matching computers",
     "- `/ad catalog <query>`: search the catalog of vetted tasks",
     "- `/ad run <id> key=value … [on HOST,HOST] [ou=DN]`: run a catalog entry (writes ask first)",
 ])
@@ -120,6 +121,58 @@ def _backups(service: Any, rest: list[str], ctx: Any, session: str) -> str:
     return "\n".join(lines) or "No servers found."
 
 
+def _fleet_flags(i: dict[str, Any], disk_pct: int) -> list[str]:
+    flags = []
+    if i.get("pending_reboot"):
+        flags.append("reboot")
+    if i.get("online") and isinstance(i.get("c_free_pct"), (int, float)) and i["c_free_pct"] < disk_pct:
+        flags.append("low disk")
+    if i.get("defender_rt") is False:
+        flags.append("defender off")
+    if i.get("bitlocker") not in ("on", None):
+        flags.append("bitlocker " + str(i["bitlocker"]))
+    if i.get("rdp") and i.get("nla") is False:
+        flags.append("rdp no NLA")
+    return flags
+
+
+def _fleet(service: Any, rest: list[str], ctx: Any, session: str) -> str:
+    r = service.call("fleet_inventory", {}, actor="command", session=session)
+    if not r["ok"]:
+        return _err(r)
+    d = r["data"]
+    s = d["summary"]
+    disk_pct = int(getattr(service.settings, "alert_disk_free_pct", 10))
+    lines = [
+        f"{s['total']} computer(s) · {s['online']} online · {s['offline']} offline · {s['pending_reboot']} pending reboot · "
+        f"{s['low_disk']} low disk · {s['patch_compliant']} patched ≤35d · defender off {s['defender_off']} · "
+        f"bitlocker off {s['bitlocker_off']} · RDP without NLA {s['rdp_no_nla']}"
+    ]
+    key = (rest[0] if rest else "").strip().lower()
+    tests: dict[str, Callable[[dict[str, Any]], bool]] = {
+        "offline": lambda i: not i.get("online"),
+        "reboot": lambda i: bool(i.get("pending_reboot")),
+        "disk": lambda i: bool(i.get("online")) and isinstance(i.get("c_free_pct"), (int, float)) and i["c_free_pct"] < disk_pct,
+        "patch": lambda i: isinstance(i.get("patch_age_days"), (int, float)) and i["patch_age_days"] > 35,
+    }
+    test = tests.get(key) or (lambda i: key in " ".join(str(i.get(f) or "") for f in ("name", "dns", "user", "os", "ou")).lower())
+    rows = [i for i in d["items"] if not key or test(i)]
+    for i in rows[:20]:
+        free = i.get("c_free_pct")
+        age = i.get("patch_age_days")
+        lines.append(" · ".join([
+            str(i.get("name")), "online" if i.get("online") else "offline", str(i.get("user") or "-"),
+            f"C: {free}% free" if free is not None else "C: -",
+            f"patch {age}d" if age is not None else "patch ?",
+            ", ".join(_fleet_flags(i, disk_pct)) or "-",
+        ]))
+    if len(rows) > 20:
+        lines.append(f"… and {len(rows) - 20} more")
+    if key and not rows:
+        lines.append("No computers match.")
+    return "\n".join(lines)
+
+
 def _catalog(service: Any, rest: list[str], ctx: Any, session: str) -> str:
     r = service.call("catalog_search", {"query": rest[0] if rest else "", "limit": 15}, actor="command", session=session)
     if not r["ok"]:
@@ -205,6 +258,7 @@ _SUBCOMMANDS: dict[str, Callable[[Any, list[str], Any, str], str]] = {
     "unlock": _unlock,
     "sessions": _sessions,
     "backups": _backups,
+    "fleet": _fleet,
     "catalog": _catalog,
     "run": _run,
 }

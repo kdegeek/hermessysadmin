@@ -48,6 +48,9 @@ provides_tools:
   - catalog_module_status
   - catalog_run
   - catalog_search
+  - fleet_device
+  - fleet_history
+  - fleet_inventory
   - gpo_backup
   - gpo_backups
   - gpo_create

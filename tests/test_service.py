@@ -274,3 +274,18 @@ def test_script_policy_block_is_audited_once(ops, make_service, runner, audit):
 def test_local_policy_block_is_audited_once(ops, make_service, runner, audit):
     make_service().call("t_s_write", {"identity": "krbtgt"}, actor="agent", approved=True)
     assert len(audit.query()) == 1
+
+
+def test_refresh_true_bypasses_cache_but_stores_result(scratch_ops, make_service, runner):
+    from sysadmin.registry import Op, Param
+
+    scratch_ops(Op("t_s_refresh", "t", "R", "t_s_refresh", "d", params=(Param("refresh", "boolean", "d"),), cache_ttl=30))
+    runner.responses["t_s_refresh"] = lambda params: {"n": len(runner.calls)}
+    svc = make_service(clock=lambda: 0.0)
+    svc.call("t_s_refresh", {}, actor="dashboard")
+    svc.call("t_s_refresh", {}, actor="dashboard")
+    assert len(runner.calls) == 1
+    svc.call("t_s_refresh", {"refresh": True}, actor="dashboard")
+    assert len(runner.calls) == 2
+    assert svc.call("t_s_refresh", {}, actor="dashboard")["data"] == {"n": 2}  # the refreshed value was cached
+    assert len(runner.calls) == 2

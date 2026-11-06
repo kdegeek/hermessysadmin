@@ -199,6 +199,18 @@ def audit(service: Any, limit: int = 100, actor: str | None = None, decision: st
     return _safe(lambda: {"ok": True, "data": {"items": service.audit.query(limit=limit, actor=actor or None, decision=decision or None)}})
 
 
+def fleet(service: Any, refresh: bool = False) -> dict[str, Any]:
+    return _safe(lambda: service.call("fleet_inventory", {"refresh": refresh}, actor=ACTOR))
+
+
+def fleet_device(service: Any, computer: str) -> dict[str, Any]:
+    return _safe(lambda: service.call("fleet_device", {"computer": computer}, actor=ACTOR))
+
+
+def fleet_history(service: Any, days: int = 30) -> dict[str, Any]:
+    return _safe(lambda: service.call("fleet_history", {"days": days}, actor=ACTOR))
+
+
 def refresh(service: Any) -> dict[str, Any]:
     def go() -> dict[str, Any]:
         service.invalidate()

@@ -16,6 +16,7 @@ EMOJI = {
     "ad_gpo": "📜",
     "ad_rdp": "🖥️",
     "ad_backup": "💾",
+    "fleet": "🗂️",
     "ad_meta": "🛠️",
     "catalog": "📚",
 }

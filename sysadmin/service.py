@@ -187,12 +187,14 @@ class Service:
     def _run_cached(self, op: Op, clean: dict[str, Any]) -> Any:
         if op.cache_ttl <= 0:
             return self._run(op, clean)
-        key = op.name + json.dumps(clean, sort_keys=True, default=str)
+        # refresh=true skips the lookup but still stores the result; it is not part of the cache key.
+        key = op.name + json.dumps({k: v for k, v in clean.items() if k != "refresh"}, sort_keys=True, default=str)
         now = self._clock()
-        with self._lock:
-            hit = self._cache.get(key)
-        if hit is not None and now - hit[0] < op.cache_ttl:
-            return copy.deepcopy(hit[1])
+        if clean.get("refresh") is not True:
+            with self._lock:
+                hit = self._cache.get(key)
+            if hit is not None and now - hit[0] < op.cache_ttl:
+                return copy.deepcopy(hit[1])
         with self._lock:
             gen = self._generation
         data = self._run(op, clean)

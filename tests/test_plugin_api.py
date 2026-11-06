@@ -29,7 +29,7 @@ def client(monkeypatch):
             return {"ok": True, "data": {"fn": fn_name}}
         return f
 
-    for name in ("health", "test_connection", "list_ops", "decision", "preview", "run_op", "overview", "audit", "refresh"):
+    for name in ("health", "test_connection", "list_ops", "decision", "preview", "run_op", "overview", "audit", "refresh", "fleet", "fleet_device", "fleet_history"):
         monkeypatch.setattr(core_api, name, fake(name))
     monkeypatch.setattr(sys.modules["hermes_sysadmin_core.runtime"], "get_service", lambda: StubService())
     app = FastAPI()
@@ -56,6 +56,9 @@ def test_manifest():
         ("get", "/overview", "overview"),
         ("get", "/audit?limit=5&actor=agent", "audit"),
         ("post", "/refresh", "refresh"),
+        ("get", "/fleet?refresh=true", "fleet"),
+        ("get", "/fleet/history?days=7", "fleet_history"),
+        ("get", "/fleet/PC-01", "fleet_device"),
     ],
 )
 def test_routes_delegate(client, method, path, fn):
