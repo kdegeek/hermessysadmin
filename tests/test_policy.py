@@ -141,3 +141,24 @@ def test_escalate_exception_fails_closed():
 def test_privileged_group_in_spaced_dn_and_sid_escalates():
     assert decide(GROUP, {"group": "CN = Domain Admins,CN=Users,DC=corp", "members": ["bob"]}, PERMISSIVE).tier == "H"
     assert decide(GROUP, {"group": "S-1-5-32-544", "members": ["bob"]}, PERMISSIVE).tier == "H"
+
+
+@pytest.mark.parametrize(
+    "dn",
+    [
+        r"CN=\6brbtgt,CN=Users,DC=corp,DC=local",
+        'CN="krbtgt",CN=Users,DC=corp,DC=local',
+        "CN=krbtgt+OU=x,CN=Users,DC=corp,DC=local",
+        r'CN="krb\74gt",CN=Users,DC=corp,DC=local',
+    ],
+)
+def test_dn_escape_quote_and_multivalue_forms_normalize(dn):
+    assert normalize_identity(dn) == "krbtgt"
+
+
+def test_audit_record_accepts_non_string_keys():
+    import sqlite3
+    from sysadmin.audit import AuditLog
+    log = AuditLog(sqlite3.connect(":memory:", check_same_thread=False))
+    log.record(actor="agent", session="", tool="t", target="", tier="W", decision="approved", result="ok", params={("a", 1): 2, b"k": 3})
+    assert log.query()[0]["params"] == {"('a', 1)": 2, "b'k'": 3}

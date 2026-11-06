@@ -64,7 +64,7 @@ def test_redact_recurses_and_normalizes_keys():
     assert out["nested"] == {"SecurePassword": "[redacted]", "ok": 1}
     assert out["items"][0] == {"pwd": "[redacted]"}
     assert out["items"][1][0] == {"user_password": "[redacted]"}
-    assert out[5] == "x" and out["plain"] == "v"
+    assert out["5"] == "x" and out["plain"] == "v"
 
 
 def test_oversized_params_with_password_stay_redacted():

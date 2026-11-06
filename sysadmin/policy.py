@@ -46,22 +46,40 @@ class NoFacts:
         return None
 
 
+_HEX = "0123456789abcdefABCDEF"
+
+
 def _first_rdn_value(dn: str) -> str:
-    """Value of the first RDN of a DN, honouring backslash-escaped characters."""
+    """Value of the first attribute of a DN's first RDN (RFC 4514).
+
+    Honours backslash escapes (``\\,`` and hex pairs such as ``\\6b``), quoted
+    values, and stops at an unescaped ``,`` or ``+`` (multi-valued RDN), so every
+    spelling AD resolves to the same object normalizes to the same name.
+    """
     text = _DN_RE.sub("", dn, count=1)
-    out: list[str] = []
+    out = bytearray()
+    quoted = False
     i = 0
     while i < len(text):
         ch = text[i]
+        pair = text[i + 1 : i + 3]
+        if ch == "\\" and len(pair) == 2 and all(c in _HEX for c in pair):
+            out.append(int(text[i + 1 : i + 3], 16))
+            i += 3
+            continue
         if ch == "\\" and i + 1 < len(text):
-            out.append(text[i + 1])
+            out.extend(text[i + 1].encode())
             i += 2
             continue
-        if ch == ",":
+        if ch == '"':
+            quoted = not quoted
+            i += 1
+            continue
+        if ch in ",+" and not quoted:
             break
-        out.append(ch)
+        out.extend(ch.encode())
         i += 1
-    return "".join(out)
+    return out.decode("utf-8", errors="replace")
 
 
 def normalize_identity(value: str) -> str:

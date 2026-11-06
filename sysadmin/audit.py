@@ -41,7 +41,7 @@ def _is_secret_key(key: Any) -> bool:
 
 def _redact_value(value: Any) -> Any:
     if isinstance(value, Mapping):
-        return {k: ("[redacted]" if _is_secret_key(k) else _redact_value(v)) for k, v in value.items()}
+        return {(k if isinstance(k, str) else str(k)): ("[redacted]" if _is_secret_key(k) else _redact_value(v)) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [_redact_value(v) for v in value]
     return value
