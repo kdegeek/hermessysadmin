@@ -26,12 +26,13 @@ Invoke-Op {
                 catch [Microsoft.PowerShell.Commands.MemberNotFoundException] { }
             }
             try {
-                [pscustomobject]@{ members = @(Get-LocalGroupMember -SID 'S-1-5-32-555' | ForEach-Object { "$($_.Name)" }); warning = $null }
+                [pscustomobject]@{ members = @(Get-LocalGroupMember -SID 'S-1-5-32-555' -ErrorAction Stop | ForEach-Object { "$($_.Name)" }); warning = $null }
             } catch {
                 [pscustomobject]@{ members = $null; warning = "Change applied but the membership read-back failed: $($_.Exception.Message)" }
             }
         }
-        $now = if ($null -eq $r.members) { $null } else { @($r.members) }
+        $now = $null
+        if ($null -ne $r.members) { $now = @($r.members) }
         $warning = $r.warning
     }
     @{ host = $ComputerName; removed = $qualified; domain_controller = $isDc; members = $now; warning = $warning }

@@ -30,7 +30,7 @@ Invoke-Op {
             policy            = [bool]$p
             last_success      = (& $iso $s.LastSuccessfulBackupTime)
             last_backup       = (& $iso $s.LastBackupTime)
-            last_result_hr    = [int]$s.LastBackupResultHR
+            last_result_hr    = [long]$s.LastBackupResultHR
             message           = "$($s.DetailedMessage)"
             next_run          = (& $iso $s.NextBackupTime)
             versions          = [int]$s.NumberOfVersions

@@ -21,10 +21,10 @@ Invoke-Op {
             else { foreach ($vol in $V) { Add-WBVolume -Policy $policy -Volume (Get-WBVolume -VolumePath $vol) } }
             if (-not $T) {
                 if (-not $scheduled) { throw "Give a 'target' (no scheduled policy to take it from)." }
-                $existing = @(Get-WBBackupTarget -Policy $scheduled)[0]
-                $T = if ($existing.Path) { "$($existing.Path)" } else { "$($existing.Label)" }
-            }
-            if ($T -like '\\*') { $bt = New-WBBackupTarget -NetworkPath $T -Credential $C }
+                # Reuse the scheduled target object: a disk/volume target has no path to rebuild it from.
+                $bt = @(Get-WBBackupTarget -Policy $scheduled)[0]
+                $T = $(if ($bt.Path) { "$($bt.Path)" } else { "$($bt.Label)" })
+            } elseif ($T -like '\\*') { $bt = New-WBBackupTarget -NetworkPath $T -Credential $C }
             else { $bt = New-WBBackupTarget -VolumePath $T }
             Add-WBBackupTarget -Policy $policy -Target $bt | Out-Null
         }

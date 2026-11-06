@@ -30,7 +30,7 @@ Invoke-Op {
         if ($SS) { Add-WBSystemState -Policy $p }
         if ($BMR) { Add-WBBareMetalRecovery -Policy $p }
         foreach ($vol in $V) { Add-WBVolume -Policy $p -Volume (Get-WBVolume -VolumePath $vol) }
-        Set-WBSchedule -Policy $p -Schedule @($Sch | ForEach-Object { [datetime]::ParseExact($_, 'H:mm', $null) }) | Out-Null
+        Set-WBSchedule -Policy $p -Schedule @($Sch | ForEach-Object { [datetime]::ParseExact($_, 'H:mm', [cultureinfo]::InvariantCulture) }) | Out-Null
         if ($T -like '\\*') { $bt = New-WBBackupTarget -NetworkPath $T -Credential $C } else { $bt = New-WBBackupTarget -VolumePath $T }
         Add-WBBackupTarget -Policy $p -Target $bt | Out-Null
         Set-WBPolicy -Policy $p -Force
@@ -46,6 +46,7 @@ Invoke-Op {
                 "Schedule: $(@($before.schedule) -join ', ') -> $($Schedule -join ', ')",
                 "Target: $($before.target) -> $Target",
                 "System state: $($before.system_state) -> $SystemState; bare metal: $($before.bare_metal) -> $BareMetal",
+                "Volumes: $(@($before.volumes) -join ', ') -> $(@($Volumes) -join ', ')",
                 "Set-WBPolicy -Force (replaces the existing policy)"
             )
             current = $before
