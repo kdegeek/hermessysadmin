@@ -64,3 +64,49 @@ def test_manifest_declares_exactly_what_register_registers():
     assert sorted(m["provides_tools"]) == sorted(ctx.tools) == sorted(n for n in OPS if not n.startswith("t_"))
     assert sorted(m["provides_hooks"]) == sorted(ctx.hooks) == ["post_tool_call", "pre_tool_call"]
     assert m["provides_middleware"] == []
+
+
+import re
+
+from sysadmin.tools import EMOJI
+
+SKILL_NAMES = {
+    "onboard-user", "offboard-user", "lockout-triage", "gpo-change",
+    "domain-health-check", "access-review", "backup-recovery-guide",
+}
+TOOL_WORD = re.compile(r"\b(?:ad|gpo|rdp|backup|sysadmin)_[a-z_]+\b")
+
+
+def _frontmatter(text):
+    assert text.startswith("---\n"), "SKILL.md must start with YAML frontmatter"
+    head, body = text[4:].split("\n---\n", 1)
+    return yaml.safe_load(head), body
+
+
+def test_register_adds_skills_and_ad_command():
+    ctx = FakeCtx()
+    load_plugin().register(ctx)
+    assert set(ctx.skills) == SKILL_NAMES
+    assert all(p.is_file() and p.name == "SKILL.md" for p in ctx.skills.values())
+    handler, description, args_hint = ctx.commands["ad"]
+    assert callable(handler) and "status" in args_hint
+
+
+def test_register_hooks_are_the_real_gate_functions():
+    ctx = FakeCtx()
+    plugin = load_plugin()
+    plugin.register(ctx)
+    # The plugin imports sysadmin as a submodule of itself, not as top-level "sysadmin".
+    hooks = sys.modules[plugin.__name__ + ".sysadmin.hooks"]
+    assert ctx.hooks["pre_tool_call"] is hooks.pre_tool_call
+    assert ctx.hooks["post_tool_call"] is hooks.post_tool_call
+
+
+def test_skills_are_well_formed_and_only_name_real_tools():
+    known = set(OPS) | set(EMOJI)
+    for name in SKILL_NAMES:
+        meta, body = _frontmatter((ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8"))
+        assert meta["name"] == name
+        assert 20 <= len(meta["description"]) <= 1024
+        unknown = sorted(set(TOOL_WORD.findall(body)) - known)
+        assert not unknown, f"{name} mentions unknown tools: {unknown}"
