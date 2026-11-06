@@ -271,10 +271,107 @@ function Global:Invoke-HermesCatalogFanout {
     return @{ items = $items; errors = $failed; summary = @{ hosts = $Computers.Count; ok = $okHosts; failed = $failed.Count } }
 }
 
+function Global:Assert-HermesModuleRoot {
+    # The pinned-module folder is code that runs as the admin account, so only SYSTEM and Administrators
+    # may own or write to it. -Create makes it (and its parent) with a protected, administrators-only ACL;
+    # an existing root is re-ACLed only when an administrator already owns it. Without -Create this only checks.
+    param([switch]$Create)
+    $base = Join-Path $env:ProgramData 'HermesSysadmin'
+    $root = Join-Path $base 'Modules'
+    $sidType = [System.Security.Principal.SecurityIdentifier]
+    $admins = New-Object $sidType 'S-1-5-32-544'
+    $system = New-Object $sidType 'S-1-5-18'
+    $trusted = @($admins.Value, $system.Value)
+    $lockDown = {
+        param([string]$Path)
+        $acl = Get-Acl -LiteralPath $Path
+        $acl.SetAccessRuleProtection($true, $false)
+        foreach ($r in @($acl.Access)) { [void]$acl.RemoveAccessRule($r) }
+        foreach ($sid in @($admins, $system)) {
+            $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+            $acl.AddAccessRule($rule)
+        }
+        $acl.SetOwner($admins)
+        Set-Acl -LiteralPath $Path -AclObject $acl
+    }
+    $ownerOk = {
+        param([string]$Path)
+        $o = (Get-Acl -LiteralPath $Path).GetOwner($sidType)
+        return ($null -ne $o -and $trusted -contains $o.Value)
+    }
+    if ($Create) {
+        foreach ($dir in @($base, $root)) {
+            if (-not (Test-Path -LiteralPath $dir)) {
+                New-Item -ItemType Directory -Path $dir -Force | Out-Null
+                & $lockDown $dir
+            } elseif ($dir -eq $root) {
+                if (-not (& $ownerOk $dir)) { throw "UnsafeModuleRoot: $dir exists but is not owned by Administrators or SYSTEM; remove it or take ownership as an administrator." }
+                & $lockDown $dir
+            }
+        }
+    }
+    if (-not (Test-Path -LiteralPath $root)) { throw "UnsafeModuleRoot: $root does not exist." }
+    if (-not (& $ownerOk $root)) { throw "UnsafeModuleRoot: $root is not owned by Administrators or SYSTEM." }
+    # write, append, create, delete, change-permissions, take-ownership, generic write/all
+    $writeMask = 0x500D0156
+    foreach ($ace in @((Get-Acl -LiteralPath $root).GetAccessRules($true, $true, $sidType))) {
+        if ("$($ace.AccessControlType)" -ne 'Allow') { continue }
+        if ($trusted -contains $ace.IdentityReference.Value) { continue }
+        if (([int]$ace.FileSystemRights -band $writeMask) -ne 0) {
+            throw "UnsafeModuleRoot: $root grants write access to $($ace.IdentityReference.Value)."
+        }
+    }
+}
+
+function Global:Get-HermesModuleRecord {
+    # installed.json -> @{ Name = @{ version; package_hash; installed_utc; files = @{ relpath = sha256 } } }
+    $file = Join-Path (Join-Path $env:ProgramData 'HermesSysadmin\Modules') 'installed.json'
+    $out = @{}
+    if (-not (Test-Path -LiteralPath $file)) { return $out }
+    try {
+        $json = Get-Content -LiteralPath $file -Raw -Encoding UTF8 | ConvertFrom-Json
+        foreach ($p in $json.PSObject.Properties) {
+            $files = @{}
+            if ($p.Value.files) { foreach ($f in $p.Value.files.PSObject.Properties) { $files[$f.Name] = "$($f.Value)" } }
+            $out[$p.Name] = @{ version = "$($p.Value.version)"; package_hash = "$($p.Value.package_hash)"; installed_utc = "$($p.Value.installed_utc)"; files = $files }
+        }
+    } catch { return @{} }
+    return $out
+}
+
+function Global:Get-HermesFileHashMap {
+    # relative path -> SHA256 for every file under $Dir
+    param([Parameter(Mandatory)][string]$Dir)
+    $base = (Resolve-Path -LiteralPath $Dir).ProviderPath.TrimEnd('\')
+    $map = @{}
+    foreach ($f in @(Get-ChildItem -LiteralPath $Dir -Recurse -File -Force)) {
+        $map[$f.FullName.Substring($base.Length).TrimStart('\')] = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash
+    }
+    return $map
+}
+
+function Global:Test-HermesModuleVerified {
+    # True only when the root is safe, installed.json records this exact version and package hash, and the
+    # files on disk are exactly the files (and SHA256 hashes) recorded at install time.
+    param([Parameter(Mandatory)][string]$Name, [Parameter(Mandatory)][string]$Version, [Parameter(Mandatory)][string]$PackageHash)
+    try { Assert-HermesModuleRoot } catch { return $false }
+    $dir = Join-Path (Join-Path $env:ProgramData 'HermesSysadmin\Modules') (Join-Path $Name $Version)
+    if (-not (Test-Path -LiteralPath $dir)) { return $false }
+    $rec = (Get-HermesModuleRecord)[$Name]
+    if ($null -eq $rec -or $rec.version -ne $Version -or $rec.package_hash -cne $PackageHash -or $rec.files.Count -eq 0) { return $false }
+    $actual = Get-HermesFileHashMap -Dir $dir
+    if ($actual.Count -ne $rec.files.Count) { return $false }
+    foreach ($k in $rec.files.Keys) {
+        if (-not $actual.ContainsKey($k) -or $actual[$k] -ne $rec.files[$k]) { return $false }
+    }
+    return $true
+}
+
 function Global:Use-HermesModule {
     # Import a pinned Gallery module from the plugin-owned folder (Task 4 installs it there).
     param([Parameter(Mandatory)][string]$Name, [Parameter(Mandatory)][string]$Version)
     $root = 'C:\ProgramData\HermesSysadmin\Modules'
+    if (Test-Path -LiteralPath $root) { Assert-HermesModuleRoot }
     if (-not (Test-Path (Join-Path $root "$Name\$Version"))) {
         throw "NotInstalled: $Name $Version is not installed on the jump host. Install it with catalog_module_install (name: $Name)."
     }

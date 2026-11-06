@@ -76,3 +76,33 @@ def test_catalog_get_module_installed_is_null_on_error_or_inbox(monkeypatch, mak
     _gallery_entry(monkeypatch, "inbox:ActiveDirectory")
     out = make_service().call("catalog_get", {"id": "t.entry"}, actor="agent")
     assert out["data"]["module_installed"] is None
+
+
+def _script(name):
+    from sysadmin.runner import SCRIPTS_DIR
+
+    return (SCRIPTS_DIR / f"{name}.ps1").read_text(encoding="utf-8")
+
+
+def test_module_root_is_protected_before_any_write():
+    prelude, install = _script("_prelude"), _script("catalog_module_install")
+    assert "function Global:Assert-HermesModuleRoot" in prelude and "UnsafeModuleRoot:" in prelude
+    assert "SetAccessRuleProtection($true, $false)" in prelude and "S-1-5-32-544" in prelude and "S-1-5-18" in prelude
+    assert "Add-Type" not in prelude
+    create = install.index("Assert-HermesModuleRoot -Create")
+    for write in ("New-Item", "Invoke-WebRequest", "Copy-Item", "Move-Item", "Set-Content"):
+        # the first write after the preview branch comes after the ACL gate
+        assert install.index(write, install.index("LoadWithPartialName")) > create
+    assert install.index("Assert-HermesModuleRoot\n", create) > create
+    assert "Assert-HermesModuleRoot" in _script("catalog_module_status") and "root_safe" in _script("catalog_module_status")
+    use = prelude[prelude.index("function Global:Use-HermesModule"):]
+    assert "Assert-HermesModuleRoot" in use and "-Create" not in use
+
+
+def test_verification_is_by_file_hash_and_safer_staging():
+    prelude, install = _script("_prelude"), _script("catalog_module_install")
+    assert "Test-HermesModuleVerified" in _script("catalog_module_status") and "Test-HermesModuleVerified" in install
+    assert "-Algorithm SHA256" in prelude and "files = $fileHashes" in install
+    assert "-cne $m.package_hash" in install and ".part" in install and "$ProgressPreference = 'SilentlyContinue'" in install
+    assert install.index("Copy-Item -LiteralPath $staged") < install.index("Get-FileHash -LiteralPath $work") < install.index("ExtractToDirectory($work")
+    assert "Use staged package" in install and "dependency cycle" in install and "^\\d+(\\.\\d+){1,3}$" in install

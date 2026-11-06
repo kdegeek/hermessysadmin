@@ -4,18 +4,30 @@ param(
     [switch]$Preview
 )
 Invoke-Op {
+    $ProgressPreference = 'SilentlyContinue'
     $mods = @((ConvertFrom-Json -InputObject $Lock).modules)
     $byName = @{}
-    foreach ($m in $mods) { $byName[$m.name] = $m }
+    foreach ($m in $mods) {
+        Assert-Hermes ("$($m.name)" -match '^[A-Za-z0-9._-]+$') "Lock entry has an invalid module name '$($m.name)'."
+        Assert-Hermes ("$($m.version)" -match '^\d+(\.\d+){1,3}$') "Lock entry $($m.name) has an invalid version '$($m.version)'."
+        $byName[$m.name] = $m
+    }
+    foreach ($m in $mods) {
+        foreach ($r in @($m.requires)) { Assert-Hermes ($r -and $byName.ContainsKey($r)) "Lock entry $($m.name) requires '$r', which is not in the lock." }
+    }
     Assert-Hermes ($byName.ContainsKey($Name)) "'$Name' is not a pinned module."
 
-    # Dependencies first.
+    # Dependencies first; $state is 1 while visiting (a revisit is a cycle) and 2 when done.
     $order = New-Object System.Collections.ArrayList
+    $state = @{}
     $visit = $null
     $visit = {
         param([string]$n)
-        if ($order -contains $n) { return }
+        if ($state[$n] -eq 2) { return }
+        if ($state[$n] -eq 1) { throw "The lock has a dependency cycle at '$n'." }
+        $state[$n] = 1
         foreach ($r in @($byName[$n].requires)) { if ($r) { & $visit $r } }
+        $state[$n] = 2
         [void]$order.Add($n)
     }
     & $visit $Name
@@ -25,64 +37,79 @@ Invoke-Op {
     $recordFile = Join-Path $root 'installed.json'
     $arrow = [string][char]0x2192
 
-    $record = @{}
-    if (Test-Path -LiteralPath $recordFile) {
-        try {
-            $json = Get-Content -LiteralPath $recordFile -Raw -Encoding UTF8 | ConvertFrom-Json
-            foreach ($p in $json.PSObject.Properties) { $record[$p.Name] = @{ version = "$($p.Value.version)"; package_hash = "$($p.Value.package_hash)"; installed_utc = "$($p.Value.installed_utc)" } }
-        } catch { $record = @{} }
-    }
-    $isDone = {
-        param($m)
-        $r = $record[$m.name]
-        return ((Test-Path -LiteralPath (Join-Path $root (Join-Path $m.name $m.version))) -and $null -ne $r -and $r.version -eq "$($m.version)" -and $r.package_hash -eq "$($m.package_hash)")
-    }
-
     if ($Preview) {
+        $rootNote = @()
+        if (-not (Test-Path -LiteralPath $root)) { $rootNote = @("Create $root with an administrators-only ACL") }
+        else { try { Assert-HermesModuleRoot } catch { $rootNote = @("Existing module root fails the safety check: $($_.Exception.Message)") } }
         $lines = @(foreach ($n in $order) {
             $m = $byName[$n]
-            if (& $isDone $m) { "$($m.name) $($m.version): already installed" }
-            else { "Download https://www.powershellgallery.com/api/v2/package/$($m.name)/$($m.version) $arrow verify SHA512 $arrow install to $(Join-Path $root (Join-Path $m.name $m.version))" }
+            $dest = Join-Path $root (Join-Path $m.name $m.version)
+            $staged = Join-Path $stagingDir "$($m.name).$($m.version).nupkg"
+            if (Test-HermesModuleVerified -Name $m.name -Version $m.version -PackageHash $m.package_hash) { "$($m.name) $($m.version): already installed" }
+            elseif (Test-Path -LiteralPath $staged) { "Use staged package $staged $arrow verify SHA512 $arrow install to $dest" }
+            else { "Download https://www.powershellgallery.com/api/v2/package/$($m.name)/$($m.version) $arrow verify SHA512 $arrow install to $dest" }
         })
         $current = @(foreach ($n in $order) {
             $m = $byName[$n]
-            @{ name = $m.name; version = $m.version; installed = [bool](Test-Path -LiteralPath (Join-Path $root (Join-Path $m.name $m.version))); verified = [bool](& $isDone $m) }
+            @{
+                name = $m.name; version = $m.version
+                installed = [bool](Test-Path -LiteralPath (Join-Path $root (Join-Path $m.name $m.version)))
+                verified = [bool](Test-HermesModuleVerified -Name $m.name -Version $m.version -PackageHash $m.package_hash)
+            }
         })
         return @{
             summary = "Install $Name and its pinned dependencies ($($order.Count) module(s)) into $root"
-            changes = $lines
+            changes = @($rootNote + $lines)
             current = @{ root = $root; items = $current }
         }
     }
 
     [Reflection.Assembly]::LoadWithPartialName('System.IO.Compression.FileSystem') | Out-Null
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    Assert-HermesModuleRoot -Create
+    Assert-HermesModuleRoot
     New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
 
+    $record = Get-HermesModuleRecord
     $results = @()
     foreach ($n in $order) {
         $m = $byName[$n]
-        if (& $isDone $m) { $results += @{ name = $m.name; version = $m.version; action = 'already installed' }; continue }
-        $pkg = Join-Path $stagingDir "$($m.name).$($m.version).nupkg"
-        $tmp = Join-Path $root (".tmp-" + [guid]::NewGuid().ToString('N'))
+        if (Test-HermesModuleVerified -Name $m.name -Version $m.version -PackageHash $m.package_hash) {
+            $results += @{ name = $m.name; version = $m.version; action = 'already installed' }
+            continue
+        }
+        $staged = Join-Path $stagingDir "$($m.name).$($m.version).nupkg"
+        $part = "$staged.part"
+        $tmp = Join-Path $root ('.tmp-' + [guid]::NewGuid().ToString('N'))
         try {
-            if (-not (Test-Path -LiteralPath $pkg)) {
+            if (-not (Test-Path -LiteralPath $staged)) {
                 $url = "https://www.powershellgallery.com/api/v2/package/$($m.name)/$($m.version)"
-                Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $pkg
+                try {
+                    Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $part
+                    Move-Item -LiteralPath $part -Destination $staged
+                } catch {
+                    Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue
+                    throw
+                }
             }
-            $hex = (Get-FileHash -LiteralPath $pkg -Algorithm SHA512).Hash
+            # Hash and extract the SAME private copy, so the staged file cannot be swapped in between.
+            New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+            $work = Join-Path $tmp 'package.nupkg'
+            $content = Join-Path $tmp 'content'
+            Copy-Item -LiteralPath $staged -Destination $work
+            $hex = (Get-FileHash -LiteralPath $work -Algorithm SHA512).Hash
             $bytes = [byte[]]@($hex -split '(?<=\G..)' | Where-Object { $_ } | ForEach-Object { [Convert]::ToByte($_, 16) })
             $actual = [Convert]::ToBase64String($bytes)
-            if ($actual -ne $m.package_hash) {
-                Remove-Item -LiteralPath $pkg -Force -ErrorAction SilentlyContinue
+            if ($actual -cne $m.package_hash) {
+                Remove-Item -LiteralPath $staged -Force -ErrorAction SilentlyContinue
                 throw "$($m.name) $($m.version): package SHA512 does not match the pinned hash; the download was deleted."
             }
-            [IO.Compression.ZipFile]::ExtractToDirectory($pkg, $tmp)
-            foreach ($junk in @('_rels', 'package')) { Remove-Item -LiteralPath (Join-Path $tmp $junk) -Recurse -Force -ErrorAction SilentlyContinue }
-            Remove-Item -LiteralPath (Join-Path $tmp '[Content_Types].xml') -Force -ErrorAction SilentlyContinue
-            Get-ChildItem -LiteralPath $tmp -Filter '*.nuspec' -File | Remove-Item -Force
+            [IO.Compression.ZipFile]::ExtractToDirectory($work, $content)
+            foreach ($junk in @('_rels', 'package')) { Remove-Item -LiteralPath (Join-Path $content $junk) -Recurse -Force -ErrorAction SilentlyContinue }
+            Remove-Item -LiteralPath (Join-Path $content '[Content_Types].xml') -Force -ErrorAction SilentlyContinue
+            Get-ChildItem -LiteralPath $content -Filter '*.nuspec' -File | Remove-Item -Force
             if ($m.signer) {
-                $files = @(Get-ChildItem -LiteralPath $tmp -Recurse -File | Where-Object { $_.Extension -in @('.psd1', '.psm1', '.ps1') })
+                $files = @(Get-ChildItem -LiteralPath $content -Recurse -File | Where-Object { $_.Extension -in @('.psd1', '.psm1', '.ps1') })
                 if ($files.Count -eq 0) { throw "$($m.name) $($m.version): no script files to verify the signature of." }
                 foreach ($f in $files) {
                     $sig = Get-AuthenticodeSignature -LiteralPath $f.FullName
@@ -90,12 +117,13 @@ Invoke-Op {
                     if (-not $sig.SignerCertificate -or -not $sig.SignerCertificate.Subject.Contains($m.signer)) { throw "$($m.name) $($m.version): $($f.Name) is not signed by $($m.signer)." }
                 }
             }
+            $fileHashes = Get-HermesFileHashMap -Dir $content
             $dest = Join-Path $root (Join-Path $m.name $m.version)
             New-Item -ItemType Directory -Path (Join-Path $root $m.name) -Force | Out-Null
             if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
-            Move-Item -LiteralPath $tmp -Destination $dest
-            $record[$m.name] = @{ version = "$($m.version)"; package_hash = "$($m.package_hash)"; installed_utc = (Get-Date).ToUniversalTime().ToString('o') }
-            $record | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $recordFile -Encoding UTF8
+            Move-Item -LiteralPath $content -Destination $dest
+            $record[$m.name] = @{ version = "$($m.version)"; package_hash = "$($m.package_hash)"; installed_utc = (Get-Date).ToUniversalTime().ToString('o'); files = $fileHashes }
+            $record | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $recordFile -Encoding UTF8
             $results += @{ name = $m.name; version = $m.version; action = 'installed'; path = $dest }
         } finally {
             if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue }
