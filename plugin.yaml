@@ -36,6 +36,22 @@ provides_tools:
   - ad_user_reset_password
   - ad_user_unlock
   - ad_user_update
+  - gpo_backup
+  - gpo_backups
+  - gpo_create
+  - gpo_delete
+  - gpo_get
+  - gpo_health
+  - gpo_link
+  - gpo_list
+  - gpo_report
+  - gpo_restore
+  - gpo_rsop
+  - gpo_set_link
+  - gpo_set_security_filter
+  - gpo_set_status
+  - gpo_unlink
+  - gpo_update_hosts
 provides_hooks:
   - pre_tool_call
   - post_tool_call
