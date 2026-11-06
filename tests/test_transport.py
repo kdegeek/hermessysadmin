@@ -4,7 +4,7 @@ import pytest
 import requests
 
 from sysadmin.config import Settings
-from sysadmin.errors import ConnectionFailed, NotConfigured, RemoteScriptError, Timeout
+from sysadmin.errors import ConnectionFailed, NotConfigured, RemoteScriptError, SysadminError, Timeout
 from sysadmin.transport import PsrpTransport, UnconfiguredTransport
 
 SETTINGS = Settings(host="dc01", username="CORP\\svc", password="pw")
@@ -15,6 +15,9 @@ class FakePool:
         self.responder = responder
         self.closed = False
         self.prelude_runs = 0
+
+    def open(self):
+        pass
 
     def close(self):
         self.closed = True
@@ -127,3 +130,43 @@ def test_prelude_failure_raises_and_closes_pool():
 def test_unconfigured_transport_raises_not_configured():
     with pytest.raises(NotConfigured):
         UnconfiguredTransport().invoke("S", {})
+
+
+def test_prelude_exception_closes_pool():
+    def responder(ps):
+        raise requests.exceptions.ConnectionError("boom")
+
+    t, pools = make(responder)
+    with pytest.raises(ConnectionFailed):
+        t.invoke("S", {})
+    assert pools[0].closed
+
+
+def test_pool_open_failure_closes_pool():
+    t, pools = make(lambda ps: [])
+    orig = FakePool.open
+
+    def bad_open(self):
+        raise requests.exceptions.ConnectionError("refused")
+
+    FakePool.open = bad_open
+    try:
+        with pytest.raises(ConnectionFailed):
+            t.invoke("S", {})
+    finally:
+        FakePool.open = orig
+    assert pools[0].closed
+
+
+def test_unexpected_exception_is_not_reported_as_connection_failure():
+    def responder(ps):
+        if ps.script == "PRELUDE":
+            return []
+        raise KeyError("oops")
+
+    t, _ = make(responder)
+    with pytest.raises(SysadminError) as ei:
+        t.invoke("S", {})
+    assert not isinstance(ei.value, ConnectionFailed)
+    assert ei.value.type == "Error"
+    assert "KeyError" in ei.value.message

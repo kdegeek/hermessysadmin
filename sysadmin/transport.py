@@ -8,7 +8,7 @@ from contextlib import suppress
 from typing import Any, Callable, Mapping, Protocol
 
 from .config import Settings
-from .errors import ConnectionFailed, NotConfigured, RemoteScriptError, Timeout
+from .errors import ConnectionFailed, NotConfigured, RemoteScriptError, SysadminError, Timeout
 
 log = logging.getLogger(__name__)
 
@@ -60,6 +60,10 @@ def _map_exception(exc: BaseException, host: str) -> Exception:
         from pypsrp.exceptions import AuthenticationError, WinRMTransportError
     except ImportError:  # pragma: no cover
         AuthenticationError = WinRMTransportError = ()  # type: ignore[assignment]
+    try:
+        from pypsrp.exceptions import WinRMError
+    except ImportError:  # pragma: no cover
+        WinRMError = ()  # type: ignore[assignment,misc]
 
     text = str(exc)
     if isinstance(exc, AuthenticationError) or (
@@ -78,7 +82,10 @@ def _map_exception(exc: BaseException, host: str) -> Exception:
         )
     if isinstance(exc, requests.exceptions.ConnectionError):
         return ConnectionFailed(f"Cannot reach {host}: {text}")
-    return ConnectionFailed(f"WinRM error talking to {host}: {type(exc).__name__}: {text}")
+    if isinstance(exc, (requests.exceptions.RequestException, WinRMError, OSError)):
+        return ConnectionFailed(f"WinRM error talking to {host}: {type(exc).__name__}: {text}")
+    log.error("Unexpected error talking to %s", host, exc_info=exc)
+    return SysadminError(f"Unexpected error talking to {host}: {type(exc).__name__}: {text}")
 
 
 class PsrpTransport:
@@ -99,18 +106,20 @@ class PsrpTransport:
 
     def _open(self) -> Any:
         pool = self._pool_factory(self._settings)
-        if hasattr(pool, "open"):
+        try:
             pool.open()
-        ps = self._ps_factory(pool)
-        ps.add_script(self._prelude, use_local_scope=False)
-        ps.add_parameter("User", self._settings.username)
-        ps.add_parameter("Pass", self._settings.password)
-        ps.invoke()
-        if ps.had_errors:
-            message = str(ps.streams.error[0]) if ps.streams.error else "prelude failed"
+            ps = self._ps_factory(pool)
+            ps.add_script(self._prelude, use_local_scope=False)
+            ps.add_parameter("User", self._settings.username)
+            ps.add_parameter("Pass", self._settings.password)
+            ps.invoke()
+            if ps.had_errors:
+                message = str(ps.streams.error[0]) if ps.streams.error else "prelude failed"
+                raise RemoteScriptError(f"Session setup failed on {self._settings.host}: {message}")
+        except BaseException:
             with suppress(Exception):
                 pool.close()
-            raise RemoteScriptError(f"Session setup failed on {self._settings.host}: {message}")
+            raise
         return pool
 
     def _drop(self) -> None:

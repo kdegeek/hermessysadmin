@@ -13,6 +13,8 @@ $Global:HermesCred = New-Object System.Management.Automation.PSCredential -Argum
 $Global:PSDefaultParameterValues['Invoke-Command:Credential'] = $Global:HermesCred
 # AD cmdlets that talk to another DC (-Server / -Target) also need explicit credentials.
 $Global:PSDefaultParameterValues['*-AD*:Credential'] = $Global:HermesCred
+# Do not leave the plaintext password/user lingering in the runspace's global scope.
+Remove-Variable -Name Pass, User -ErrorAction SilentlyContinue
 
 foreach ($m in 'ActiveDirectory', 'GroupPolicy') {
     if (Get-Module -ListAvailable -Name $m) { Import-Module $m -ErrorAction SilentlyContinue }
@@ -44,18 +46,33 @@ function Global:Get-ParentDn {
 function Global:New-HermesPassword {
     # Cryptographically random password guaranteed to contain upper, lower, digit and symbol.
     param([int]$Length = 20)
+    if ($Length -lt 4) { throw 'New-HermesPassword: Length must be at least 4.' }
     $sets = @('ABCDEFGHJKLMNPQRSTUVWXYZ', 'abcdefghijkmnopqrstuvwxyz', '23456789', '!#%+=?@-')
     $all = -join $sets
-    $bytes = New-Object byte[] $Length
-    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-    $chars = @(foreach ($b in $bytes) { $all[$b % $all.Length] })
-    $shuffle = New-Object byte[] $sets.Count
-    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($shuffle)
-    for ($i = 0; $i -lt $sets.Count; $i++) {
-        $pos = $shuffle[$i] % $Length
-        $chars[$pos] = $sets[$i][$bytes[$pos] % $sets[$i].Length]
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        # Uniform random int in [0, $max) by rejection sampling.
+        $next = {
+            param([int]$max)
+            $buf = New-Object byte[] 4
+            $limit = [uint32]::MaxValue - ([uint32]::MaxValue % [uint32]$max)
+            do { $rng.GetBytes($buf); $v = [BitConverter]::ToUInt32($buf, 0) } while ($v -ge $limit)
+            return [int]($v % [uint32]$max)
+        }
+        $chars = New-Object char[] $Length
+        for ($i = 0; $i -lt $Length; $i++) { $chars[$i] = $all[(& $next $all.Length)] }
+        # Partial Fisher-Yates: 4 DISTINCT positions, one forced per character class.
+        $idx = 0..($Length - 1)
+        for ($i = 0; $i -lt 4; $i++) {
+            $j = $i + (& $next ($Length - $i))
+            $t = $idx[$i]; $idx[$i] = $idx[$j]; $idx[$j] = $t
+            $set = $sets[$i]
+            $chars[$idx[$i]] = $set[(& $next $set.Length)]
+        }
+        return (-join $chars)
+    } finally {
+        $rng.Dispose()
     }
-    return (-join $chars)
 }
 
 function Global:ConvertTo-HermesSecure {
