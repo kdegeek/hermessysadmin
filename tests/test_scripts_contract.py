@@ -73,3 +73,10 @@ def test_all_scripts_parse():
         capture_output=True, text=True, timeout=120,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_group_member_scripts_resolve_uniquely_and_change_resolved_objects():
+    for name, cmd in (("ad_group_add_member", "Add-ADGroupMember"), ("ad_group_remove_member", "Remove-ADGroupMember")):
+        text = (SCRIPTS_DIR / f"{name}.ps1").read_text(encoding="utf-8")
+        assert "Resolve-HermesMember" in text and "cn=" not in text
+        assert f"{cmd} -Identity $g -Members $dns" in text

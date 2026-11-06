@@ -5,12 +5,10 @@ param(
 )
 Invoke-Op {
     $g = Get-ADGroup -Identity $Group -Properties member
-    foreach ($m in $Members) {
-        $v = ConvertTo-LdapValue $m
-        $found = @(Get-ADObject -LDAPFilter "(|(sAMAccountName=$v)(distinguishedName=$v)(userPrincipalName=$v)(cn=$v))" -Properties objectSid, primaryGroupID, isCriticalSystemObject)
-        if ($found.Count -eq 0) { throw "Cannot find an object with identity '$m'." }
-        foreach ($f in $found) { Assert-HermesNotProtected $f }
-    }
+    # Resolve once, check the resolved objects, then change exactly those objects (by DN).
+    $resolved = @(foreach ($m in $Members) { Resolve-HermesMember $m })
+    foreach ($r in $resolved) { Assert-HermesNotProtected $r -AsMember }
+    $dns = @($resolved | ForEach-Object { $_.DistinguishedName })
     if ($Preview) {
         return @{
             summary = "Remove $($Members -join ', ') from $($g.Name)"
@@ -18,6 +16,6 @@ Invoke-Op {
             current = @{ member_count = @($g.member).Count; members = @($g.member | Select-Object -First 20 | ForEach-Object { Get-CnName $_ }) }
         }
     }
-    Remove-ADGroupMember -Identity $g -Members $Members -Confirm:$false
+    Remove-ADGroupMember -Identity $g -Members $dns -Confirm:$false
     @{ group = $g.Name; removed = @($Members) }
 }

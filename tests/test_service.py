@@ -260,3 +260,17 @@ def test_tier_ceiling_allows_matching_tier(ops, make_service, runner):
     assert make_service().call("t_s_write", {"identity": "bob"}, actor="dashboard", approved="W")["ok"] is True
     runner.responses["t_s_esc"] = {}
     assert make_service().call("t_s_esc", {"identity": "bob"}, actor="dashboard", approved="H")["ok"] is True
+
+
+def test_script_policy_block_is_audited_once(ops, make_service, runner, audit):
+    from sysadmin.errors import PolicyBlocked
+    runner.responses["t_s_write"] = PolicyBlocked("CN=krbtgt is a built-in protected account")
+    result = make_service().call("t_s_write", {"identity": "alias"}, actor="agent", approved=True)
+    assert result["error"]["type"] == "PolicyBlocked"
+    rows = audit.query()
+    assert len(rows) == 1 and rows[0]["decision"].startswith("blocked: CN=krbtgt") and rows[0]["result"] == "-"
+
+
+def test_local_policy_block_is_audited_once(ops, make_service, runner, audit):
+    make_service().call("t_s_write", {"identity": "krbtgt"}, actor="agent", approved=True)
+    assert len(audit.query()) == 1

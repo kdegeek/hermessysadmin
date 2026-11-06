@@ -102,6 +102,10 @@ class Service:
                 )
             try:
                 data = self._execute(op, clean)
+            except PolicyBlocked as exc:
+                # The script refused after resolving the real object (e.g. an aliased krbtgt).
+                self._audit(op, clean, actor, session, tier, f"blocked: {exc.message}", "-")
+                raise
             finally:
                 if op.tier != "R":
                     self.invalidate()

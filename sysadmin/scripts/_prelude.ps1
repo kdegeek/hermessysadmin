@@ -107,17 +107,39 @@ function Global:Assert-Hermes {
     if (-not $Condition) { Write-Error -Message $Message -Category InvalidArgument -ErrorAction Stop }
 }
 
+function Global:Resolve-HermesMember {
+    # Resolve a group-member identity to exactly ONE object, the same way the membership cmdlets
+    # will (DN, GUID, SID, sAMAccountName or UPN; never a display name), so the object checked is
+    # the object changed.
+    param([Parameter(Mandatory)][string]$Identity)
+    $id = $Identity.Trim()
+    $props = @('objectSid', 'primaryGroupID', 'isCriticalSystemObject', 'objectClass')
+    if ($id -match '^\{?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\}?$' -or $id -match '^(CN|OU|DC)\s*=') {
+        $found = @(Get-ADObject -Identity $id -Properties $props)
+    } elseif ($id -match '^S-1-') {
+        $found = @(Get-ADObject -Filter 'objectSid -eq $id' -Properties $props)
+    } else {
+        $v = ConvertTo-LdapValue $id
+        $found = @(Get-ADObject -LDAPFilter "(|(sAMAccountName=$v)(userPrincipalName=$v))" -Properties $props)
+    }
+    if ($found.Count -eq 0) { throw "Cannot find an object with identity '$Identity'." }
+    if ($found.Count -gt 1) { throw "Identity '$Identity' matches $($found.Count) objects; use a DN or sAMAccountName." }
+    $found[0]
+}
+
 function Global:Assert-HermesNotProtected {
     # Refuse to touch built-in/critical AD objects, judged on the RESOLVED object (not its name).
-    param([Parameter(Mandatory)]$Object)
-    $o = Get-ADObject -Identity $Object.DistinguishedName -Properties objectSid, primaryGroupID, isCriticalSystemObject
+    # -AsMember: the object is only being added to / removed from a group, so built-in GROUPS
+    # (critical system objects such as Domain Users) may be nested; protected accounts and DCs may not.
+    param([Parameter(Mandatory)]$Object, [switch]$AsMember)
+    $o = Get-ADObject -Identity $Object.DistinguishedName -Properties objectSid, primaryGroupID, isCriticalSystemObject, objectClass
     $sid = "$($o.objectSid)"
     $pgid = 0
     if ($null -ne $o.primaryGroupID) { $pgid = [int]$o.primaryGroupID }
     $reason = $null
     if ($sid -match '-(500|502)$') { $reason = 'a built-in protected account (RID 500/502)' }
     elseif ($pgid -eq 516 -or $pgid -eq 521) { $reason = 'a domain controller computer account' }
-    elseif ($o.isCriticalSystemObject -eq $true) { $reason = 'a critical system object' }
+    elseif ($o.isCriticalSystemObject -eq $true -and -not ($AsMember -and "$($o.objectClass)" -eq 'group')) { $reason = 'a critical system object' }
     if ($reason) { throw "PolicyBlocked: $($o.DistinguishedName) is $reason; the plugin will not modify it." }
 }
 
