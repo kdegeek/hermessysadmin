@@ -162,3 +162,26 @@ def test_audit_record_accepts_non_string_keys():
     log = AuditLog(sqlite3.connect(":memory:", check_same_thread=False))
     log.record(actor="agent", session="", tool="t", target="", tier="W", decision="approved", result="ok", params={("a", 1): 2, b"k": 3})
     assert log.query()[0]["params"] == {"('a', 1)": 2, "b'k'": 3}
+
+
+@pytest.mark.parametrize(
+    "group",
+    [
+        "S-1-5-21-1111-2222-3333-512",
+        "s-1-5-21-1-2-3-519",
+        "S-1-5-32-544",
+        "S-1-5-32-551",
+        "6f9619ff-8b86-d011-b42d-00c04fc964ff",
+        "{6F9619FF-8B86-D011-B42D-00C04FC964FF}",
+    ],
+)
+def test_privileged_group_sid_and_guid_forms(group):
+    from sysadmin.policy import is_privileged_group
+
+    assert is_privileged_group(group, Settings())
+
+
+def test_ordinary_group_sid_is_not_privileged():
+    from sysadmin.policy import is_privileged_group
+
+    assert not is_privileged_group("S-1-5-21-1111-2222-3333-1105", Settings())

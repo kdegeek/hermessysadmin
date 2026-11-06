@@ -93,7 +93,19 @@ def normalize_identity(value: str) -> str:
     return text.strip().lower()
 
 
+# Domain-relative RIDs of privileged groups: Domain Admins, Cert Publishers, Schema Admins,
+# Enterprise Admins, Group Policy Creator Owners, Enterprise Key Admins, Key Admins.
+_PRIVILEGED_DOMAIN_SID_RE = re.compile(r"^S-1-5-21-\d+-\d+-\d+-(512|517|518|519|520|526|527)$", re.IGNORECASE)
+# BUILTIN groups: Administrators, Account/Server/Print/Backup Operators, Replicator.
+_PRIVILEGED_BUILTIN_SID_RE = re.compile(r"^S-1-5-32-(544|548|549|550|551|552)$", re.IGNORECASE)
+_GUID_RE = re.compile(r"^\{?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}?$", re.IGNORECASE)
+
+
 def is_privileged_group(name: str, settings: Any) -> bool:
+    """True for privileged group names, their SIDs, and any objectGUID (it cannot be checked by name)."""
+    text = name.strip()
+    if _PRIVILEGED_DOMAIN_SID_RE.match(text) or _PRIVILEGED_BUILTIN_SID_RE.match(text) or _GUID_RE.match(text):
+        return True
     pool = set(PRIVILEGED_DEFAULT) | {normalize_identity(g) for g in settings.privileged_groups}
     return normalize_identity(name) in pool
 
