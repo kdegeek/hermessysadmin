@@ -11,7 +11,13 @@ from sysadmin.runner import SCRIPTS_DIR
 
 ROOT = Path(__file__).resolve().parent.parent
 REAL_OPS = [op for op in OPS.values() if not op.name.startswith("t_")]
-FORBIDDEN = re.compile(r"Invoke-Expression|\biex\b|Add-Type|DownloadString|Start-Process", re.IGNORECASE)
+FORBIDDEN = re.compile(
+    r"Invoke-Expression|\biex\b|Add-Type|DownloadString|Start-Process"
+    r"|\[scriptblock\]::Create|NewScriptBlock|InvokeScript|\bInvoke-Command\b",
+    re.IGNORECASE,
+)
+# Windows PowerShell 5.1 is the target; pwsh 7 parses these but 5.1 does not.
+PS7_ONLY = re.compile(r"\?\?|\?\.|&&|\|\|")
 
 
 def _code(text: str) -> str:
@@ -39,8 +45,11 @@ def test_every_op_has_a_contract_conforming_script(op):
     assert path.is_file(), f"missing {path.name}"
     text = path.read_text(encoding="utf-8")
     block = _param_block(text)
-    assert "Invoke-Op {" in text
+    body = _code(text).lstrip()[len(block):].lstrip()
+    assert body.startswith("Invoke-Op {"), "the script body must be a single Invoke-Op { ... } block"
+    assert body.rstrip().endswith("}"), "nothing may follow the Invoke-Op block"
     assert not FORBIDDEN.search(_code(text)), "forbidden construct"
+    assert not PS7_ONLY.search(_code(text)), "PowerShell 7-only operator (target is 5.1)"
     for p in op.params:
         assert re.search(rf"\${p.ps_name}\b", block, re.IGNORECASE), f"param ${p.ps_name} not declared"
     if op.preview:
