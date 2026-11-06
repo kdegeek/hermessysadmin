@@ -15,13 +15,22 @@ Invoke-Op {
     foreach ($n in $Add) {
         Set-GPPermission -Guid $gpo.Id -TargetName $n -TargetType (& $typeOf $n) -PermissionLevel GpoApply | Out-Null
     }
+    # Only trustees whose permission is exactly GpoApply are in the filter. Never touch a
+    # trustee with edit/delegation rights: -Replace would strip those rights too.
+    $removed = @()
+    $skipped = @()
     foreach ($n in $Remove) {
-        if ($n -eq 'Authenticated Users') {
-            Set-GPPermission -Guid $gpo.Id -TargetName $n -TargetType Group -PermissionLevel GpoRead -Replace | Out-Null
-        } else {
-            Set-GPPermission -Guid $gpo.Id -TargetName $n -TargetType (& $typeOf $n) -PermissionLevel None -Replace | Out-Null
+        $type = $(if ($n -eq 'Authenticated Users') { 'Group' } else { & $typeOf $n })
+        $current = $null
+        try { $current = Get-GPPermission -Guid $gpo.Id -TargetName $n -TargetType $type -ErrorAction Stop } catch { $current = $null }
+        if (-not $current -or "$($current.Permission)" -ne 'GpoApply') {
+            $skipped += @{ principal = $n; reason = $(if ($current) { "has $($current.Permission), not GpoApply; left unchanged" } else { 'not in the security filter' }) }
+            continue
         }
+        $level = $(if ($n -eq 'Authenticated Users') { 'GpoRead' } else { 'None' })
+        Set-GPPermission -Guid $gpo.Id -TargetName $n -TargetType $type -PermissionLevel $level -Replace | Out-Null
+        $removed += $n
     }
     $apply = @(Get-GPPermission -Guid $gpo.Id -All | Where-Object { "$($_.Permission)" -eq 'GpoApply' } | ForEach-Object { "$($_.Trustee.Name)" })
-    @{ gpo = $gpo.DisplayName; added = @($Add); removed = @($Remove); security_filtering = $apply }
+    @{ gpo = $gpo.DisplayName; added = @($Add); removed = $removed; skipped = $skipped; security_filtering = $apply }
 }

@@ -7,5 +7,5 @@ Invoke-Op {
     $root = Join-Path $env:ProgramData 'HermesSysadmin\GpoBackups'
     New-Item -ItemType Directory -Path $root -Force | Out-Null
     $b = Backup-GPO -Guid $gpo.Id -Path $root -Comment $Comment
-    @{ gpo = $gpo.DisplayName; gpo_id = $gpo.Id.ToString(); backup_id = $b.Id.ToString(); time = (Iso $b.Timestamp); comment = $Comment }
+    @{ gpo = $gpo.DisplayName; gpo_id = $gpo.Id.ToString(); backup_id = $b.Id.ToString(); time = (Iso $b.CreationTime); comment = $Comment }
 }

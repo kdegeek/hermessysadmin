@@ -218,7 +218,7 @@ register(Op(
 
 register(Op(
     name="gpo_restore", toolset=TOOLSET, tier="H", script="gpo_restore",
-    description="Restore a GPO's settings from a backup (see gpo_backups). The current state is backed up first; links are unchanged.",
+    description="Restore an existing GPO's settings from a backup (see gpo_backups). The current state is backed up first; links are unchanged. A deleted GPO cannot be restored with this tool: its backup can be imported at the DC with Import-GPO -CreateIfNeeded.",
     params=(GPO, Param("backup_id", "string", "Backup ID from gpo_backups.", required=True)),
     identities=("identity",), preview=True,
 ))
