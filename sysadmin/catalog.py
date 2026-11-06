@@ -54,6 +54,34 @@ def _param_block(text: str) -> str:
     raise CatalogError("unterminated param() block")
 
 
+def _is_num(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _check_param(where: str, p: dict[str, Any]) -> None:
+    n = p["name"]
+    if not str(p.get("description") or "").strip():
+        raise CatalogError(f"{where}: param {n} needs a description")
+    if "enum" in p and (not isinstance(p["enum"], list) or not p["enum"]):
+        raise CatalogError(f"{where}: param {n} enum must be a non-empty list")
+    lo, hi = p.get("minimum"), p.get("maximum")
+    for label, v in (("minimum", lo), ("maximum", hi)):
+        if v is None:
+            continue
+        if not _is_num(v):
+            raise CatalogError(f"{where}: param {n} {label} must be a number")
+        if p["type"] != "integer":
+            raise CatalogError(f"{where}: param {n} {label} is only valid on integer params")
+    if lo is not None and hi is not None and lo > hi:
+        raise CatalogError(f"{where}: param {n} minimum is greater than maximum")
+    d = p.get("default")
+    if d is not None:
+        if _is_num(d) and ((lo is not None and d < lo) or (hi is not None and d > hi)):
+            raise CatalogError(f"{where}: param {n} default is outside minimum/maximum")
+        if p.get("enum") and d not in p["enum"]:
+            raise CatalogError(f"{where}: param {n} default is not in enum")
+
+
 def parse_entry(path: Path) -> dict[str, Any]:
     text = path.read_text(encoding="utf-8")
     m = _HEADER.match(text)
@@ -100,6 +128,7 @@ def parse_entry(path: Path) -> dict[str, Any]:
             raise CatalogError(f"{where}: each param needs a name and a type in {sorted(_TYPES)}")
         if p["name"].lower() not in declared:
             raise CatalogError(f"{where}: param {p['name']} is not declared in param()")
+        _check_param(where, p)
     if meta["target"] == "endpoint" and not {"computers", "ou"} <= declared:
         raise CatalogError(f"{where}: endpoint entries must declare $Computers and $Ou")
     if meta["preview"] == "plan" and "preview" not in declared:
@@ -124,7 +153,7 @@ def _to_op(meta: dict[str, Any]) -> Op:
             p["name"], p["type"], str(p.get("description") or p["name"]),
             required=bool(p.get("required")), ps=p["name"],
             enum=tuple(p["enum"]) if p.get("enum") else None,
-            default=p.get("default"), minimum=p.get("minimum"),
+            default=p.get("default"), minimum=p.get("minimum"), maximum=p.get("maximum"),
         )
         for p in meta["params"]
     ]

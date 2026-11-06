@@ -12,7 +12,7 @@ columns: [host, drive, size_gb, free_gb, free_pct, low]
 tags: [disk, storage, capacity]
 source: In-box Storage module (Get-Volume)
 params:
-  - {name: MinFreePercent, type: integer, default: 10, minimum: 1, description: Flag drives below this.}
+  - {name: MinFreePercent, type: integer, default: 10, minimum: 1, maximum: 90, description: Flag drives below this.}
 #>
 param([string[]]$Computers = @(), [string]$Ou, [int]$MinFreePercent = 10)
 Invoke-Op {

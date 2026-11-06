@@ -25,6 +25,7 @@ class Param:
     default: Any = None
     items: str = "string"
     minimum: int | None = None
+    maximum: int | float | None = None
 
     @property
     def ps_name(self) -> str:
@@ -82,6 +83,8 @@ def schema_for(op: Op) -> dict[str, Any]:
             spec["default"] = p.default
         if p.minimum is not None:
             spec["minimum"] = p.minimum
+        if p.maximum is not None:
+            spec["maximum"] = p.maximum
         props[p.name] = spec
     return {
         "name": op.name,
@@ -114,6 +117,8 @@ def _coerce(p: Param, value: Any) -> Any:
             raise InvalidArguments(f"'{p.name}' must be an integer.")
         if p.minimum is not None and value < p.minimum:
             raise InvalidArguments(f"'{p.name}' must be ≥ {p.minimum}.")
+        if p.maximum is not None and value > p.maximum:
+            raise InvalidArguments(f"'{p.name}' must be ≤ {p.maximum}.")
         return value
     if p.type == "boolean":
         if isinstance(value, str) and value.strip().lower() in ("true", "false"):

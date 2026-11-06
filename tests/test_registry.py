@@ -84,3 +84,13 @@ def test_register_rejects_duplicates_bad_tier_and_read_preview(scratch_ops):
     with pytest.raises(ValueError):
         register(Op("t_reg_prev", "t", "R", "t_reg_prev", "d", preview=True))
     assert "t_reg_once" in OPS
+
+
+def test_maximum_is_in_schema_and_enforced():
+    op = Op(name="t_reg_max", toolset="t", tier="R", script="t_reg_max", description="d",
+            params=(Param("level", "integer", "Level", minimum=0, maximum=4),))
+    props = schema_for(op)["parameters"]["properties"] if "parameters" in schema_for(op) else schema_for(op)["properties"]
+    assert props["level"]["maximum"] == 4
+    assert coerce_args(op, {"level": 4}) == {"level": 4}
+    with pytest.raises(InvalidArguments):
+        coerce_args(op, {"level": 5})

@@ -121,3 +121,42 @@ def test_catalog_ops_are_not_agent_tools():
     ctx = Ctx()
     tools.register_tools(ctx)
     assert not [n for n in ctx.names if n.startswith("cat.")]
+
+
+def test_maximum_flows_into_schema_and_coercion(tmp_path, cleanup):
+    from sysadmin.errors import InvalidArguments
+    from sysadmin.registry import coerce_args, schema_for
+
+    text = ENTRY.replace(
+        "{name: Threshold, type: integer, default: 10, minimum: 1, description: A threshold.}",
+        "{name: Level, type: integer, minimum: 0, maximum: 4, default: 2, description: x}",
+    ).replace("[int]$Threshold = 10", "[int]$Level = 2")
+    write(tmp_path, "t_area/sample.ps1", text)
+    (op,) = catalog.load(tmp_path, strict=True)
+    schema = schema_for(op)
+    props = schema.get("properties") or schema["parameters"]["properties"]
+    assert props["Level"]["minimum"] == 0 and props["Level"]["maximum"] == 4
+    assert coerce_args(op, {"Level": 4})["Level"] == 4
+    with pytest.raises(InvalidArguments):
+        coerce_args(op, {"Level": 5})
+
+
+@pytest.mark.parametrize("param", [
+    "{name: Threshold, type: integer, description: x, enum: []}",
+    "{name: Threshold, type: integer, description: x, enum: abc}",
+    "{name: Threshold, type: integer, description: x, minimum: abc}",
+    "{name: Threshold, type: integer, description: x, maximum: true}",
+    "{name: Threshold, type: string, description: x, minimum: 1}",
+    "{name: Threshold, type: string, description: x, maximum: 1}",
+    "{name: Threshold, type: integer, description: x, minimum: 5, maximum: 2}",
+    "{name: Threshold, type: integer, description: x, minimum: 5, default: 1}",
+    "{name: Threshold, type: integer, description: x, maximum: 5, default: 9}",
+    "{name: Threshold, type: string, description: x, enum: [a, b], default: c}",
+    "{name: Threshold, type: integer}",
+    "{name: Threshold, type: integer, description: ''}",
+])
+def test_invalid_param_headers_raise(tmp_path, cleanup, param):
+    old = "{name: Threshold, type: integer, default: 10, minimum: 1, description: A threshold.}"
+    write(tmp_path, "t_area/sample.ps1", ENTRY.replace(old, param))
+    with pytest.raises(catalog.CatalogError):
+        catalog.load(tmp_path, strict=True)
