@@ -33,5 +33,5 @@ def register(ctx):
         "ad",
         commands.make_command(ctx),
         description="Active Directory quick commands (no LLM round-trip)",
-        args_hint="status | user <name> | unlock <name> | sessions [host] | backups",
+        args_hint="status | user <name> | unlock <name> | sessions [host] | backups | catalog <query> | run <id> k=v [on H1,H2]",
     )

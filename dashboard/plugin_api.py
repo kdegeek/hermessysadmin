@@ -107,6 +107,11 @@ async def op_run(name: str, request: Request) -> dict[str, Any]:
     return await _with_service("run_op", name, await _body(request))
 
 
+@router.get("/catalog")
+async def catalog() -> dict[str, Any]:
+    return await _with_service("catalog")
+
+
 @router.get("/overview")
 async def overview() -> dict[str, Any]:
     return await _with_service("overview")

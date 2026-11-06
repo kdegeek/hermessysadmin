@@ -43,6 +43,9 @@ provides_tools:
   - backup_start
   - backup_status
   - backup_versions
+  - catalog_get
+  - catalog_run
+  - catalog_search
   - gpo_backup
   - gpo_backups
   - gpo_create

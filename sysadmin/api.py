@@ -6,6 +6,8 @@ import logging
 from typing import Any, Callable, Mapping
 
 from . import __version__, ops  # noqa: F401  (registers every op)
+from . import catalog as _catalog
+from .ops.catalog_ops import entry_detail
 from .errors import ApprovalRequired, InvalidArguments, error_result
 from .registry import OPS, Op, coerce_args, schema_for, target_of
 
@@ -86,6 +88,20 @@ def list_ops() -> dict[str, Any]:
                 "params": [{"name": p.name, "required": p.required, **props[p.name]} for p in op.params],
             })
         return {"ok": True, "data": {"items": items}}
+
+    return _safe(go)
+
+
+def catalog(service: Any = None) -> dict[str, Any]:
+    def go() -> dict[str, Any]:
+        ops = _catalog.entries()
+        counts: dict[str, int] = {}
+        for op in ops:
+            counts[op.meta["category"]] = counts.get(op.meta["category"], 0) + 1
+        return {"ok": True, "data": {
+            "categories": [{"name": c, "count": counts[c]} for c in _catalog.CATEGORIES if c in counts],
+            "items": [entry_detail(op) for op in ops],
+        }}
 
     return _safe(go)
 

@@ -61,7 +61,7 @@ def test_manifest_declares_exactly_what_register_registers():
     ctx = FakeCtx()
     load_plugin().register(ctx)
     m = manifest()
-    assert sorted(m["provides_tools"]) == sorted(ctx.tools) == sorted(n for n in OPS if not n.startswith("t_") and not OPS[n].catalog)
+    assert sorted(m["provides_tools"]) == sorted(ctx.tools) == sorted([n for n in OPS if not n.startswith("t_") and not OPS[n].catalog] + ["catalog_run"])
     assert sorted(m["provides_hooks"]) == sorted(ctx.hooks) == ["post_tool_call", "pre_tool_call"]
     assert "provides_middleware" not in m and m["kind"] == "standalone"
 

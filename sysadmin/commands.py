@@ -13,6 +13,8 @@ USAGE = "\n".join([
     "- `/ad unlock <name>`: unlock an account (asks first)",
     "- `/ad sessions [host]`: RDP sessions (all servers when no host is given)",
     "- `/ad backups`: Windows Server Backup status per server",
+    "- `/ad catalog <query>`: search the catalog of vetted tasks",
+    "- `/ad run <id> key=value … [on HOST,HOST] [ou=DN]`: run a catalog entry (writes ask first)",
 ])
 HEALTH = {"ok": "🟢", "warn": "🟡", "bad": "🔴"}
 BACKUP = {"ok": "🟢", "bad": "🔴", "run": "🔵", "none": "⚪"}
@@ -118,12 +120,93 @@ def _backups(service: Any, rest: list[str], ctx: Any, session: str) -> str:
     return "\n".join(lines) or "No servers found."
 
 
+def _catalog(service: Any, rest: list[str], ctx: Any, session: str) -> str:
+    r = service.call("catalog_search", {"query": rest[0] if rest else "", "limit": 15}, actor="command", session=session)
+    if not r["ok"]:
+        return _err(r)
+    d = r["data"]
+    if not d["items"]:
+        return "No catalog entries match."
+    lines = [f"- `{i['id']}` · {i['title']} · {i['tier']} · {i['target']}" for i in d["items"]]
+    if d["total"] > len(d["items"]):
+        lines.append(f"… and {d['total'] - len(d['items'])} more")
+    return "\n".join(lines)
+
+
+def _coerce_token(value: str) -> Any:
+    if value.isdigit():
+        return int(value)
+    if value.lower() in ("true", "false"):
+        return value.lower() == "true"
+    return value
+
+
+def _parse_run(text: str) -> tuple[str, dict[str, Any]]:
+    """'<id> k=v … [on H1,H2] [ou=DN]' -> (id, args). DN values may contain spaces, so ou= takes the rest."""
+    text = text.strip()
+    if not text:
+        raise ValueError("Usage: /ad run <id> key=value … [on HOST,HOST] [ou=DN]")
+    entry_id, _, tail = text.partition(" ")
+    args: dict[str, Any] = {}
+    params: dict[str, Any] = {}
+    tokens = tail.split()
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        if tok.lower() == "on" and i + 1 < len(tokens):
+            args["computers"] = [h for h in tokens[i + 1].split(",") if h]
+            i += 2
+        elif tok.lower().startswith("ou="):
+            rest = " ".join(tokens[i:])[3:]
+            args["ou"] = _unquote(rest)
+            break
+        elif "=" in tok:
+            key, _, value = tok.partition("=")
+            params[key] = _coerce_token(_unquote(value))
+            i += 1
+        else:
+            raise ValueError(f"Unexpected '{tok}'. Use key=value, 'on HOST,HOST' or ou=DN.")
+    return entry_id, {**params, **args}
+
+
+def _render_rows(data: Any) -> list[str]:
+    if not isinstance(data, dict):
+        return [str(data)]
+    lines: list[str] = []
+    for row in (data.get("items") or [])[:20]:
+        if isinstance(row, dict):
+            host = row.get("host") or row.get("computer") or row.get("name") or "-"
+            rest = " ".join(f"{k}={v}" for k, v in row.items() if k not in ("host", "computer"))
+            lines.append(f"{host}: {rest}".rstrip())
+        else:
+            lines.append(str(row))
+    extra = len(data.get("items") or []) - 20
+    if extra > 0:
+        lines.append(f"… and {extra} more")
+    lines += [f"{e.get('host', '-')}: {e.get('message')}" for e in data.get("errors") or [] if isinstance(e, dict)]
+    return lines or ["(no rows)"]
+
+
+def _run(service: Any, rest: list[str], ctx: Any, session: str) -> str:
+    try:
+        entry_id, merged = _parse_run(rest[0] if rest else "")
+    except ValueError as exc:
+        return str(exc)
+    name = "cat." + entry_id
+    r = service.call(name, merged, actor="command", session=session)
+    if not r["ok"]:
+        return _err(r)
+    return "\n".join(_render_rows(r["data"]))
+
+
 _SUBCOMMANDS: dict[str, Callable[[Any, list[str], Any, str], str]] = {
     "status": _status,
     "user": _user,
     "unlock": _unlock,
     "sessions": _sessions,
     "backups": _backups,
+    "catalog": _catalog,
+    "run": _run,
 }
 
 

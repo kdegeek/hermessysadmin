@@ -10,6 +10,7 @@ from typing import Any, Mapping
 
 import yaml
 
+from .errors import InvalidArguments
 from .policy import is_domain_controller_name
 from .registry import OPS, Op, Param, register
 from .runner import CATALOG_DIR
@@ -193,3 +194,24 @@ def load(directory: Path = CATALOG_DIR, *, strict: bool = False) -> list[Op]:
 
 def entries() -> list[Op]:
     return sorted((op for op in OPS.values() if op.catalog), key=lambda o: o.name)
+
+
+def run_target(args: Mapping[str, Any] | None) -> tuple[str, dict[str, Any]]:
+    """Resolve catalog_run arguments to (op name, merged args). Raises InvalidArguments."""
+    args = dict(args or {})
+    entry_id = args.get("id")
+    if not isinstance(entry_id, str) or not _ID.match(entry_id):
+        raise InvalidArguments("'id' must look like <area>.<name>, e.g. endpoint.uptime.")
+    params = args.get("params") or {}
+    computers = args.get("computers")
+    ou = args.get("ou")
+    if not isinstance(params, dict):
+        raise InvalidArguments("'params' must be an object.")
+    if computers is not None and not isinstance(computers, list):
+        raise InvalidArguments("'computers' must be a list of strings.")
+    if ou is not None and not isinstance(ou, str):
+        raise InvalidArguments("'ou' must be a string.")
+    op = OPS.get("cat." + entry_id)
+    if op is None or not op.catalog:
+        raise InvalidArguments(f"Unknown catalog entry '{entry_id}'. Use catalog_search to find ids.")
+    return op.name, {**params, **({"computers": computers} if computers else {}), **({"ou": ou} if ou else {})}

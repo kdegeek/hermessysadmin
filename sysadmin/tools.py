@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, Callable
 
-from . import runtime
+from . import catalog, runtime
 from .config import load_settings
 from .errors import error_result
 from .registry import OPS, schema_for
@@ -17,6 +17,7 @@ EMOJI = {
     "ad_rdp": "🖥️",
     "ad_backup": "💾",
     "ad_meta": "🛠️",
+    "catalog": "📚",
 }
 
 
@@ -34,6 +35,42 @@ def make_handler(name: str) -> Callable[..., str]:
 
     handler.__name__ = f"hermes_sysadmin_{name}"
     return handler
+
+
+def make_catalog_run_handler() -> Callable[..., str]:
+    def handler(args: dict | None = None, **kwargs: Any) -> str:
+        try:
+            name, merged = catalog.run_target(args)
+            service = runtime.get_service()
+            session = str(kwargs.get("session_id") or kwargs.get("task_id") or "")
+            result = service.call(name, merged, actor="agent", session=session, approved=True)
+        except Exception as exc:
+            result = error_result(exc)
+        return json.dumps(result, default=str, ensure_ascii=False)
+
+    handler.__name__ = "hermes_sysadmin_catalog_run"
+    return handler
+
+
+CATALOG_RUN_SCHEMA = {
+    "name": "catalog_run",
+    "description": (
+        "[tier of the entry] Run a vetted catalog entry by id (find ids with catalog_search, parameters with "
+        "catalog_get). Writes need approval; targeting more than 10 machines, an OU, all machines or a domain "
+        "controller is high-risk."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "id": {"type": "string"},
+            "params": {"type": "object"},
+            "computers": {"type": "array", "items": {"type": "string"}},
+            "ou": {"type": "string"},
+        },
+        "required": ["id"],
+        "additionalProperties": False,
+    },
+}
 
 
 def _escape_enabled() -> bool:
@@ -55,4 +92,13 @@ def register_tools(ctx: Any) -> list[str]:
             emoji=EMOJI.get(op.toolset, "🏢"),
         )
         names.append(op.name)
+    ctx.register_tool(
+        name="catalog_run",
+        toolset="catalog",
+        schema=CATALOG_RUN_SCHEMA,
+        handler=make_catalog_run_handler(),
+        description=CATALOG_RUN_SCHEMA["description"],
+        emoji=EMOJI["catalog"],
+    )
+    names.append("catalog_run")
     return names

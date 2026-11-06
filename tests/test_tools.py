@@ -17,7 +17,7 @@ def test_register_tools_registers_every_real_op_with_schema():
     ctx = FakeCtx()
     names = tools.register_tools(ctx)
     real = sorted(n for n in OPS if not n.startswith("t_") and not OPS[n].catalog)
-    assert names == real
+    assert sorted(names) == sorted(real + ["catalog_run"])
     entry = ctx.tools["ad_search"]
     assert entry["toolset"] == "ad_domain"
     assert entry["schema"]["name"] == "ad_search"
