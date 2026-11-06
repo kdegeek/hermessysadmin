@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
 from .errors import InvalidArguments
+
+_INT_RE = re.compile(r"-?[0-9]+")
 
 TIERS = ("R", "W", "H")
 TIER_LABEL = {"R": "read-only", "W": "write · needs approval", "H": "high-risk · needs approval"}
@@ -100,7 +103,7 @@ def _coerce(p: Param, value: Any) -> Any:
     if p.type == "integer":
         if isinstance(value, bool):
             raise InvalidArguments(f"'{p.name}' must be an integer.")
-        if isinstance(value, str) and value.strip().lstrip("-").isdigit():
+        if isinstance(value, str) and _INT_RE.fullmatch(value.strip()):
             value = int(value.strip())
         if not isinstance(value, int):
             raise InvalidArguments(f"'{p.name}' must be an integer.")

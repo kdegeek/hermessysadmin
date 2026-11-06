@@ -50,6 +50,8 @@ def test_coerce_args_applies_defaults_and_coerces_types():
         ({"identity": "b", "nope": 1}, "Unknown argument"),
         ({"identity": "b", "days": 0}, "must be ≥ 1"),
         ({"identity": "b", "days": True}, "must be an integer"),
+        ({"identity": "b", "days": "--5"}, "must be an integer"),
+        ({"identity": "b", "days": "²"}, "must be an integer"),
         ({"identity": "b", "force": "maybe"}, "true or false"),
         ({"identity": "b", "kind": "ou"}, "must be one of"),
         ({"identity": "b", "hosts": [1]}, "list of strings"),
