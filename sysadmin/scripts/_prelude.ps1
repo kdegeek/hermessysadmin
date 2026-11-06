@@ -107,6 +107,20 @@ function Global:Assert-Hermes {
     if (-not $Condition) { Write-Error -Message $Message -Category InvalidArgument -ErrorAction Stop }
 }
 
+function Global:Assert-HermesNotProtected {
+    # Refuse to touch built-in/critical AD objects, judged on the RESOLVED object (not its name).
+    param([Parameter(Mandatory)]$Object)
+    $o = Get-ADObject -Identity $Object.DistinguishedName -Properties objectSid, primaryGroupID, isCriticalSystemObject
+    $sid = "$($o.objectSid)"
+    $pgid = 0
+    if ($null -ne $o.primaryGroupID) { $pgid = [int]$o.primaryGroupID }
+    $reason = $null
+    if ($sid -match '-(500|502)$') { $reason = 'a built-in protected account (RID 500/502)' }
+    elseif ($pgid -eq 516 -or $pgid -eq 521) { $reason = 'a domain controller computer account' }
+    elseif ($o.isCriticalSystemObject -eq $true) { $reason = 'a critical system object' }
+    if ($reason) { throw "PolicyBlocked: $($o.DistinguishedName) is $reason; the plugin will not modify it." }
+}
+
 function Global:Iso {
     param($Value)
     if ($null -eq $Value -or "$Value" -eq '') { return $null }
@@ -118,6 +132,7 @@ function Global:Get-HermesErrorType {
     $name = $Err.Exception.GetType().Name
     $cat = "$($Err.CategoryInfo.Category)"
     $msg = "$($Err.Exception.Message)"
+    if ($msg -match '^PolicyBlocked:') { return 'PolicyBlocked' }
     if ($name -match 'IdentityNotFound|NotFound' -or $cat -eq 'ObjectNotFound' -or $msg -match 'Cannot find an object|was not found|does not exist') { return 'NotFound' }
     if ($name -match 'UnauthorizedAccess' -or $cat -in @('PermissionDenied', 'SecurityError') -or $msg -match 'Access is denied|Insufficient access rights') { return 'PermissionDenied' }
     if ($cat -in @('InvalidArgument', 'InvalidData')) { return 'InvalidArguments' }

@@ -5,6 +5,12 @@ param(
 )
 Invoke-Op {
     $g = Get-ADGroup -Identity $Group -Properties member
+    foreach ($m in $Members) {
+        $v = ConvertTo-LdapValue $m
+        $found = @(Get-ADObject -LDAPFilter "(|(sAMAccountName=$v)(distinguishedName=$v)(userPrincipalName=$v)(cn=$v))" -Properties objectSid, primaryGroupID, isCriticalSystemObject)
+        if ($found.Count -eq 0) { throw "Cannot find an object with identity '$m'." }
+        foreach ($f in $found) { Assert-HermesNotProtected $f }
+    }
     if ($Preview) {
         return @{
             summary = "Add $($Members -join ', ') to $($g.Name)"

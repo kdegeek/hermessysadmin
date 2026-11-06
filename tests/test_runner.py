@@ -93,7 +93,31 @@ def test_real_prelude_defines_helpers():
         "function Global:Get-CnName", "function Global:Get-ParentDn", "function Global:New-HermesPassword",
         "function Global:ConvertTo-HermesSecure", "function Global:Assert-Hermes",
         "function Global:ConvertTo-LdapValue", "function Global:Get-HermesGpo", "function Global:Get-XmlText",
-        "function Global:Get-HermesTargets", "function Global:Invoke-HermesOne",
+        "function Global:Assert-HermesNotProtected", "function Global:Get-HermesTargets", "function Global:Invoke-HermesOne",
         "$Global:HermesCred", "'*-AD*:Credential'", "'*-GP*:Server'",
     ):
         assert name in text
+
+
+def test_parse_output_maps_policy_blocked():
+    from sysadmin.errors import PolicyBlocked
+
+    with pytest.raises(PolicyBlocked):
+        parse_output(['{"ok":false,"error":{"type":"PolicyBlocked","message":"CN=Administrator is a built-in protected account"}}'])
+
+
+def test_prelude_maps_policyblocked_message_and_checks_sid_rid_dc_critical():
+    text = load_prelude()
+    assert "^PolicyBlocked:" in text and "return 'PolicyBlocked'" in text
+    for needle in ("-(500|502)$", "516", "521", "isCriticalSystemObject"):
+        assert needle in text
+
+
+@pytest.mark.parametrize("name", [
+    "ad_user_update", "ad_user_reset_password", "ad_user_unlock", "ad_user_enable",
+    "ad_user_disable", "ad_user_move", "ad_user_delete", "ad_group_add_member", "ad_group_remove_member",
+])
+def test_user_write_scripts_assert_not_protected(name):
+    from sysadmin.runner import SCRIPTS_DIR
+
+    assert "Assert-HermesNotProtected" in (SCRIPTS_DIR / f"{name}.ps1").read_text(encoding="utf-8")

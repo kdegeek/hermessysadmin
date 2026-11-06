@@ -10,9 +10,10 @@ Invoke-Op {
     Assert-Hermes ($targets.Count -gt 0) 'Give computers or an OU that contains computers.'
     $remote = Get-HermesFanout -Computers $targets -ArgumentList @($Force) -Script {
         param($F)
-        $gpArgs = @('/target:computer')
-        if ($F) { $gpArgs += '/force' }
-        $out = (& gpupdate.exe @gpArgs 2>&1 | Out-String).Trim()
+        $gpCmd = 'echo n | gpupdate.exe /target:computer'
+        if ($F) { $gpCmd += ' /force' }
+        # 'echo n' answers the logoff/reboot prompt so gpupdate can never hang waiting for input.
+        $out = (& cmd.exe /c $gpCmd 2>&1 | Out-String).Trim()
         [pscustomobject]@{
             ok        = ($LASTEXITCODE -eq 0)
             exit_code = $LASTEXITCODE

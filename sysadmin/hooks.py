@@ -66,9 +66,11 @@ def pre_tool_call(tool_name: str = "", args: dict | None = None, **kwargs: Any) 
             error = (preview.get("error") or {}).get("message", "unknown error")
             body = format_preview(preview.get("data")) if preview.get("ok") else f"unavailable — {error}"
             lines.append("Preview (no change made yet):\n" + body)
-        elif decision.tier == "H":
+        else:
             # No preview: the human must see every argument they approve, untruncated.
             lines.append("Arguments:\n" + format_preview({"details": redact(clean)}, limit=None))
+        if op.name == "ad_powershell" and "hermescred" in str(clean.get("script", "")).lower():
+            lines.append("⚠ This script references the service credential ($Global:HermesCred).")
         rule_key = (
             f"hermes-sysadmin:{op.name}"
             if decision.tier == "W"

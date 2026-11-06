@@ -6,6 +6,7 @@ param(
 )
 Invoke-Op {
     $u = Get-ADUser -Identity $Identity -Properties LockedOut
+    Assert-HermesNotProtected $u
     $generated = -not $Password
     if ($generated) { $Password = New-HermesPassword }
     Set-ADAccountPassword -Identity $u -Reset -NewPassword (ConvertTo-HermesSecure $Password)

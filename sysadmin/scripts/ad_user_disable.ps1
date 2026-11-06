@@ -4,6 +4,7 @@ param(
 )
 Invoke-Op {
     $u = Get-ADUser -Identity $Identity
+    Assert-HermesNotProtected $u
     Disable-ADAccount -Identity $u
     if ($Note) { Set-ADUser -Identity $u -Description $Note }
     @{ identity = $u.SamAccountName; enabled = $false; note = $Note }

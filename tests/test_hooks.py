@@ -101,3 +101,17 @@ def test_long_preview_is_marked_truncated_and_redacted(svc, runner):
 
 def test_format_preview_redacts_secrets():
     assert "hunter2" not in hooks.format_preview({"details": {"password": "hunter2"}})
+
+
+def test_write_without_preview_shows_arguments(svc):
+    d = hooks.pre_tool_call(tool_name="t_h_write", args={"identity": "bob-the-target"})
+    assert "Arguments:" in d["message"] and "bob-the-target" in d["message"]
+
+
+def test_ad_powershell_credential_reference_is_warned(monkeypatch, make_service):
+    service = make_service(enable_powershell_escape=True)
+    monkeypatch.setattr(runtime, "get_service", lambda: service)
+    bad = hooks.pre_tool_call(tool_name="ad_powershell", args={"script": "$x = $Global:hermescred", "reason": "r"})
+    ok = hooks.pre_tool_call(tool_name="ad_powershell", args={"script": "Get-Date", "reason": "r"})
+    assert "service credential" in bad["message"]
+    assert "service credential" not in ok["message"]
