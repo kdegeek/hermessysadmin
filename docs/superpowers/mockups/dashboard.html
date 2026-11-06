@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AD Dashboard Mockup</title>
+<style>
+/* Approximates Hermes Desktop --ui-* tokens (apps/desktop/src/styles.css). The real plugin uses the host's vars. */
+:root{
+  --ui-base:#1d1d1f; --ui-accent:#6b5bd2;
+  --ui-red:#cf2d56; --ui-orange:#db704b; --ui-yellow:#c08532; --ui-green:#1f8a65; --ui-blue:#0053fd;
+  --ui-bg-chrome:#f3f2f0; --ui-bg-sidebar:#ecebe8; --ui-bg-editor:#fbfbfa; --ui-bg-elevated:#ffffff;
+  --ui-bg-card:color-mix(in srgb,var(--ui-accent) 4%,color-mix(in srgb,var(--ui-base) 4%,transparent));
+  --ui-bg-input:#fcfcfc;
+  --ui-row-hover-background:color-mix(in srgb,var(--ui-base) 4%,transparent);
+  --ui-row-active-background:color-mix(in srgb,var(--ui-accent) 10%,transparent);
+  --ui-text-primary:color-mix(in srgb,var(--ui-base) 94%,transparent);
+  --ui-text-secondary:color-mix(in srgb,var(--ui-base) 74%,transparent);
+  --ui-text-tertiary:color-mix(in srgb,var(--ui-base) 54%,transparent);
+  --ui-text-quaternary:color-mix(in srgb,var(--ui-base) 36%,transparent);
+  --ui-stroke-secondary:color-mix(in srgb,var(--ui-base) 12%,transparent);
+  --ui-stroke-tertiary:color-mix(in srgb,var(--ui-base) 8%,transparent);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ui-base:#ecebe8; --ui-accent:#9e94d5; --ui-red:#e75e78; --ui-green:#55a583;
+    --ui-bg-chrome:#161618; --ui-bg-sidebar:#1b1b1e; --ui-bg-editor:#1f1f22; --ui-bg-elevated:#26262a; --ui-bg-input:#1a1a1d;
+  }
+}
+:root[data-theme="dark"]{
+  --ui-base:#ecebe8; --ui-accent:#9e94d5; --ui-red:#e75e78; --ui-green:#55a583;
+  --ui-bg-chrome:#161618; --ui-bg-sidebar:#1b1b1e; --ui-bg-editor:#1f1f22; --ui-bg-elevated:#26262a; --ui-bg-input:#1a1a1d;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--ui-bg-chrome);color:var(--ui-text-primary);font:13px/1.45 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif}
+button{font:inherit;color:inherit}
+.app{display:grid;grid-template-columns:220px 1fr;grid-template-rows:1fr 26px;height:100vh}
+/* host chrome */
+.side{background:var(--ui-bg-sidebar);border-right:1px solid var(--ui-stroke-tertiary);padding:12px 8px;display:flex;flex-direction:column;gap:2px}
+.side .brand{font-weight:600;padding:4px 8px 12px;color:var(--ui-text-secondary)}
+.nav{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;color:var(--ui-text-secondary);cursor:default}
+.nav.host{opacity:.55}
+.nav.active{background:var(--ui-row-active-background);color:var(--ui-text-primary)}
+.nav .ico{width:16px;text-align:center}
+.side .sep{height:1px;background:var(--ui-stroke-tertiary);margin:8px}
+.side .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ui-text-quaternary);padding:4px 8px}
+.main{background:var(--ui-bg-editor);overflow:auto;position:relative}
+.status{grid-column:1/3;background:var(--ui-bg-chrome);border-top:1px solid var(--ui-stroke-tertiary);display:flex;align-items:center;gap:16px;padding:0 10px;font-size:11.5px;color:var(--ui-text-tertiary)}
+.status .mine{display:flex;align-items:center;gap:6px;color:var(--ui-text-secondary);padding:0 6px;border-radius:4px}
+.status .mine:hover{background:var(--ui-row-hover-background)}
+.status .right{margin-left:auto}
+/* plugin page */
+.page{padding:18px 22px 40px;max-width:1280px}
+.head{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.head h1{font-size:17px;margin:0;font-weight:600}
+.head .domain{color:var(--ui-text-tertiary)}
+.head .grow{flex:1}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--ui-stroke-secondary);margin-bottom:16px;overflow-x:auto}
+.tab{padding:7px 12px;border:0;background:none;color:var(--ui-text-tertiary);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.tab.on{color:var(--ui-text-primary);border-bottom-color:var(--ui-accent)}
+.tab .n{font-size:11px;margin-left:4px;padding:0 5px;border-radius:8px;background:var(--ui-bg-card);color:var(--ui-text-tertiary)}
+.btn{border:1px solid var(--ui-stroke-secondary);background:var(--ui-bg-elevated);border-radius:6px;padding:4px 10px;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--ui-row-hover-background)}
+.btn.primary{background:var(--ui-accent);border-color:transparent;color:#fff}
+.btn.danger{color:var(--ui-red)}
+.btn.danger.solid{background:var(--ui-red);color:#fff;border-color:transparent}
+.btn.sm{padding:2px 8px;font-size:12px}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+.ghost{border:0;background:none;color:var(--ui-text-tertiary);cursor:pointer;padding:2px 6px;border-radius:4px}
+.ghost:hover{background:var(--ui-row-hover-background);color:var(--ui-text-primary)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.g{background:var(--ui-green)}.y{background:var(--ui-yellow)}.r{background:var(--ui-red)}.n{background:var(--ui-text-quaternary)}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:1px 7px;border-radius:10px;background:var(--ui-bg-card);color:var(--ui-text-secondary);border:1px solid var(--ui-stroke-tertiary);white-space:nowrap}
+.badge.red{color:var(--ui-red);border-color:color-mix(in srgb,var(--ui-red) 30%,transparent);background:color-mix(in srgb,var(--ui-red) 8%,transparent)}
+.badge.yellow{color:var(--ui-yellow);border-color:color-mix(in srgb,var(--ui-yellow) 30%,transparent);background:color-mix(in srgb,var(--ui-yellow) 8%,transparent)}
+.badge.green{color:var(--ui-green);border-color:color-mix(in srgb,var(--ui-green) 30%,transparent);background:color-mix(in srgb,var(--ui-green) 8%,transparent)}
+.badge.accent{color:var(--ui-accent);border-color:color-mix(in srgb,var(--ui-accent) 30%,transparent);background:color-mix(in srgb,var(--ui-accent) 8%,transparent)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+.kpi{background:var(--ui-bg-card);border:1px solid var(--ui-stroke-tertiary);border-radius:8px;padding:10px 12px;cursor:pointer;text-align:left}
+.kpi:hover{border-color:var(--ui-stroke-secondary)}
+.kpi .v{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.kpi .l{color:var(--ui-text-tertiary);font-size:12px}
+.kpi .s{font-size:11.5px;margin-top:2px}
+.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
+@media (max-width:900px){.grid2{grid-template-columns:1fr}.app{grid-template-columns:1fr}.side{display:none}.status{grid-column:1}}
+.card{background:var(--ui-bg-card);border:1px solid var(--ui-stroke-tertiary);border-radius:8px;overflow:hidden}
+.card h3{margin:0;font-size:12.5px;font-weight:600;padding:9px 12px;border-bottom:1px solid var(--ui-stroke-tertiary);display:flex;align-items:center;gap:8px}
+.card h3 .sub{font-weight:400;color:var(--ui-text-tertiary)}
+.card h3 .grow{flex:1}
+table{width:100%;border-collapse:collapse}
+th{font-weight:500;color:var(--ui-text-tertiary);font-size:11.5px;text-align:left;padding:6px 12px;border-bottom:1px solid var(--ui-stroke-tertiary);white-space:nowrap}
+td{padding:7px 12px;border-bottom:1px solid var(--ui-stroke-tertiary);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tbody tr.click{cursor:pointer}
+tbody tr.click:hover{background:var(--ui-row-hover-background)}
+tbody tr.sel{background:var(--ui-row-active-background)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.muted{color:var(--ui-text-tertiary)}
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.search{flex:0 1 300px;border:1px solid var(--ui-stroke-secondary);background:var(--ui-bg-input);border-radius:6px;padding:5px 10px;color:var(--ui-text-primary)}
+.chip{border:1px solid var(--ui-stroke-secondary);background:none;border-radius:12px;padding:2px 10px;font-size:12px;cursor:pointer;color:var(--ui-text-secondary)}
+.chip.on{background:var(--ui-row-active-background);border-color:color-mix(in srgb,var(--ui-accent) 40%,transparent);color:var(--ui-text-primary)}
+.grow{flex:1}
+.seg{display:inline-flex;border:1px solid var(--ui-stroke-secondary);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:none;padding:3px 10px;cursor:pointer;color:var(--ui-text-tertiary)}
+.seg button.on{background:var(--ui-row-active-background);color:var(--ui-text-primary)}
+/* drawer */
+.drawer{position:fixed;top:0;right:0;bottom:26px;width:420px;max-width:100vw;background:var(--ui-bg-elevated);border-left:1px solid var(--ui-stroke-secondary);box-shadow:-12px 0 30px rgba(0,0,0,.12);transform:translateX(105%);transition:transform .18s;overflow:auto;z-index:20}
+.drawer.open{transform:none}
+.drawer .dh{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--ui-stroke-tertiary);position:sticky;top:0;background:var(--ui-bg-elevated)}
+.avatar{width:34px;height:34px;border-radius:50%;background:color-mix(in srgb,var(--ui-accent) 20%,transparent);display:grid;place-items:center;font-weight:600;color:var(--ui-accent)}
+.drawer .sec{padding:12px 16px;border-bottom:1px solid var(--ui-stroke-tertiary)}
+.drawer .sec h4{margin:0 0 8px;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ui-text-quaternary);font-weight:500}
+.kv{display:grid;grid-template-columns:130px 1fr;gap:4px 10px;font-size:12.5px}
+.kv .k{color:var(--ui-text-tertiary)}
+.actions{display:flex;flex-wrap:wrap;gap:6px}
+.callout{border-radius:6px;padding:8px 10px;font-size:12.5px;display:flex;gap:8px;align-items:flex-start}
+.callout.red{background:color-mix(in srgb,var(--ui-red) 9%,transparent);border:1px solid color-mix(in srgb,var(--ui-red) 25%,transparent)}
+.callout.yellow{background:color-mix(in srgb,var(--ui-yellow) 9%,transparent);border:1px solid color-mix(in srgb,var(--ui-yellow) 25%,transparent)}
+.callout.accent{background:color-mix(in srgb,var(--ui-accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--ui-accent) 25%,transparent)}
+/* dialog */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:40;padding:16px}
+.scrim.open{display:flex}
+.dialog{background:var(--ui-bg-elevated);border:1px solid var(--ui-stroke-secondary);border-radius:10px;width:480px;max-width:100%;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.dialog .b{padding:16px 18px}
+.dialog h2{font-size:15px;margin:0 0 6px}
+.dialog .f{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--ui-stroke-tertiary)}
+.whatif{background:var(--ui-bg-chrome);border:1px solid var(--ui-stroke-tertiary);border-radius:6px;padding:8px 10px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;white-space:pre-wrap;margin:10px 0;color:var(--ui-text-secondary)}
+.input{width:100%;border:1px solid var(--ui-stroke-secondary);background:var(--ui-bg-input);border-radius:6px;padding:6px 10px;color:var(--ui-text-primary);font:inherit}
+.tier{font-size:10.5px;font-weight:600;letter-spacing:.04em;padding:1px 6px;border-radius:4px}
+.tier.R{background:var(--ui-bg-card);color:var(--ui-text-tertiary)}
+.tier.W{background:color-mix(in srgb,var(--ui-yellow) 14%,transparent);color:var(--ui-yellow)}
+.tier.H{background:color-mix(in srgb,var(--ui-red) 14%,transparent);color:var(--ui-red)}
+.tier.P{background:var(--ui-text-primary);color:var(--ui-bg-editor)}
+/* backups */
+.hosts{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.hcard{background:var(--ui-bg-card);border:1px solid var(--ui-stroke-tertiary);border-radius:8px;padding:12px}
+.hcard.bad{border-color:color-mix(in srgb,var(--ui-red) 40%,transparent)}
+.hcard.warn{border-color:color-mix(in srgb,var(--ui-yellow) 40%,transparent)}
+.hcard .top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.hcard .top b{flex:1}
+.bar{height:6px;border-radius:3px;background:var(--ui-stroke-tertiary);overflow:hidden;margin:8px 0 4px}
+.bar i{display:block;height:100%;background:var(--ui-accent)}
+.toggle{width:30px;height:17px;border-radius:9px;background:var(--ui-stroke-secondary);position:relative;border:0;cursor:pointer;flex:none}
+.toggle::after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:#fff;transition:left .15s}
+.toggle.on{background:var(--ui-green)}
+.toggle.on::after{left:15px}
+.empty{max-width:440px;margin:60px auto;text-align:center}
+.empty .big{font-size:34px;margin-bottom:8px}
+.form{display:grid;gap:10px;text-align:left;margin-top:16px}
+.form label{font-size:12px;color:var(--ui-text-tertiary);display:grid;gap:4px}
+.toast{position:fixed;bottom:40px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;background:var(--ui-text-primary);color:var(--ui-bg-editor);padding:8px 14px;border-radius:8px;transition:.2s;z-index:60;font-size:12.5px}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.mockbar{position:fixed;top:8px;right:10px;z-index:70;display:flex;gap:6px;align-items:center;background:var(--ui-bg-elevated);border:1px dashed var(--ui-accent);border-radius:8px;padding:4px 8px;font-size:11.5px}
+.mockbar b{color:var(--ui-accent)}
+/* chat approval mock */
+.chat{max-width:640px;margin:0 auto}
+.msg{padding:10px 0}
+.msg.user .bub{background:color-mix(in srgb,var(--ui-base) 6%,transparent);border-radius:10px;padding:8px 12px;display:inline-block}
+.toolcall{border:1px solid var(--ui-stroke-tertiary);border-radius:8px;padding:6px 10px;margin:6px 0;font-size:12px;display:flex;gap:8px;align-items:center;color:var(--ui-text-secondary)}
+.approve{border:1px solid color-mix(in srgb,var(--ui-red) 35%,transparent);border-radius:10px;overflow:hidden;margin:8px 0}
+.approve .ah{background:color-mix(in srgb,var(--ui-red) 8%,transparent);padding:8px 12px;display:flex;gap:8px;align-items:center;font-weight:600}
+.approve .ab{padding:10px 12px}
+.approve .af{display:flex;gap:6px;padding:8px 12px;border-top:1px solid var(--ui-stroke-tertiary);flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="mockbar"><b>MOCKUP</b>
+  <span class="muted">State:</span>
+  <div class="seg" id="stateSeg">
+    <button class="on" data-s="live">Connected</button><button data-s="setup">First run</button><button data-s="chat">Agent approval</button>
+  </div>
+</div>
+
+<div class="app">
+  <aside class="side">
+    <div class="brand">☤ Hermes</div>
+    <div class="nav host"><span class="ico">💬</span>Chat</div>
+    <div class="nav host"><span class="ico">▦</span>Kanban</div>
+    <div class="nav host"><span class="ico">⏱</span>Cron</div>
+    <div class="sep"></div>
+    <div class="lbl">Plugins</div>
+    <div class="nav active"><span class="ico">🏢</span>Active Directory <span class="grow"></span><span class="dot y" title="Domain health"></span></div>
+    <div class="nav host"><span class="ico">🖥</span>Unraid</div>
+  </aside>
+
+  <main class="main" id="main"></main>
+
+  <footer class="status">
+    <span class="muted">Hermes · gpt-oss</span>
+    <span class="mine" title="Plugin status-bar item: domain health"><span class="dot y"></span>corp.example.local · 1 warning · 3 locked</span>
+    <span class="right">⌘K → “AD: Unlock user…”</span>
+  </footer>
+</div>
+
+<!-- user drawer -->
+<aside class="drawer" id="drawer"></aside>
+
+<!-- dialog -->
+<div class="scrim" id="scrim"><div class="dialog" id="dialog"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const state={tab:"overview",mode:"live",chips:new Set(["locked"]),userSel:null,rdpView:"sessions",gpoSel:null};
+
+const users=[
+ {sam:"bmartinez",name:"Bob Martinez",ou:"Staff/Finance",locked:true,enabled:true,last:"12 min ago",pwd:"in 41 days",priv:false,groups:["Finance-RW","VPN-Users","Remote Desktop Users"],lockSrc:"SRV-APP02",lockCount:14},
+ {sam:"aokafor",name:"Ada Okafor",ou:"Staff/Engineering",locked:false,enabled:true,last:"2 h ago",pwd:"in 3 days",priv:true,groups:["Domain Admins","Eng-All"]},
+ {sam:"jchen",name:"Jun Chen",ou:"Staff/Sales",locked:true,enabled:true,last:"1 h ago",pwd:"in 60 days",priv:false,groups:["Sales","VPN-Users"],lockSrc:"LAPTOP-JC14",lockCount:5},
+ {sam:"mlindqvist",name:"Maja Lindqvist",ou:"Staff/HR",locked:false,enabled:false,last:"94 days ago",pwd:"expired",priv:false,groups:["HR"]},
+ {sam:"svc-backup",name:"svc-backup",ou:"Service Accounts",locked:false,enabled:true,last:"5 min ago",pwd:"never expires",priv:true,groups:["Backup Operators"]},
+ {sam:"tnguyen",name:"Tom Nguyen",ou:"Staff/Finance",locked:true,enabled:true,last:"3 h ago",pwd:"in 6 days",priv:false,groups:["Finance-RW"],lockSrc:"WS-FIN-07",lockCount:3},
+ {sam:"rpatel",name:"Riya Patel",ou:"Staff/Engineering",locked:false,enabled:true,last:"8 min ago",pwd:"in 77 days",priv:false,groups:["Eng-All","Remote Desktop Users"]},
+ {sam:"krbtgt",name:"krbtgt",ou:"Users",locked:false,enabled:false,last:"—",pwd:"—",priv:true,protected:true,groups:[]},
+];
+const dcs=[
+ {name:"DC01",roles:"PDC, RID, Infra",repl:"ok",repl_t:"0 failures · 2 min",svc:"ok",skew:"+0.2 s",up:"41 d"},
+ {name:"DC02",roles:"Schema, Naming",repl:"warn",repl_t:"1 failure · last ok 47 min",svc:"ok",skew:"+1.8 s",up:"12 d"},
+];
+const gpos=[
+ {name:"Default Domain Policy",links:["corp.example.local"],enf:false,status:"Enabled",health:[],mod:"2026-08-12"},
+ {name:"Workstation Baseline",links:["OU=Workstations"],enf:true,status:"Enabled",health:[],mod:"2026-10-30"},
+ {name:"Screensaver Lock 10m",links:[],enf:false,status:"Enabled",health:["Unlinked"],mod:"2026-11-04"},
+ {name:"Finance Drive Maps",links:["OU=Finance"],enf:false,status:"User settings only",health:[],mod:"2026-09-02"},
+ {name:"Legacy IE Settings",links:["OU=Staff"],enf:false,status:"All settings disabled",health:["All settings disabled","Version mismatch AD 14 / SYSVOL 12"],mod:"2021-03-19"},
+ {name:"RDP Hardening",links:["OU=Servers"],enf:true,status:"Enabled",health:[],mod:"2026-07-21"},
+];
+const sessions=[
+ {user:"bmartinez",host:"SRV-APP02",id:3,state:"Disconnected",idle:"6 d 4 h",logon:"Oct 30 09:12",flag:"Stale creds → lockout source"},
+ {user:"rpatel",host:"SRV-APP02",id:5,state:"Active",idle:"—",logon:"Today 08:01"},
+ {user:"aokafor",host:"DC01",id:2,state:"Active",idle:"14 m",logon:"Today 10:40"},
+ {user:"jchen",host:"SRV-RDS01",id:7,state:"Disconnected",idle:"1 h 02 m",logon:"Today 09:30"},
+ {user:"tnguyen",host:"SRV-RDS01",id:9,state:"Active",idle:"2 m",logon:"Today 09:55"},
+];
+const rdpHosts=[
+ {host:"DC01",rdp:true,nla:true,fw:true,members:["Domain Admins"],dc:true},
+ {host:"DC02",rdp:true,nla:true,fw:true,members:["Domain Admins"],dc:true},
+ {host:"SRV-APP02",rdp:true,nla:false,fw:true,members:["Remote Desktop Users","bmartinez","rpatel"]},
+ {host:"SRV-RDS01",rdp:true,nla:true,fw:true,members:["Remote Desktop Users"]},
+ {host:"SRV-FS01",rdp:false,nla:true,fw:false,members:[]},
+];
+const backups=[
+ {host:"DC01",state:"ok",last:"Today 02:00",ss:"Today 02:00",ssAge:"9 h",next:"Tonight 02:00",target:"\\\\NAS01\\wsb\\DC01",versions:14},
+ {host:"DC02",state:"ok",last:"Today 02:30",ss:"Today 02:30",ssAge:"8 h",next:"Tonight 02:30",target:"\\\\NAS01\\wsb\\DC02",versions:14},
+ {host:"SRV-FS01",state:"bad",last:"Oct 27 23:00",ss:"Oct 27 23:00",ssAge:"9 d",next:"Tonight 23:00",target:"E: (USB)",versions:6,err:"Last 3 runs failed: 0x807800C5 target volume not found"},
+ {host:"SRV-APP02",state:"run",last:"Nov 4 22:00",ss:"Nov 4 22:00",ssAge:"1 d",next:"—",target:"\\\\NAS01\\wsb\\APP02",versions:9,prog:62},
+ {host:"SRV-RDS01",state:"none",last:"—",ss:"—",ssAge:"—",next:"—",target:"—",versions:0,err:"Windows Server Backup feature not installed"},
+];
+const audit=[
+ {t:"10:52:14",actor:"agent · session 8f2c",tool:"ad_user_unlock",target:"jchen",tier:"W",dec:"approved",res:"ok"},
+ {t:"10:51:02",actor:"agent · session 8f2c",tool:"ad_group_add_member",target:"Domain Admins ← bmartinez",tier:"H",dec:"denied by user",res:"—"},
+ {t:"10:47:39",actor:"dashboard",tool:"gpo_backup",target:"Workstation Baseline",tier:"W",dec:"confirmed",res:"ok"},
+ {t:"10:31:20",actor:"agent · session 77a1",tool:"ad_user_delete",target:"krbtgt",tier:"P",dec:"blocked: protected",res:"—"},
+ {t:"09:58:03",actor:"agent · session 77a1",tool:"rdp_session_logoff",target:"SRV-RDS01 #4",tier:"W",dec:"approved",res:"ok"},
+ {t:"09:12:44",actor:"dashboard",tool:"backup_start",target:"SRV-APP02 (system state)",tier:"W",dec:"confirmed",res:"failed: access denied"},
+ {t:"08:40:10",actor:"cron · nightly-review",tool:"ad_user_disable",target:"mlindqvist",tier:"W",dec:"denied: headless",res:"—"},
+];
+
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),2200)}
+function tierTag(t){return `<span class="tier ${t}">${t==="P"?"PROTECTED":t}</span>`}
+
+function header(){
+  const locked=users.filter(u=>u.locked).length;
+  const tabs=[["overview","Overview"],["users","Users",locked],["gpo","Group Policy",gpos.filter(g=>g.health.length).length],["rdp","Remote Access"],["backups","Backups",backups.filter(b=>b.state==="bad").length],["audit","Audit"]];
+  return `<div class="head"><h1>Active Directory</h1><span class="domain">corp.example.local · via DC01 (WinRM HTTPS)</span><span class="grow"></span>
+   <span class="badge accent">mode: strict</span><span class="muted" style="font-size:12px">updated 14 s ago</span><button class="btn sm" onclick="toast('Refreshed')">↻ Refresh</button></div>
+   <div class="tabs">${tabs.map(([k,l,n])=>`<button class="tab ${state.tab===k?"on":""}" onclick="go('${k}')">${l}${n?`<span class="n">${n}</span>`:""}</button>`).join("")}</div>`;
+}
+
+function overview(){
+  const locked=users.filter(u=>u.locked).length;
+  return `<div class="kpis">
+   ${kpi("1,284","Users","users",`<span class="muted">38 disabled</span>`)}
+   ${kpi(locked,"Locked out","users",`<span style="color:var(--ui-red)">+2 last hour</span>`)}
+   ${kpi("11","Passwords expiring ≤7 d","users",`<span class="muted">2 privileged</span>`)}
+   ${kpi("342","Computers","users",`<span class="muted">17 stale &gt;90 d</span>`)}
+   ${kpi("46","GPOs","gpo",`<span style="color:var(--ui-yellow)">2 need attention</span>`)}
+   ${kpi("5","RDP sessions","rdp",`<span class="muted">2 disconnected</span>`)}
+   ${kpi("9 d","Oldest system-state backup","backups",`<span style="color:var(--ui-red)">SRV-FS01</span>`)}
+  </div>
+  <div class="grid2">
+   <div class="card"><h3>Domain controllers <span class="sub">replication · services · time</span></h3>
+    <table><thead><tr><th></th><th>DC</th><th>FSMO</th><th>Replication</th><th>Services</th><th>Skew</th><th>Uptime</th></tr></thead><tbody>
+    ${dcs.map(d=>`<tr><td><span class="dot ${d.repl==="ok"?"g":"y"}"></span></td><td><b>${d.name}</b></td><td class="muted">${d.roles}</td><td>${d.repl==="ok"?d.repl_t:`<span style="color:var(--ui-yellow)">${d.repl_t}</span>`}</td><td>NTDS DNS Netlogon KDC <span class="badge green">ok</span></td><td class="mono">${d.skew}</td><td class="muted">${d.up}</td></tr>`).join("")}
+    </tbody></table></div>
+   <div class="card"><h3>Recent changes<span class="grow"></span><button class="ghost" onclick="go('audit')">View all →</button></h3>
+    <table><tbody>${audit.slice(0,6).map(a=>`<tr><td class="mono muted">${a.t}</td><td>${tierTag(a.tier)}</td><td><span class="mono">${a.tool}</span><div class="muted" style="font-size:11.5px">${esc(a.target)}</div></td><td>${decBadge(a)}</td></tr>`).join("")}</tbody></table></div>
+  </div>`;
+}
+function kpi(v,l,tab,s){return `<button class="kpi" onclick="go('${tab}')"><div class="v">${v}</div><div class="l">${l}</div><div class="s">${s}</div></button>`}
+function decBadge(a){const d=a.dec;const c=d.startsWith("approved")||d==="confirmed"?(a.res.startsWith("failed")?"yellow":"green"):"red";return `<span class="badge ${c}">${d}${a.res.startsWith("failed")?" · "+a.res:""}</span>`}
+
+function usersTab(){
+  const chips=[["locked","Locked"],["disabled","Disabled"],["stale","Stale >90 d"],["expiring","Expiring ≤7 d"],["priv","Privileged"]];
+  let list=users.filter(u=>{
+    if(!state.chips.size)return true;
+    return [...state.chips].every(c=>c==="locked"?u.locked:c==="disabled"?!u.enabled:c==="stale"?u.last.includes("94"):c==="expiring"?/in [0-7] days|expired/.test(u.pwd):c==="priv"?u.priv:true);
+  });
+  return `<div class="toolbar"><input class="search" placeholder="Search name, sAMAccountName, email…">
+   ${chips.map(([k,l])=>`<button class="chip ${state.chips.has(k)?"on":""}" onclick="chip('${k}')">${l}</button>`).join("")}
+   <span class="grow"></span><button class="btn" onclick="openRecycle()">🗑 Recycle Bin</button><button class="btn primary" onclick="newUser()">+ New user</button></div>
+  <div class="card"><table><thead><tr><th>Name</th><th>Account</th><th>OU</th><th>Status</th><th>Password</th><th>Last logon</th><th></th></tr></thead><tbody>
+  ${list.map(u=>`<tr class="click ${state.userSel===u.sam?"sel":""}" onclick="openUser('${u.sam}')"><td><b>${esc(u.name)}</b> ${u.priv?'<span class="badge accent">privileged</span>':""}${u.protected?' <span class="badge">protected</span>':""}</td><td class="mono">${u.sam}</td><td class="muted">${u.ou}</td>
+   <td>${u.locked?'<span class="badge red">● locked</span>':!u.enabled?'<span class="badge">disabled</span>':'<span class="badge green">active</span>'}</td>
+   <td class="${/expired|in [0-7] days/.test(u.pwd)?"":"muted"}" style="${/expired|in [0-7] days/.test(u.pwd)?"color:var(--ui-yellow)":""}">${u.pwd}</td><td class="muted">${u.last}</td>
+   <td>${u.locked?`<button class="btn sm" onclick="event.stopPropagation();unlock('${u.sam}')">Unlock</button>`:""}</td></tr>`).join("")||`<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">No users match these filters</td></tr>`}
+  </tbody></table></div>
+  <p class="muted" style="font-size:12px">Showing ${list.length} of 1,284 · paged from the server, 100 per page</p>`;
+}
+
+function openUser(sam){
+  const u=users.find(x=>x.sam===sam);state.userSel=sam;render();
+  const d=$("#drawer");
+  d.innerHTML=`<div class="dh"><div class="avatar">${u.name.split(" ").map(x=>x[0]).join("").slice(0,2)}</div><div style="flex:1"><b>${esc(u.name)}</b><div class="muted mono">${u.sam}@corp.example.local</div></div><button class="ghost" onclick="closeDrawer()">✕</button></div>
+  ${u.protected?`<div class="sec"><div class="callout red">🛡 <div><b>Protected object.</b> All write actions are blocked by policy for this account.</div></div></div>`:""}
+  ${u.locked?`<div class="sec"><div class="callout red">🔒 <div><b>Locked out</b> · ${u.lockCount} bad attempts in 30 min<br>Source: <b class="mono">${u.lockSrc}</b> (event 4740 on DC01)${u.lockSrc==="SRV-APP02"?`<br><span class="muted">Disconnected RDP session from Oct 30 is replaying old credentials.</span>`:""}</div></div></div>`:""}
+  <div class="sec"><h4>Actions</h4><div class="actions">
+   ${act(u,"Unlock","W",!u.locked)}${act(u,"Reset password","W")}${act(u,u.enabled?"Disable":"Enable","W")}${act(u,"Move…","W")}${act(u,"Add to group…","W")}${act(u,"Delete","H")}
+  </div></div>
+  <div class="sec"><h4>Account</h4><div class="kv">
+   <span class="k">OU</span><span>OU=${u.ou.split("/").reverse().join(",OU=")},DC=corp,DC=example,DC=local</span>
+   <span class="k">Enabled</span><span>${u.enabled?"Yes":"No"}</span>
+   <span class="k">Password expires</span><span>${u.pwd}</span>
+   <span class="k">Last logon</span><span>${u.last}</span>
+   <span class="k">Email</span><span>${u.sam}@example.com</span>
+   <span class="k">Created</span><span>2024-02-11</span>
+  </div></div>
+  <div class="sec"><h4>Groups (${u.groups.length})</h4><div class="actions">${u.groups.map(g=>`<span class="badge ${/Admins|Operators/.test(g)?"accent":""}">${g} ${u.protected?"":`<span class="ghost" style="padding:0" onclick="removeGroup('${u.sam}','${g}')">✕</span>`}</span>`).join("")||'<span class="muted">None</span>'}</div></div>
+  <div class="sec"><h4>Remote sessions</h4>${sessions.filter(s=>s.user===u.sam).map(s=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="dot ${s.state==="Active"?"g":"y"}"></span><span class="mono">${s.host}</span><span class="muted">${s.state} · idle ${s.idle}</span><span class="grow"></span><button class="btn sm" onclick="confirmW('Log off session','Log off ${u.sam} from ${s.host} (session ${s.id})? Unsaved work in that session will be lost.','rdp_session_logoff')">Log off</button></div>`).join("")||'<span class="muted">None</span>'}</div>`;
+  d.classList.add("open");
+}
+function act(u,label,tier,dis){
+  const blocked=u.protected;
+  const on=blocked||dis?"disabled":"";
+  const cls=tier==="H"?"btn sm danger":"btn sm";
+  const fn=label==="Delete"?`confirmH('Delete user','${u.sam}','Remove-ADUser -Identity ${u.sam} -WhatIf\\nWhat if: Performing the operation \\"Remove\\" on target \\"CN=${u.name},OU=${u.ou.split("/").reverse().join(",OU=")},DC=corp,DC=example,DC=local\\".\\nRecycle Bin: enabled — restorable for 180 days.','ad_user_delete')`
+   :label==="Unlock"?`unlock('${u.sam}')`
+   :label==="Reset password"?`resetPwd('${u.sam}')`
+   :label==="Add to group…"?`addGroup('${u.sam}')`
+   :`confirmW('${label} ${u.sam}','${label} ${u.sam}?','ad_user_${label.toLowerCase().replace(/[^a-z]/g,"")}')`;
+  return `<button class="${cls}" ${on} onclick="${fn}" title="${blocked?"Blocked: protected object":tier+"-tier"}">${label}</button>`;
+}
+function closeDrawer(){$("#drawer").classList.remove("open");state.userSel=null;render()}
+
+function unlock(sam){
+  confirmW("Unlock account",`Unlock <b class="mono">${sam}</b>? The bad-password counter resets. If the lockout source is still active the account will lock again.`,"ad_user_unlock",()=>{
+    const u=users.find(x=>x.sam===sam);u.locked=false;audit.unshift({t:"now",actor:"dashboard",tool:"ad_user_unlock",target:sam,tier:"W",dec:"confirmed",res:"ok"});
+    toast(`${sam} unlocked · logged to audit`);render();if($("#drawer").classList.contains("open"))openUser(sam);
+  });
+}
+function resetPwd(sam){
+  dialog(`<div class="b"><h2>Reset password · <span class="mono">${sam}</span></h2>${tierTag("W")}
+   <div class="form"><div class="seg"><button class="on">Generate</button><button>Set manually</button></div>
+   <label><span><input type="checkbox" checked> User must change password at next logon</span></label>
+   <label><span><input type="checkbox" checked> Unlock account if locked</span></label></div>
+   <p class="muted" style="font-size:12px">A 20-character password is generated on the server and shown <b>once</b>. It is never written to the audit log.</p></div>
+   <div class="f"><button class="btn" onclick="closeDlg()">Cancel</button><button class="btn primary" onclick="showPwd('${sam}')">Reset password</button></div>`);
+}
+function showPwd(sam){
+  dialog(`<div class="b"><h2>Password reset</h2><p>New password for <b class="mono">${sam}</b>:</p>
+   <div class="whatif" style="font-size:15px;color:var(--ui-text-primary);text-align:center;letter-spacing:.06em">Tq7!marble-Vox-29-dune</div>
+   <p class="muted" style="font-size:12px">Copy it now. It won't be shown again. Change is required at next logon.</p></div>
+   <div class="f"><button class="btn" onclick="toast('Copied')">Copy</button><button class="btn primary" onclick="closeDlg()">Done</button></div>`);
+}
+function addGroup(sam){
+  dialog(`<div class="b"><h2>Add <span class="mono">${sam}</span> to group</h2>
+   <input class="input" id="grp" placeholder="Group name" value="Domain Admins" oninput="grpHint()">
+   <div id="grpHint" style="margin-top:10px"></div></div>
+   <div class="f"><button class="btn" onclick="closeDlg()">Cancel</button><button class="btn primary" onclick="grpGo('${sam}')">Continue</button></div>`);grpHint();
+}
+function grpHint(){const v=$("#grp").value;$("#grpHint").innerHTML=/admins|operators|group policy creator|dnsadmins/i.test(v)?`<div class="callout red">${tierTag("H")} <div><b>Privileged group.</b> This change escalates to high-risk: a WhatIf preview and type-to-confirm are required.</div></div>`:`<div class="callout accent">${tierTag("W")} <div>Standard group change.</div></div>`}
+function grpGo(sam){const g=$("#grp").value;if(/admins|operators/i.test(g))confirmH(`Add to ${g}`,sam,`Add-ADGroupMember -Identity "${g}" -Members ${sam} -WhatIf\nWhat if: Performing the operation "Set" on target "CN=${g},CN=Users,DC=corp,DC=example,DC=local".\n\nEffective rights gained: full control of the domain, all DCs, all GPOs.\nCurrent members of ${g}: 3 (aokafor, Administrator, svc-deploy)`,"ad_group_add_member");else{closeDlg();toast(`Added to ${g}`)}}
+function removeGroup(sam,g){confirmW("Remove from group",`Remove <b class="mono">${sam}</b> from <b>${g}</b>?`,"ad_group_remove_member")}
+function newUser(){
+  dialog(`<div class="b"><h2>New user</h2><div class="form">
+   <label>Copy from template user<input class="input" value="rpatel (Engineering)"></label>
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label>First name<input class="input" placeholder="Jane"></label><label>Last name<input class="input" placeholder="Doe"></label></div>
+   <label>sAMAccountName<input class="input mono" placeholder="jdoe"></label>
+   <label>OU<input class="input" value="OU=Engineering,OU=Staff,DC=corp,DC=example,DC=local"></label>
+   <div class="muted" style="font-size:12px">Groups copied from template: Eng-All, Remote Desktop Users</div>
+   <label><span><input type="checkbox" checked> Generate initial password (must change at next logon)</span></label></div></div>
+   <div class="f"><button class="btn" onclick="closeDlg()">Cancel</button><button class="btn primary" onclick="closeDlg();toast('User created · logged to audit')">Create user</button></div>`);
+}
+function openRecycle(){
+  dialog(`<div class="b"><h2>AD Recycle Bin</h2><p class="muted" style="font-size:12px">Deleted objects are restorable for 180 days (msDS-deletedObjectLifetime).</p>
+   <table><thead><tr><th>Object</th><th>Type</th><th>Deleted</th><th></th></tr></thead><tbody>
+   <tr><td>Dana Lee<div class="muted mono" style="font-size:11px">OU=Staff/Sales</div></td><td>user</td><td class="muted">Nov 2</td><td><button class="btn sm" onclick="closeDlg();toast('Restored cdoyle to original OU')">Restore</button></td></tr>
+   <tr><td>Contractors-2025<div class="muted mono" style="font-size:11px">OU=Groups</div></td><td>group</td><td class="muted">Oct 18</td><td><button class="btn sm">Restore</button></td></tr>
+   <tr><td>WS-OLD-22</td><td>computer</td><td class="muted">Sep 30</td><td><button class="btn sm">Restore</button></td></tr></tbody></table></div>
+   <div class="f"><button class="btn" onclick="closeDlg()">Close</button></div>`);
+}
+
+function gpoTab(){
+  return `<div class="toolbar"><input class="search" placeholder="Search GPOs…"><button class="chip">Needs attention</button><button class="chip">Unlinked</button><button class="chip">Enforced</button><span class="grow"></span>
+   <button class="btn" onclick="gpupdate()">⟳ Run gpupdate…</button><button class="btn primary" onclick="toast('New GPO dialog')">+ New GPO</button></div>
+  <div class="grid2" style="grid-template-columns:1.3fr 1fr">
+  <div class="card"><table><thead><tr><th>GPO</th><th>Links</th><th>Status</th><th>Modified</th></tr></thead><tbody>
+   ${gpos.map((g,i)=>`<tr class="click ${state.gpoSel===i?"sel":""}" onclick="state.gpoSel=${i};render()"><td><b>${g.name}</b> ${g.health.map(h=>`<span class="badge yellow">⚠ ${h.split(" ")[0]==="Version"?"Version mismatch":h}</span>`).join(" ")}</td>
+   <td>${g.links.length?g.links.map(l=>`<span class="badge">${g.enf?"🔒 ":""}${l}</span>`).join(" "):'<span class="muted">—</span>'}</td><td class="muted">${g.status}</td><td class="muted">${g.mod}</td></tr>`).join("")}
+  </tbody></table></div>
+  ${gpoDetail()}</div>`;
+}
+function gpoDetail(){
+  const g=gpos[state.gpoSel??2];
+  return `<div class="card"><h3>${g.name}<span class="grow"></span><span class="badge">${g.status}</span></h3>
+   <div style="padding:12px;display:grid;gap:12px">
+   ${g.health.map(h=>`<div class="callout yellow">⚠ <div>${h}</div></div>`).join("")}
+   <div class="actions">
+    <button class="btn sm" onclick="linkGpo('${g.name}')">Link…</button><button class="btn sm" ${g.links.length?"":"disabled"} onclick="confirmW('Unlink GPO','Unlink ${g.name}?','gpo_unlink')">Unlink</button>
+    <button class="btn sm">${g.enf?"Unenforce":"Enforce"}</button><button class="btn sm">Status…</button><button class="btn sm">Security filter…</button>
+    <button class="btn sm" onclick="toast('Backup created: {8D2A…} · 10:58')">Back up</button><button class="btn sm danger" onclick="restoreGpo('${g.name}')">Restore…</button><button class="btn sm danger" onclick="confirmH('Delete GPO','${g.name}','Remove-GPO -Name \\'${g.name}\\' -WhatIf\\nA backup will be taken automatically before deletion.\\nLinks removed: ${g.links.length||0}','gpo_delete')">Delete</button>
+   </div>
+   <div><div class="muted" style="font-size:11.5px;margin-bottom:4px">LINKS</div>${g.links.length?g.links.map(l=>`<div>${l} ${g.enf?'<span class="badge">enforced</span>':""}</div>`).join(""):'<span class="muted">Not linked anywhere</span>'}</div>
+   <div><div class="muted" style="font-size:11.5px;margin-bottom:4px">SECURITY FILTERING</div>Authenticated Users</div>
+   <div><div class="muted" style="font-size:11.5px;margin-bottom:4px">SETTINGS (parsed report)</div>
+    <table><tbody>
+     <tr><td class="muted">Computer › Admin Templates › Control Panel › Personalization</td></tr>
+     <tr><td>Enable screen saver <span class="badge green">Enabled</span></td></tr>
+     <tr><td>Screen saver timeout <span class="mono">600 s</span></td></tr>
+     <tr><td>Password protect the screen saver <span class="badge green">Enabled</span></td></tr>
+    </tbody></table>
+    <button class="ghost" style="margin-top:6px">Open full HTML report ↗</button></div>
+   <div><div class="muted" style="font-size:11.5px;margin-bottom:4px">BACKUPS</div><span class="muted">3 backups · latest Nov 4 18:20</span></div>
+   </div></div>`;
+}
+function linkGpo(n){dialog(`<div class="b"><h2>Link “${n}”</h2>${tierTag("W")}<div class="form"><label>Target OU<input class="input" value="OU=Finance,OU=Staff,DC=corp,DC=example,DC=local"></label><label><span><input type="checkbox"> Enforced</span></label><label><span><input type="checkbox" checked> Back up GPO before change</span></label><label><span><input type="checkbox" checked> Run gpupdate on a test host after linking</span></label><label>Test host<input class="input mono" value="WS-FIN-07"></label></div></div><div class="f"><button class="btn" onclick="closeDlg()">Cancel</button><button class="btn primary" onclick="closeDlg();toast('Linked · gpupdate on WS-FIN-07 ok · RSoP verified')">Link</button></div>`)}
+function restoreGpo(n){confirmH("Restore GPO",n,`Restore-GPO -Name '${n}' -BackupId {8D2A41C7-…} -WhatIf\nRestores settings from backup taken Nov 4 18:20.\nA backup of the current state is taken first.\nLinks are not changed by a restore.`,"gpo_restore")}
+function gpupdate(){dialog(`<div class="b"><h2>Run gpupdate</h2>${tierTag("W")}<div class="form"><div class="seg"><button class="on">By OU</button><button>By hosts</button></div><label>OU<input class="input" value="OU=Finance,OU=Staff,DC=corp,DC=example,DC=local"></label><label><span><input type="checkbox" checked> /force</span></label><div class="muted" style="font-size:12px">23 computers · runs in parallel (throttle 16) · per-host results shown</div></div></div><div class="f"><button class="btn" onclick="closeDlg()">Cancel</button><button class="btn primary" onclick="closeDlg();toast('gpupdate: 21 ok · 2 offline')">Run</button></div>`)}
+
+function rdpTab(){
+  const seg=`<div class="seg"><button class="${state.rdpView==="sessions"?"on":""}" onclick="state.rdpView='sessions';render()">Sessions</button><button class="${state.rdpView==="hosts"?"on":""}" onclick="state.rdpView='hosts';render()">Hosts</button></div>`;
+  if(state.rdpView==="hosts") return `<div class="toolbar">${seg}<input class="search" placeholder="Filter hosts…"><span class="grow"></span><span class="muted" style="font-size:12px">Scope: OU=Servers + Domain Controllers</span></div>
+   <div class="card"><table><thead><tr><th>Host</th><th>RDP</th><th>NLA</th><th>Firewall rule</th><th>Remote Desktop Users</th><th></th></tr></thead><tbody>
+   ${rdpHosts.map(h=>`<tr><td><b>${h.host}</b> ${h.dc?'<span class="badge accent">DC</span>':""}</td>
+    <td><button class="toggle ${h.rdp?"on":""}" onclick="${h.dc?`confirmH('Disable RDP on a domain controller','${h.host}','Set-ItemProperty HKLM:\\\\System\\\\CurrentControlSet\\\\Control\\\\Terminal Server -Name fDenyTSConnections -Value 1 -WhatIf\\nTarget is a domain controller. You may lose remote access to ${h.host}.','rdp_set_enabled')`:`confirmW('${h.rdp?"Disable":"Enable"} RDP','${h.rdp?"Disable":"Enable"} RDP on ${h.host}?','rdp_set_enabled')`}"></button></td>
+    <td>${h.nla?'<span class="badge green">on</span>':'<span class="badge yellow">⚠ off</span>'}</td><td>${h.fw?'<span class="badge green">open</span>':'<span class="muted">closed</span>'}</td>
+    <td>${h.members.map(m=>`<span class="badge">${m}</span>`).join(" ")||'<span class="muted">—</span>'} <button class="ghost">+ Add</button></td>
+    <td><button class="btn sm" ${h.rdp?"":"disabled"} onclick="toast('Opening ${h.host}.rdp in Microsoft Remote Desktop…')">Connect ↗</button></td></tr>`).join("")}
+   </tbody></table></div>`;
+  return `<div class="toolbar">${seg}<input class="search" placeholder="Filter by user or host…"><button class="chip">Disconnected</button><button class="chip">Idle &gt;1 d</button><span class="grow"></span><span class="muted" style="font-size:12px">5 sessions on 3 hosts · 2 hosts unreachable</span></div>
+  <div class="card"><table><thead><tr><th>User</th><th>Host</th><th>ID</th><th>State</th><th>Idle</th><th>Logon</th><th></th></tr></thead><tbody>
+  ${sessions.map(s=>`<tr><td><b class="mono">${s.user}</b>${s.flag?`<div><span class="badge red">${s.flag}</span></div>`:""}</td><td class="mono">${s.host}</td><td class="muted">${s.id}</td><td><span class="dot ${s.state==="Active"?"g":"y"}"></span> ${s.state}</td><td class="muted">${s.idle}</td><td class="muted">${s.logon}</td>
+   <td style="white-space:nowrap"><button class="btn sm" onclick="toast('Message dialog')">Message</button> <button class="btn sm" onclick="confirmW('Disconnect session','Disconnect ${s.user} on ${s.host}?','rdp_session_disconnect')">Disconnect</button> <button class="btn sm danger" onclick="confirmW('Log off session','Log off ${s.user} from ${s.host} (session ${s.id})? Unsaved work will be lost.','rdp_session_logoff')">Log off</button> <button class="btn sm" onclick="toast('Opening ${s.host}.rdp…')">Connect ↗</button></td></tr>`).join("")}
+  </tbody></table></div>
+  <div class="callout yellow" style="margin-top:10px">⚠ <div>SRV-LEGACY01, SRV-PRINT02 unreachable over WinRM from DC01. <button class="ghost">Details</button></div></div>`;
+}
+
+function backupsTab(){
+  return `<div class="toolbar"><span class="muted">Windows Server Backup · stale threshold: system state older than 7 days</span><span class="grow"></span><button class="btn" onclick="toast('Refreshed backup status')">↻ Refresh</button></div>
+  <div class="hosts">${backups.map(b=>`<div class="hcard ${b.state==="bad"?"bad":b.state==="none"?"warn":""}">
+   <div class="top"><span class="dot ${b.state==="ok"?"g":b.state==="bad"?"r":b.state==="run"?"y":"n"}"></span><b>${b.host}</b>${b.state==="run"?'<span class="badge accent">running</span>':b.state==="bad"?'<span class="badge red">stale</span>':b.state==="none"?'<span class="badge">not configured</span>':'<span class="badge green">ok</span>'}</div>
+   ${b.err?`<div class="callout ${b.state==="bad"?"red":"yellow"}" style="margin-bottom:8px;font-size:12px">${b.err}</div>`:""}
+   ${b.state==="run"?`<div class="bar"><i style="width:${b.prog}%"></i></div><div class="muted" style="font-size:12px">System state · ${b.prog}% · ~6 min left</div>`:""}
+   <div class="kv" style="grid-template-columns:110px 1fr;font-size:12px">
+    <span class="k">Last success</span><span>${b.last}</span><span class="k">System state</span><span style="${b.state==="bad"?"color:var(--ui-red)":""}">${b.ss}${b.ssAge!=="—"?` (${b.ssAge})`:""}</span>
+    <span class="k">Next run</span><span>${b.next}</span><span class="k">Target</span><span class="mono" style="font-size:11.5px">${b.target}</span><span class="k">Versions</span><span>${b.versions}</span></div>
+   <div class="actions" style="margin-top:10px">${b.state==="run"?`<button class="btn sm danger" onclick="confirmW('Cancel backup','Cancel the running backup on ${b.host}?','backup_cancel')">Cancel</button>`:b.state==="none"?`<button class="btn sm" disabled>Back up now</button><span class="muted" style="font-size:11.5px">Install feature first</span>`:`<button class="btn sm primary" onclick="backupNow('${b.host}')">Back up now</button>`}<button class="btn sm" ${b.versions?"":"disabled"}>Versions</button><button class="btn sm danger" ${b.state==="none"?"disabled":""} onclick="confirmH('Change backup policy','${b.host}','Set-WBPolicy -Policy … -WhatIf\\nSchedule: 02:00 → 23:00\\nTarget: E: (USB) → \\\\\\\\NAS01\\\\wsb\\\\FS01','backup_set_policy')">Policy…</button></div>
+  </div>`).join("")}</div>`;
+}
+function backupNow(h){dialog(`<div class="b"><h2>Back up ${h} now</h2>${tierTag("W")}<div class="form"><div class="seg"><button class="on">System state</button><button>Full (policy)</button><button>Volumes…</button></div><label>Target<input class="input mono" value="\\\\NAS01\\wsb\\${h}"></label><div class="muted" style="font-size:12px">Runs as a server-side job. Progress is polled and shown here; you can close this page.</div></div></div><div class="f"><button class="btn" onclick="closeDlg()">Cancel</button><button class="btn primary" onclick="startBk('${h}')">Start backup</button></div>`)}
+function startBk(h){const b=backups.find(x=>x.host===h);b.state="run";b.prog=3;b.err=null;closeDlg();toast(`Backup started on ${h}`);render();const iv=setInterval(()=>{b.prog=Math.min(100,b.prog+9);if(b.prog>=100){clearInterval(iv);b.state="ok";b.ss="Just now";b.ssAge="0 m";b.last="Just now";b.versions++;toast(`${h}: system-state backup complete`)}if(state.tab==="backups")render()},700)}
+
+function auditTab(){
+  return `<div class="toolbar"><input class="search" placeholder="Search tool, target, actor…"><button class="chip">Agent</button><button class="chip">Dashboard</button><button class="chip">Denied / blocked</button><button class="chip">Failed</button><span class="grow"></span><button class="btn">Export CSV</button></div>
+  <div class="card"><table><thead><tr><th>Time</th><th>Actor</th><th>Tier</th><th>Action</th><th>Target</th><th>Decision / result</th></tr></thead><tbody>
+  ${audit.map(a=>`<tr class="click"><td class="mono muted">${a.t}</td><td>${a.actor}</td><td>${tierTag(a.tier)}</td><td class="mono">${a.tool}</td><td>${esc(a.target)}</td><td>${decBadge(a)}</td></tr>`).join("")}
+  </tbody></table></div><p class="muted" style="font-size:12px">Passwords and secret parameters are redacted before storage. Stored locally in the plugin's SQLite database.</p>`;
+}
+
+function setup(){
+  return `<div class="empty"><div class="big">🏢</div><h2 style="margin:0 0 6px;font-size:17px">Connect to Active Directory</h2>
+   <p class="muted">Hermes reaches your domain through one WinRM jump host, a domain controller or a server with RSAT installed. Credentials are stored in Hermes secrets.</p>
+   <div class="form"><label>Jump host<input class="input mono" placeholder="dc01.corp.example.local"></label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label>Transport<select class="input"><option>HTTPS · 5986</option><option>HTTP · 5985 (encrypted)</option></select></label><label>Auth<select class="input"><option>NTLM</option><option>Kerberos</option></select></label></div>
+    <label>Username<input class="input mono" placeholder="CORP\\svc-hermes"></label><label>Password<input class="input" type="password" placeholder="••••••••"></label>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn">Open plugin settings</button><button class="btn primary" onclick="testConn()">Test connection</button></div>
+    <div id="testRes"></div></div></div>`;
+}
+function testConn(){$("#testRes").innerHTML=`<div class="callout accent">✓ <div>Connected to <b>DC01</b> · Windows Server 2022 · domain corp.example.local<br>ActiveDirectory module ✓ · GroupPolicy module ✓ · WindowsServerBackup on 3/5 servers<br><span class="muted">Delegated rights: user write in OU=Staff ✓ · GPO link in OU=Staff ✓ · Domain Admin ✗ (recommended)</span></div></div>`}
+
+function chat(){
+  return `<div class="page"><div class="chat">
+   <p class="muted" style="font-size:12px;text-align:center">This is Hermes's own chat UI. The plugin's <span class="mono">pre_tool_call</span> hook supplies the approval message and WhatIf preview.</p>
+   <div class="msg user"><div class="bub">Bob says he's locked out again, figure out why and fix it.</div></div>
+   <div class="msg"><div class="toolcall">${tierTag("R")} <span class="mono">ad_user_get</span> bmartinez <span class="grow"></span><span class="badge green">ok · 0.4 s</span></div>
+    <div class="toolcall">${tierTag("R")} <span class="mono">ad_lockout_source</span> bmartinez <span class="grow"></span><span class="badge green">SRV-APP02 · 14 events</span></div>
+    <div class="toolcall">${tierTag("R")} <span class="mono">rdp_sessions</span> host=SRV-APP02 <span class="grow"></span><span class="badge green">2 sessions</span></div>
+    <p>Bob's account is being locked by <b>SRV-APP02</b>. He has a disconnected RDP session there from Oct 30 that keeps retrying his old password. I'll log off that session, then unlock him.</p>
+    <div class="approve" style="border-color:color-mix(in srgb,var(--ui-yellow) 40%,transparent)"><div class="ah" style="background:color-mix(in srgb,var(--ui-yellow) 9%,transparent)">${tierTag("W")} Approval required · rdp_session_logoff</div>
+     <div class="ab">Log off <b class="mono">bmartinez</b> from <b class="mono">SRV-APP02</b> (session 3, disconnected 6 d 4 h).</div>
+     <div class="af"><button class="btn primary sm">Approve once</button><button class="btn sm">Approve for session</button><button class="btn sm danger">Deny</button></div></div>
+    <div class="toolcall">${tierTag("W")} <span class="mono">rdp_session_logoff</span> SRV-APP02 #3 <span class="grow"></span><span class="badge green">approved · ok</span></div>
+    <div class="toolcall">${tierTag("W")} <span class="mono">ad_user_unlock</span> bmartinez <span class="grow"></span><span class="badge green">approved · ok</span></div>
+    <p>Done. Bob is unlocked and the stale session is gone, so it shouldn't happen again. Tell him to sign out of any other machines after his next password change.</p></div>
+   <div class="msg user"><div class="bub">Also add Bob to Domain Admins.</div></div>
+   <div class="msg"><div class="approve"><div class="ah">${tierTag("H")} High-risk change · ad_group_add_member</div>
+     <div class="ab"><b>Privileged group.</b> Adding <b class="mono">bmartinez</b> to <b>Domain Admins</b> grants full control of the domain.
+      <div class="whatif">Add-ADGroupMember -Identity "Domain Admins" -Members bmartinez -WhatIf
+What if: Performing the operation "Set" on target
+"CN=Domain Admins,CN=Users,DC=corp,DC=example,DC=local".
+Current members: aokafor, Administrator, svc-deploy</div></div>
+     <div class="af"><button class="btn sm">Approve once</button><button class="btn sm danger solid">Deny</button><span class="muted" style="font-size:11.5px;align-self:center">“Always” is unavailable for high-risk tools</span></div></div>
+    <div class="toolcall">${tierTag("H")} <span class="mono">ad_group_add_member</span> Domain Admins ← bmartinez <span class="grow"></span><span class="badge red">denied by user</span></div>
+    <p>Understood. I didn't make that change. If Bob needs elevated access for a specific task, I can add him to a scoped delegation group instead.</p></div>
+  </div></div>`;
+}
+
+/* dialogs */
+function dialog(html){$("#dialog").innerHTML=html;$("#scrim").classList.add("open")}
+function closeDlg(){$("#scrim").classList.remove("open")}
+let pending=null;
+function confirmW(title,body,tool,fn){pending=fn;dialog(`<div class="b"><h2>${title}</h2>${tierTag("W")} <span class="mono muted" style="font-size:11.5px">${tool}</span><p>${body}</p></div><div class="f"><button class="btn" onclick="closeDlg()">Cancel</button><button class="btn primary" onclick="doPending('${tool}')">Confirm</button></div>`)}
+function doPending(tool){closeDlg();if(pending){pending();pending=null}else toast(`${tool} · ok · logged to audit`)}
+function confirmH(title,name,whatif,tool){dialog(`<div class="b"><h2>${title}</h2>${tierTag("H")} <span class="mono muted" style="font-size:11.5px">${tool}</span>
+  <p class="muted" style="font-size:12px;margin:8px 0 0">Preview from the server (-WhatIf). Nothing has changed yet.</p><div class="whatif">${esc(whatif)}</div>
+  <label class="muted" style="font-size:12px">Type <b class="mono" style="color:var(--ui-text-primary)">${esc(name)}</b> to confirm</label>
+  <input class="input mono" id="tconf" oninput="$('#hgo').disabled=this.value!==${JSON.stringify(name).replace(/"/g,'&quot;')}" style="margin-top:4px"></div>
+  <div class="f"><button class="btn" onclick="closeDlg()">Cancel</button><button class="btn danger solid" id="hgo" disabled onclick="closeDlg();toast('${tool} · ok · logged to audit')">${title}</button></div>`);setTimeout(()=>$("#tconf")?.focus(),30)}
+$("#scrim").addEventListener("click",e=>{if(e.target.id==="scrim")closeDlg()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeDlg();closeDrawer()}});
+
+function chip(k){state.chips.has(k)?state.chips.delete(k):state.chips.add(k);render()}
+function go(t){state.tab=t;if(t!=="users")$("#drawer").classList.remove("open");render();$("#main").scrollTop=0}
+function render(){
+  const m=$("#main");
+  if(state.mode==="setup"){m.innerHTML=`<div class="page">${setup()}</div>`;return}
+  if(state.mode==="chat"){m.innerHTML=chat();return}
+  const body={overview,users:usersTab,gpo:gpoTab,rdp:rdpTab,backups:backupsTab,audit:auditTab}[state.tab]();
+  m.innerHTML=`<div class="page">${header()}${body}</div>`;
+}
+document.querySelectorAll("#stateSeg button").forEach(b=>b.onclick=()=>{document.querySelectorAll("#stateSeg button").forEach(x=>x.classList.remove("on"));b.classList.add("on");state.mode=b.dataset.s;$("#drawer").classList.remove("open");render()});
+render();
+</script>
+</body>
+</html>
