@@ -34,7 +34,8 @@ def dc_status(dc: Mapping[str, Any]) -> str:
         status = "warn"
     if isinstance(skew, (int, float)) and abs(skew) >= 60:
         status = "warn"
-    if (dc.get("replication") or {}).get("failures"):
+    replication = dc.get("replication") or {}
+    if replication.get("failures") or replication.get("error"):
         status = "warn"
     return status
 

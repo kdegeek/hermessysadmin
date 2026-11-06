@@ -33,6 +33,7 @@ def with_(**changes):
         (with_(time_skew_seconds=-75), "warn"),
         (with_(time_skew_seconds=301), "bad"),
         (with_(replication={"failures": 2}), "warn"),
+        (with_(replication={"failures": 0, "error": "RPC server unavailable"}), "warn"),
     ],
 )
 def test_dc_status(dc, expected):

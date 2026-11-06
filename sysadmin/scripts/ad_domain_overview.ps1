@@ -17,7 +17,7 @@ Invoke-Op {
     $cutoff = $nowUtc.AddDays(-$StaleDays).ToFileTimeUtc()
     $stale = @($computers | Where-Object { -not $_.LastLogonTimestamp -or $_.LastLogonTimestamp -lt $cutoff })
     $gpos = $null
-    if (Get-Command Get-GPO -ErrorAction SilentlyContinue) { $gpos = @(Get-GPO -All).Count }
+    if (Get-Command Get-GPO -ErrorAction SilentlyContinue) { try { $gpos = @(Get-GPO -All).Count } catch { $gpos = $null } }
     $recycle = @(Get-ADOptionalFeature -Filter "Name -eq 'Recycle Bin Feature'" | Where-Object { $_.EnabledScopes.Count -gt 0 }).Count -gt 0
     @{
         domain              = $d.DNSRoot

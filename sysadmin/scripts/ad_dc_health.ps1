@@ -20,8 +20,13 @@ Invoke-Op {
     $byHost = @{}
     foreach ($r in $remote.results) { $byHost["$($r.host)".ToLower()] = $r }
     $items = @(foreach ($dc in $dcs) {
-        $failures = @(Get-ADReplicationFailure -Target $dc.HostName -ErrorAction SilentlyContinue | Where-Object { $_.FailureCount -gt 0 })
-        $partners = @(Get-ADReplicationPartnerMetadata -Target $dc.HostName -Scope Server -ErrorAction SilentlyContinue)
+        $replError = $null
+        $failures = @()
+        $partners = @()
+        try {
+            $failures = @(Get-ADReplicationFailure -Target $dc.HostName | Where-Object { $_.FailureCount -gt 0 })
+            $partners = @(Get-ADReplicationPartnerMetadata -Target $dc.HostName -Scope Server)
+        } catch { $replError = "$($_.Exception.Message)" }
         $last = ($partners | Sort-Object LastReplicationSuccess -Descending | Select-Object -First 1).LastReplicationSuccess
         $r = $byHost["$($dc.HostName)".ToLower()]
         if (-not $r) { $r = $byHost["$($dc.Name)".ToLower()] }
@@ -42,6 +47,7 @@ Invoke-Op {
                 failures     = $failures.Count
                 partners     = $partners.Count
                 last_success = (Iso $last)
+                error        = $replError
                 errors       = @($failures | Select-Object -First 5 | ForEach-Object {
                     @{ partner = "$($_.Partner)"; count = $_.FailureCount; first = (Iso $_.FirstFailureTime); message = "$($_.LastError)" }
                 })
