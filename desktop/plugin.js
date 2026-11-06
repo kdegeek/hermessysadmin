@@ -903,7 +903,7 @@ function HighRiskDialog({ seq, o, dec, opts }) {
       className: 'hs-stack',
       children: [
         opts.body ? jsx('p', { className: 'hs-p', children: opts.body }) : null,
-        jsx('div', { className: 'hs-muted hs-small', children: `${dec.reason} Preview from the server (-WhatIf). Nothing has changed yet.` }),
+        jsx('div', { className: 'hs-muted hs-small', children: `${dec.reason} Preview from the server (-Preview). Nothing has changed yet.` }),
         jsx(PreviewBody, { q: pv, args: o.args }),
         jsxs('label', {
           className: 'hs-field',
@@ -1798,7 +1798,7 @@ function AddToGroupDialog({ seq, sam }) {
         tone: 'red',
         icon: jsx(TierTag, { tier: 'H' }),
         children: jsxs('div', {
-          children: [jsx('b', { children: 'Privileged group.' }), ' This change escalates to high-risk: a WhatIf preview and type-to-confirm are required.'],
+          children: [jsx('b', { children: 'Privileged group.' }), ' This change escalates to high-risk: a preview and type-to-confirm are required.'],
         }),
       });
     } else {
@@ -2509,7 +2509,7 @@ function LinkGpoDialog({ seq, gpo }) {
         jsx(Callout, {
           tone: 'accent',
           icon: jsx(TierTag, { tier: 'W' }),
-          children: 'Linking at the domain root, the Domain Controllers OU or a site escalates to high-risk: you will see a WhatIf preview and type the GPO name to confirm.',
+          children: 'Linking at the domain root, the Domain Controllers OU or a site escalates to high-risk: you will see a preview and type the GPO name to confirm.',
         }),
         jsx(CheckRow, { checked: enforced, onChange: setEnforced, label: 'Enforce the link' }),
         jsx(CheckRow, { checked: backupFirst, onChange: setBackupFirst, label: 'Back up the GPO first' }),
@@ -3424,7 +3424,7 @@ export default {
     ]);
     // Live updates: every write (agent or dashboard) emits plugin.hermes-sysadmin.changed.
     // Polling in §5 (refetchInterval) covers missed events and changes made outside Hermes.
-    ctx.onEvent(CHANGED_EVENT, () => invalidateAll());
+    ctx.onEvent(CHANGED_EVENT, () => { Promise.resolve().then(() => api.refresh()).catch(() => {}).then(() => invalidateAll()); });
     ctx.onDispose(() => {
       $dialog.set(null);
       $drawer.set(null);

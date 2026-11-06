@@ -92,7 +92,9 @@ def test_rest_paths_are_backend_routes(code):
 
 def test_subscribes_to_change_event(code):
     assert "const CHANGED_EVENT = 'plugin.hermes-sysadmin.changed';" in code
-    assert "ctx.onEvent(CHANGED_EVENT, () => invalidateAll());" in code
+    handler = code[code.index("ctx.onEvent(CHANGED_EVENT"):][:200]
+    assert handler.index("api.refresh()") < handler.index("invalidateAll()")
+    assert "(-Preview)" in code and "(-WhatIf)" not in code
 
 
 def test_node_syntax_check(tmp_path):
