@@ -23,9 +23,9 @@ provides_tools:
   - ad_group_list
   - ad_group_remove_member
   - ad_lockout_source
+  - ad_powershell
   - ad_recycle_bin_list
   - ad_recycle_bin_restore
-  - ad_powershell
   - ad_search
   - ad_user_create
   - ad_user_delete
@@ -82,9 +82,8 @@ config_schema:
     required: true
   port:
     type: int
-    default: 5986
     label: WinRM port
-    description: 5986 for HTTPS, 5985 for HTTP (traffic is still encrypted with NTLM/Kerberos).
+    description: Leave empty to use 5986 for HTTPS or 5985 for HTTP (traffic is still encrypted with NTLM/Kerberos).
   use_https:
     type: bool
     default: true

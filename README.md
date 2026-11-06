@@ -54,10 +54,10 @@ Settings: `host`, `port`, `use_https`, `auth` (ntlm/kerberos), `username`, `pass
 | Read | list, get, report, status | runs | runs | runs |
 | Write | unlock, reset password, link GPO, log off, start backup | approval | runs | blocked |
 | High-risk | delete user, GPO delete/restore, backup policy, raw PowerShell; plus escalated writes: privileged-group membership, GPO links at the domain root / DC OU / sites, RDP or Remote Desktop Users on a DC, disabling NLA | approval (with preview where one exists) | approval (with preview where one exists) | blocked |
-| Protected | krbtgt, Administrator, your denylist | blocked | blocked | blocked |
+| Protected | krbtgt, Administrator, DC accounts, critical system objects, your denylist | blocked | blocked | blocked |
 
 - The agent asks through Hermes's own approval prompt. High-risk approvals use a one-time key, so an "always allow" never carries over to the next high-risk call.
-- Protected accounts are matched by name, distinguished name and SID (including the domain's built-in Administrator and krbtgt SIDs). Privileged groups are matched by name, SID and GUID, so renaming or addressing a group by another identifier does not bypass escalation. An identity the policy cannot interpret is blocked rather than allowed.
+- Protected accounts are matched by name, distinguished name and SID (including the domain's built-in Administrator and krbtgt SIDs). Privileged groups are matched by name, SID and GUID, so renaming or addressing a group by another identifier does not bypass escalation. An identity the policy cannot interpret is blocked rather than allowed. Every user and group-membership write script also re-checks the resolved AD object, so a protected account addressed by an alias still cannot be changed in any mode: RID 500/502, domain controller computer accounts (primary group 516/521) and objects flagged `isCriticalSystemObject` are refused with a PolicyBlocked error, including in previews.
 - The approval prompt never truncates what you are approving. Previews are length-limited with an explicit truncation marker, and for high-risk calls without a preview, including the `ad_powershell` escape hatch, every argument and the full script are shown.
 - The dashboard requires a confirm dialog for every write, and high-risk changes also make you type the object's name. The API refuses writes that lack that confirmation.
 - Every write attempt is logged, whether allowed, approved, denied, blocked or failed: who, what, target, tier and result. Passwords are redacted.
@@ -67,7 +67,7 @@ Settings: `host`, `port`, `use_https`, `auth` (ntlm/kerberos), `username`, `pass
 
 - **Network:** WinRM (5985/5986) to the configured jump host only. The jump host then makes WinRM connections to member servers you target (RDP, backup and gpupdate features). No other network calls, and no telemetry.
 - **Shell:** no local shell. PowerShell runs remotely on the jump host.
-- **Credentials:** the WinRM password is read only through Hermes secrets (`get_secret`). It is sent to the jump host for authentication and, for fan-out, used there as an explicit credential. It is never logged.
+- **Credentials:** the WinRM password is read only through Hermes secrets (`get_secret`). It is sent to the jump host for authentication and, for fan-out, used there as an explicit credential. It is never logged. `backup_set_policy` with a UNC target (`\\server\share`) stores that same service credential in the target server's Windows Server Backup schedule (`New-WBBackupTarget -Credential`), so use a least-privilege service account. The optional `ad_powershell` escape hatch, when enabled, can read the credential (`$Global:HermesCred`); the approval prompt warns when a script references it.
 - **Files:** a SQLite audit log in the plugin's Hermes data folder. GPO backups are written on the DC under `%ProgramData%\HermesSysadmin\GpoBackups`. The dashboard's Connect button may save a `.rdp` file to a folder you choose.
 - **Background work:** none in Hermes. Backups are server-side Windows Server Backup jobs, and the dashboard polls while open.
 
