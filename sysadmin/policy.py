@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+import re
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Protocol
 
+log = logging.getLogger(__name__)
+
+_DN_RE = re.compile(r"^\s*cn\s*=", re.IGNORECASE)
+_PROTECTED_SID_RE = re.compile(r"^S-1-5-21-\d+-\d+-\d+-(500|502)$", re.IGNORECASE)
 PROTECTED_DEFAULT = ("krbtgt", "administrator")
 PRIVILEGED_DEFAULT = (
     "domain admins",
@@ -19,6 +25,7 @@ PRIVILEGED_DEFAULT = (
     "dnsadmins",
     "key admins",
     "enterprise key admins",
+    "s-1-5-32-544",  # well-known SID of BUILTIN\\Administrators
 )
 
 
@@ -39,10 +46,28 @@ class NoFacts:
         return None
 
 
+def _first_rdn_value(dn: str) -> str:
+    """Value of the first RDN of a DN, honouring backslash-escaped characters."""
+    text = _DN_RE.sub("", dn, count=1)
+    out: list[str] = []
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == "\\" and i + 1 < len(text):
+            out.append(text[i + 1])
+            i += 2
+            continue
+        if ch == ",":
+            break
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 def normalize_identity(value: str) -> str:
     text = value.strip()
-    if text.lower().startswith("cn="):
-        text = text[3:].split(",", 1)[0]
+    if _DN_RE.match(text):
+        text = _first_rdn_value(text)
     if "\\" in text:
         text = text.split("\\", 1)[1]
     if "@" in text:
@@ -60,14 +85,26 @@ def is_domain_controller_name(host: str, dcs: Iterable[str]) -> bool:
     return any(short == d.strip().lower().split(".", 1)[0] for d in dcs)
 
 
-def _protected_hit(op: Any, args: Mapping[str, Any], settings: Any) -> str | None:
+def _protected_hit(op: Any, args: Mapping[str, Any], settings: Any) -> tuple[str, str] | None:
+    """Return ("protected", item) or ("uninterpretable", repr) when the call must be blocked."""
     pool = set(PROTECTED_DEFAULT) | {normalize_identity(p) for p in settings.protected_objects}
     for key in op.identities:
         value = args.get(key)
-        for item in value if isinstance(value, list) else [value]:
-            if isinstance(item, str) and item and normalize_identity(item) in pool:
-                return item
+        is_collection = isinstance(value, (list, tuple, set, frozenset))
+        if value is None:
+            continue  # absent/None top-level identity: nothing to protect
+        for item in (value if is_collection else [value]):
+            if not isinstance(item, str):
+                return ("uninterpretable", f"{key}={item!r}"[:80])
+            if not item:
+                continue
+            if _PROTECTED_SID_RE.match(item.strip()) or normalize_identity(item) in pool:
+                return ("protected", item)
     return None
+
+
+def _block_safety(tier: str, why: str) -> Decision:
+    return Decision("block", tier, f"The hermes-sysadmin safety check failed ({why}); the change was blocked.")
 
 
 def decide(op: Any, args: Mapping[str, Any], settings: Any, facts: Facts | None = None) -> Decision:
@@ -75,11 +112,21 @@ def decide(op: Any, args: Mapping[str, Any], settings: Any, facts: Facts | None 
         return Decision("allow", "R", "Read-only operation.")
     hit = _protected_hit(op, args, settings)
     if hit:
+        kind, item = hit
+        if kind == "uninterpretable":
+            return Decision(
+                "block", "P",
+                f"The identity value ({item}) could not be interpreted; blocked by the hermes-sysadmin policy.",
+            )
         return Decision(
             "block", "P",
-            f"'{hit}' is a protected object; changes to it are blocked by the hermes-sysadmin policy.",
+            f"'{item}' is a protected object; changes to it are blocked by the hermes-sysadmin policy.",
         )
-    escalated = bool(op.escalate and op.escalate(args, settings, facts or NoFacts()))
+    try:
+        escalated = bool(op.escalate and op.escalate(args, settings, facts or NoFacts()))
+    except Exception:
+        log.exception("hermes-sysadmin: escalate check failed for %s", getattr(op, "name", "?"))
+        return _block_safety(op.tier if op.tier in ("W", "H") else "W", "escalation check raised an error")
     tier = "H" if op.tier == "H" or escalated else "W"
     if settings.mode == "read-only":
         return Decision("block", tier, "hermes-sysadmin is in read-only mode; writes are disabled in its settings.")

@@ -53,3 +53,23 @@ def test_oversized_params_stay_valid_json():
     log.record(actor="agent", session="", tool="ad_powershell", target="", tier="H", decision="approved", result="ok", params={"script": "x" * 10000})
     params = log.query()[0]["params"]
     assert set(params) == {"_truncated"} and len(params["_truncated"]) < 4000
+
+
+def test_redact_recurses_and_normalizes_keys():
+    out = redact({
+        "newPassword": "a", "Old-Password": "b", "nested": {"SecurePassword": "c", "ok": 1},
+        "items": [{"pwd": "d"}, ({"user_password": "e"},)], 5: "x", "plain": "v",
+    })
+    assert out["newPassword"] == "[redacted]" and out["Old-Password"] == "[redacted]"
+    assert out["nested"] == {"SecurePassword": "[redacted]", "ok": 1}
+    assert out["items"][0] == {"pwd": "[redacted]"}
+    assert out["items"][1][0] == {"user_password": "[redacted]"}
+    assert out[5] == "x" and out["plain"] == "v"
+
+
+def test_oversized_params_with_password_stay_redacted():
+    log = open_audit()
+    log.record(actor="a", session="", tool="t", target="", tier="W", decision="allow", result="ok",
+               params={"blob": "z" * 10000, "nested": {"password": "hunter2"}})
+    row = log.query()[0]
+    assert "hunter2" not in str(row["params"])

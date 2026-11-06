@@ -10,7 +10,6 @@ from typing import Any, Mapping
 
 from . import PLUGIN_ID
 
-SECRET_KEYS = frozenset({"password", "new_password"})
 _COLUMNS = ("id", "ts", "actor", "session", "tool", "target", "tier", "decision", "result", "params")
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS audit (
@@ -29,6 +28,29 @@ CREATE INDEX IF NOT EXISTS audit_ts ON audit(ts);
 """
 
 
+_SECRET_NAMES = frozenset({
+    "password", "newpassword", "oldpassword", "currentpassword",
+    "passwd", "pwd", "securepassword", "secret",
+})
+
+
+def _is_secret_key(key: Any) -> bool:
+    norm = str(key).lower().replace("_", "").replace("-", "")
+    return norm in _SECRET_NAMES or norm.endswith("password")
+
+
+def _redact_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {k: ("[redacted]" if _is_secret_key(k) else _redact_value(v)) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_redact_value(v) for v in value]
+    return value
+
+
+def redact(args: Mapping[str, Any] | None) -> dict[str, Any]:
+    return _redact_value(args or {})
+
+
 MAX_PARAMS_JSON = 4000
 
 
@@ -38,10 +60,6 @@ def _params_json(params: Mapping[str, Any] | None) -> str:
     if len(text) <= MAX_PARAMS_JSON:
         return text
     return json.dumps({"_truncated": text[: MAX_PARAMS_JSON - 100]})
-
-
-def redact(args: Mapping[str, Any] | None) -> dict[str, Any]:
-    return {k: ("[redacted]" if k.lower() in SECRET_KEYS else v) for k, v in (args or {}).items()}
 
 
 class AuditLog:
