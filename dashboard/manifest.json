@@ -1,0 +1,6 @@
+{
+  "name": "hermes-sysadmin",
+  "label": "Active Directory",
+  "tab": { "hidden": true },
+  "api": "plugin_api.py"
+}
