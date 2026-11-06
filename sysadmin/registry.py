@@ -46,6 +46,8 @@ class Op:
     post: Callable[[Any, Mapping[str, Any], Any], Any] | None = None
     cache_ttl: float = 0.0
     inject: Callable[[Any], Mapping[str, Any]] | None = None  # extra PS params derived from Settings
+    local: Callable[[Any, Mapping[str, Any]], Any] | None = None  # run in Python as local(service, args) instead of a script
+    enabled: Callable[[Any], bool] | None = None  # enabled(settings) False -> decide() blocks the op
 
 
 OPS: dict[str, Op] = {}

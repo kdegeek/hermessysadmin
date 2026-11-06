@@ -169,7 +169,10 @@ class Service:
         return params
 
     def _run(self, op: Op, clean: dict[str, Any]) -> Any:
-        data = self.runner.run(op.script, self._params(op, clean), retry=op.tier == "R")
+        if op.local is not None:
+            data = op.local(self, clean)
+        else:
+            data = self.runner.run(op.script, self._params(op, clean), retry=op.tier == "R")
         return op.post(data, clean, self.settings) if op.post else data
 
     def _run_cached(self, op: Op, clean: dict[str, Any]) -> Any:

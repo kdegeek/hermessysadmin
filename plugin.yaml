@@ -25,6 +25,7 @@ provides_tools:
   - ad_lockout_source
   - ad_recycle_bin_list
   - ad_recycle_bin_restore
+  - ad_powershell
   - ad_search
   - ad_user_create
   - ad_user_delete
@@ -68,6 +69,7 @@ provides_tools:
   - rdp_set_nla
   - rdp_users_add
   - rdp_users_remove
+  - sysadmin_audit_log
 provides_hooks:
   - pre_tool_call
   - post_tool_call

@@ -10,7 +10,7 @@ from sysadmin.registry import OPS
 from sysadmin.runner import SCRIPTS_DIR
 
 ROOT = Path(__file__).resolve().parent.parent
-REAL_OPS = [op for op in OPS.values() if not op.name.startswith("t_")]
+REAL_OPS = [op for op in OPS.values() if not op.name.startswith("t_") and op.local is None]
 FORBIDDEN = re.compile(
     r"Invoke-Expression|\biex\b|Add-Type|DownloadString|Start-Process"
     r"|\[scriptblock\]::Create|NewScriptBlock|InvokeScript|\bInvoke-Command\b",

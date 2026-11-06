@@ -138,6 +138,8 @@ def _block_safety(tier: str, why: str) -> Decision:
 
 
 def decide(op: Any, args: Mapping[str, Any], settings: Any, facts: Facts | None = None) -> Decision:
+    if getattr(op, "enabled", None) is not None and not op.enabled(settings):
+        return Decision("block", op.tier, f"{op.name} is disabled in the hermes-sysadmin settings.")
     if op.tier == "R":
         return Decision("allow", "R", "Read-only operation.")
     hit = _protected_hit(op, args, settings)
