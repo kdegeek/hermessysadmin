@@ -140,3 +140,22 @@ def test_parent_reparse_and_ownership_checks():
     assert "will be re-secured" in install and "fails the safety check" in install
     assert "will be re-secured" in install[install.index("'broad'"):install.index("'foreign'")]
     assert "fails the safety check" in install[install.index("'foreign'"):]
+
+
+def test_install_tool_is_hidden_from_agents_while_the_lock_is_empty(synthetic_lock, monkeypatch):
+    from sysadmin import tools
+
+    seen = {}
+
+    class Ctx:
+        def register_tool(self, **kw):
+            seen[kw["name"]] = kw.get("check_fn")
+
+        def __getattr__(self, name):
+            return lambda *a, **k: None
+
+    tools.register_tools(Ctx())
+    check = seen["catalog_module_install"]
+    assert check() is True  # synthetic lock pins a module
+    monkeypatch.setattr(modules, "LOCK_PATH", CATALOG_DIR / "modules.lock.json")
+    assert check() is False

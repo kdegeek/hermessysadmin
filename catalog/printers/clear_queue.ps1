@@ -16,24 +16,29 @@ params:
 #>
 param([string[]]$Computers = @(), [string]$Ou, [string]$Printer, [switch]$Preview)
 Invoke-Op {
-    if ($Printer -notmatch '^[^\\/:*?"<>|]{1,256}$') { throw 'InvalidArguments: Printer must be a printer name (no \ / : * ? " < > | characters, up to 256 characters)' }
+    if ($Printer -cnotmatch '\A[^\\/:*?"<>|\x00-\x1f]{1,256}\z') { throw 'InvalidArguments: Printer must be a printer name (no \ / : * ? " < > | characters, up to 256 characters)' }
     $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Workstation
     if ($Preview) {
         $read = Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($Printer) -Script {
             param($name)
             $ErrorActionPreference = 'Stop'
-            foreach ($j in @(Get-PrintJob -PrinterName $name | Select-Object -First 50)) {
-                [pscustomobject]@{ job = [int]$j.Id; document = "$($j.DocumentName)"; user = "$($j.UserName)" }
+            $all = @(Get-PrintJob -PrinterName $name)
+            foreach ($j in @($all | Select-Object -First 50)) {
+                [pscustomobject]@{ job = [int]$j.Id; document = "$($j.DocumentName)"; user = "$($j.UserName)"; total = $all.Count }
             }
+            if ($all.Count -eq 0) { [pscustomobject]@{ job = $null; document = $null; user = $null; total = 0 } }
         }
         $cur = @{}
+        $totals = @{}
         foreach ($r in $read.items) {
+            $totals[$r['host']] = $r['total']
+            if ($null -eq $r['job']) { continue }
             if (-not $cur.ContainsKey($r['host'])) { $cur[$r['host']] = @() }
             $cur[$r['host']] += ,@{ job = $r['job']; document = $r['document']; user = $r['user'] }
         }
         return @{ summary = "Clear the queue of printer '$Printer' on $($targets.Count) computer(s)"
-                  changes = @($read.items | ForEach-Object { "$($_['host']): remove job $($_['job']) '$($_['document'])' ($($_['user']))" }) + @($read.errors | ForEach-Object { "$($_.host): unreachable or printer missing ($($_.message))" })
-                  current = $cur }
+                  changes = @($read.items | Where-Object { $null -ne $_['job'] } | ForEach-Object { "$($_['host']): remove job $($_['job']) '$($_['document'])' ($($_['user']))" }) + @($read.errors | ForEach-Object { "$($_.host): unreachable or printer missing ($($_.message))" })
+                  current = $cur; totals = $totals }
     }
     Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($Printer) -Script {
         param($name)

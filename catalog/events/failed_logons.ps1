@@ -25,6 +25,7 @@ Invoke-Op {
             throw
         }
         $groups = @{}
+        $capped = ($events.Count -ge 5000)
         foreach ($e in $events) {
             $d = @{}
             foreach ($n in ([xml]$e.ToXml()).Event.EventData.Data) { $d["$($n.Name)"] = "$($n.'#text')" }
@@ -34,9 +35,10 @@ Invoke-Op {
             $groups[$key]['count']++
             if ($t -gt $groups[$key]['last']) { $groups[$key]['last'] = $t }
         }
-        foreach ($g in $groups.Values) { [pscustomobject]$g }
+        foreach ($g in $groups.Values) { $g['capped'] = $capped; [pscustomobject]$g }
     }
     $merged = @{}
+    $cappedDcs = @($fan.items | Where-Object { $_['capped'] } | ForEach-Object { $_['host'] } | Sort-Object -Unique)
     foreach ($r in $fan.items) {
         $key = "$($r['account'])|$($r['source_ip'])|$($r['workstation'])"
         if (-not $merged.ContainsKey($key)) { $merged[$key] = @{ account = $r['account']; source_ip = $r['source_ip']; workstation = $r['workstation']; count = 0; last = $r['last'] } }
@@ -44,5 +46,5 @@ Invoke-Op {
         if ("$($r['last'])" -gt "$($merged[$key]['last'])") { $merged[$key]['last'] = $r['last'] }
     }
     $all = @($merged.Values | Sort-Object { $_['count'] } -Descending)
-    @{ items = @($all | Select-Object -First 500); errors = $fan.errors; summary = @{ total = $all.Count; truncated = ($all.Count -gt 500); dcs = $dcs.Count; dcs_ok = $fan.summary.ok; dcs_failed = $fan.summary.failed; hours = $Hours } }
+    @{ items = @($all | Select-Object -First 500); errors = $fan.errors; summary = @{ total = $all.Count; truncated = ($all.Count -gt 500); dcs = $dcs.Count; dcs_ok = $fan.summary.ok; dcs_failed = $fan.summary.failed; hours = $Hours; capped_dcs = $cappedDcs } }
 }

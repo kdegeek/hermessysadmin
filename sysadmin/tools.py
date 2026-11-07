@@ -78,6 +78,11 @@ def _escape_enabled() -> bool:
     return load_settings().enable_powershell_escape
 
 
+def _install_listed() -> bool:
+    op = OPS["catalog_module_install"]
+    return op.enabled is None or bool(op.enabled(None))  # hidden while no module is pinned
+
+
 def register_tools(ctx: Any) -> list[str]:
     names: list[str] = []
     for op in sorted(OPS.values(), key=lambda o: o.name):
@@ -88,7 +93,7 @@ def register_tools(ctx: Any) -> list[str]:
             toolset=op.toolset,
             schema=schema_for(op),
             handler=make_handler(op.name),
-            check_fn=_escape_enabled if op.name == "ad_powershell" else None,
+            check_fn=_escape_enabled if op.name == "ad_powershell" else (_install_listed if op.name == "catalog_module_install" else None),
             description=op.description,
             emoji=EMOJI.get(op.toolset, "🏢"),
         )

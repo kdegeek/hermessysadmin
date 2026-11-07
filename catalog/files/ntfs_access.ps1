@@ -15,8 +15,8 @@ params:
 #>
 param([string]$Server, [string]$Path)
 Invoke-Op {
-    if ($Server -notmatch '^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$') { throw 'InvalidArguments: Server must be a host name (letters, digits, dots and hyphens)' }
-    if ($Path -notmatch '^[A-Za-z]:\\' -or $Path -match '[*?<>|"\x00-\x1f]' -or (@($Path -split '[\\/]') -contains '..')) { throw 'InvalidArguments: Path must be an absolute local path such as D:\Shares\Data, without .. segments or wildcards' }
+    if ($Server -cnotmatch '\A[A-Za-z0-9][A-Za-z0-9.-]{0,252}\z') { throw 'InvalidArguments: Server must be a host name (letters, digits, dots and hyphens)' }
+    if ($Path -cnotmatch '\A[A-Za-z]:\\[^:*?<>|"\x00-\x1f]*\z' -or (@($Path -split '[\\/]') -contains '..')) { throw 'InvalidArguments: Path must be an absolute local path such as D:\Shares\Data, without .. segments, wildcards or stream (:) suffixes' }
     $fan = Invoke-HermesCatalogFanout -Computers @($Server) -ArgumentList @($Path) -Script {
         param($p)
         $ErrorActionPreference = 'Stop'
