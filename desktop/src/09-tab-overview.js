@@ -109,6 +109,13 @@ function num0(v) {
 
 const PATCH_BUCKETS = ['<7', '7-35', '35-90', '>90', 'unknown'];
 const SEEN_BUCKETS = ['<1d', '1-7d', '7-30d', '30-90d', '>90d', 'never'];
+// Bucket colours say how worried to be: fresh is green, old is amber then red, unknown is grey.
+const PATCH_TONE = { '<7': 'success', '7-35': 'success', '35-90': 'warning', '>90': 'danger', unknown: 'muted' };
+const SEEN_TONE = { '<1d': 'success', '1-7d': 'success', '7-30d': null, '30-90d': 'warning', '>90d': 'danger', never: 'muted' };
+
+function toned(buckets, tones) {
+  return buckets.map((b) => ({ ...b, tone: tones[b.label] }));
+}
 const DISK_DEFAULT_PCT = 10;
 
 function diskThreshold(monitoring) {
@@ -128,7 +135,7 @@ function FleetCharts({ fleet, diskPct }) {
         const osData = Object.entries(s.os_mix || {})
           .sort((a, b) => b[1] - a[1])
           .map(([label, value]) => ({ label, value, onClick: fleetGo('all', { os: label }) }));
-        const patch = orderedBuckets(s.patch_age_buckets, PATCH_BUCKETS).map((b) => (b.label === '35-90' || b.label === '>90' ? { ...b, onClick: fleetGo('patch_old') } : b));
+        const patch = toned(orderedBuckets(s.patch_age_buckets, PATCH_BUCKETS), PATCH_TONE).map((b) => (b.label === '35-90' || b.label === '>90' ? { ...b, onClick: fleetGo('patch_old') } : b));
         const lowDisk = list(d.items)
           .filter((i) => i.online && typeof i.c_free_pct === 'number')
           .sort((a, b) => a.c_free_pct - b.c_free_pct)
@@ -144,7 +151,7 @@ function FleetCharts({ fleet, diskPct }) {
           className: 'hs-grid3',
           children: [
             jsxs('div', { children: [jsx('div', { className: 'hs-label', children: 'Operating systems' }), osData.length ? jsx(Donut, { data: osData, center: String(num0(s.total)), title: 'Operating systems' }) : jsx('div', { className: 'hs-muted', children: 'No computers' })] }),
-            jsxs('div', { children: [jsx('div', { className: 'hs-label', children: 'Last logon' }), jsx(Histogram, { data: orderedBuckets(s.last_seen_buckets, SEEN_BUCKETS), title: 'Computers by last logon' })] }),
+            jsxs('div', { children: [jsx('div', { className: 'hs-label', children: 'Last logon' }), jsx(Histogram, { data: toned(orderedBuckets(s.last_seen_buckets, SEEN_BUCKETS), SEEN_TONE), title: 'Computers by last logon' })] }),
             jsxs('div', { children: [jsx('div', { className: 'hs-label', children: 'Patch age (days)' }), jsx(Histogram, { data: patch, title: 'Computers by days since last patch' })] }),
             jsxs('div', {
               className: 'hs-span3',
@@ -233,15 +240,15 @@ function InfrastructureCard({ data }) {
   const attention = num0(k.gpos_needing_attention);
   const unlinked = Math.min(num0(k.gpos_unlinked), attention);
   const gpoData = [
-    { label: 'Healthy', value: Math.max(0, total - attention), onClick: () => goTab('gpo') },
-    { label: 'Unlinked', value: unlinked, onClick: () => goTab('gpo') },
-    { label: 'Other issues', value: attention - unlinked, onClick: () => goTab('gpo') },
+    { label: 'Healthy', value: Math.max(0, total - attention), tone: 'success', onClick: () => goTab('gpo') },
+    { label: 'Unlinked', value: unlinked, tone: 'warning', onClick: () => goTab('gpo') },
+    { label: 'Other issues', value: attention - unlinked, tone: 'danger', onClick: () => goTab('gpo') },
   ].filter((d) => d.value > 0);
   const backups = list(data.backups)
     .filter((b) => typeof b.age_hours === 'number')
     .sort((a, b) => b.age_hours - a.age_hours)
     .slice(0, 8)
-    .map((b) => ({ label: shortHost(b.host), value: b.age_hours, display: ageText(b.age_hours), tone: b.state === 'bad' ? 'danger' : null, onClick: () => goTab('backups') }));
+    .map((b) => ({ label: shortHost(b.host), value: b.age_hours, display: ageText(b.age_hours), tone: b.state === 'bad' ? 'danger' : 'success', onClick: () => goTab('backups') }));
   return jsxs('div', {
     className: 'hs-stack',
     children: [
@@ -485,6 +492,7 @@ function OverviewTab() {
         className: 'hs-stack',
         children: [
           jsx(SectionErrors, { errors: d.errors }),
+          jsx(AttentionCard, { data: d, fleet, monitoring, alertsRef }),
           jsx(OverviewKpis, { data: d, fleet, monitoring, alertsRef }),
           jsx(FleetCharts, { fleet, diskPct: diskThreshold(monitoring) }),
           jsxs('div', { className: 'hs-grid2 hs-even', children: [jsx(IdentityCard, { data: d }), jsx(SecurityCard, { fleet })] }),

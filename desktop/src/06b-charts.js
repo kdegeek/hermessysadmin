@@ -39,7 +39,13 @@ function toneColor(tone) {
   if (tone === 'danger') return 'var(--ui-red, var(--ui-accent))';
   if (tone === 'warning') return 'var(--ui-yellow, var(--ui-accent))';
   if (tone === 'success') return 'var(--ui-green, var(--ui-accent))';
+  if (tone === 'muted') return 'var(--ui-text-quaternary, var(--ui-stroke-secondary))';
   return seriesColor(0);
+}
+
+// A datum's own tone wins; otherwise the categorical series colour for its position.
+function datumColor(d, i) {
+  return d && d.tone ? toneColor(d.tone) : seriesColor(i);
 }
 
 // A figure with role=img hides its children from assistive tech, so interactive charts are a labelled group.
@@ -59,7 +65,7 @@ function ChartLegend({ data, total, showPct }) {
     children: data.map((d, i) => {
       const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
       const inner = [
-        jsx('span', { className: 'hs-chart-swatch', style: { background: seriesColor(i) } }),
+        jsx('span', { className: 'hs-chart-swatch', style: { background: datumColor(d, i) } }),
         jsx('span', { className: 'hs-chart-legend-label', children: d.label }),
         jsx('span', { className: 'hs-chart-legend-value', children: showPct ? `${d.value} (${pct}%)` : String(d.value) }),
       ];
@@ -100,7 +106,7 @@ function Donut({ data, size = 140, center, title }) {
               'path',
               {
                 d: a.d,
-                fill: seriesColor(a.index),
+                fill: datumColor(d, a.index),
                 ...chartMouse(d.onClick),
               },
               k,
@@ -163,7 +169,7 @@ function Histogram({ data, height = 120, title }) {
           const h = barWidths([d.value], top, barH)[0];
           return jsx(
             'rect',
-            { x: i * slot + slot * 0.15, y: 4 + barH - h, width: slot * 0.7, height: h, fill: seriesColor(0), ...chartMouse(d.onClick) },
+            { x: i * slot + slot * 0.15, y: 4 + barH - h, width: slot * 0.7, height: h, rx: 1.2, fill: toneColor(d.tone), ...chartMouse(d.onClick) },
             `${i}-${d.label}`,
           );
         }),
@@ -226,8 +232,10 @@ function StackedBar({ data, title }) {
   });
 }
 
-function Sparkline({ points, width = 160, height = 36, label, valueText }) {
-  const d = sparkPath(points || [], width, height - 4);
+function Sparkline({ points, width = 220, height = 44, label, valueText, tone }) {
+  const d = sparkPath(points || [], width, height - 6);
+  const color = tone ? toneColor(tone) : seriesColor(0);
+  const end = d ? d.split(' ').pop().slice(1).split(',').map(Number) : null;
   const text = valueText != null ? String(valueText) : '';
   const aria = [label, text].filter(Boolean).join(': ') || 'Trend';
   return jsxs('figure', {
@@ -242,7 +250,11 @@ function Sparkline({ points, width = 160, height = 36, label, valueText }) {
         'aria-hidden': 'true',
         focusable: 'false',
         children: d
-          ? jsx('path', { d, transform: 'translate(0 2)', fill: 'none', stroke: seriesColor(0), strokeWidth: 1.5, strokeLinejoin: 'round', strokeLinecap: 'round' })
+          ? [
+              jsx('path', { d: `${d} L${width},${height - 6} L0,${height - 6} Z`, transform: 'translate(0 3)', fill: color, opacity: 0.12 }, 'area'),
+              jsx('path', { d, transform: 'translate(0 3)', fill: 'none', stroke: color, strokeWidth: 2, strokeLinejoin: 'round', strokeLinecap: 'round' }, 'line'),
+              end && end.every(Number.isFinite) ? jsx('circle', { cx: Math.min(end[0], width - 3), cy: end[1] + 3, r: 3, fill: color }, 'dot') : null,
+            ]
           : jsx('line', { x1: 0, x2: width, y1: height / 2, y2: height / 2, stroke: 'var(--ui-stroke-tertiary)', strokeDasharray: '2 3' }),
       }),
       text ? jsx('span', { className: 'hs-chart-sparkvalue', children: text }) : null,

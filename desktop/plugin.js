@@ -191,8 +191,47 @@ textarea.hs-input{min-height:64px;resize:vertical}
 .hs-grid3 .hs-span3{grid-column:1 / -1}
 .hs-grid2.hs-even{grid-template-columns:1fr 1fr}
 @media (max-width:900px){.hs-grid3,.hs-grid2.hs-even{grid-template-columns:1fr}}
+.hs-stat{min-width:0;display:flex}
+.hs-stat .hs-kpi{width:100%;display:flex;flex-direction:column;justify-content:flex-start}
+.hs-kpi .hs-l,.hs-kpi .hs-s{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hs-kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.hs-kpi{transition:border-color .15s,transform .15s,box-shadow .15s}
+.hs-kpi:hover{transform:translateY(-1px);box-shadow:0 4px 14px color-mix(in srgb,var(--ui-base,#000) 8%,transparent)}
+@keyframes hs-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.hs-card,.hs-hero,.hs-kpis{animation:hs-in .35s ease-out both}
+@media (prefers-reduced-motion:reduce){.hs-card,.hs-hero,.hs-kpis,.hs-score-arc{animation:none!important;transition:none!important}}
+.hs-hero{display:grid;grid-template-columns:minmax(260px,330px) 1fr;gap:18px;padding:16px 18px;border-radius:12px;border:1px solid color-mix(in srgb,var(--ui-accent) 22%,var(--ui-stroke-tertiary));background:radial-gradient(120% 140% at 0% 0%,color-mix(in srgb,var(--ui-accent) 10%,transparent),transparent 60%),var(--ui-bg-card)}
+@media (max-width:900px){.hs-hero{grid-template-columns:1fr}}
+.hs-hero-side{display:flex;gap:16px;align-items:center}
+.hs-hero-copy{display:grid;gap:6px;justify-items:start}
+.hs-hero-title{font-size:16px;font-weight:600}
+.hs-score{position:relative;margin:0;flex:none}
+.hs-score svg{display:block}
+.hs-score-track{fill:none;stroke:var(--ui-stroke-tertiary);stroke-width:9}
+.hs-score-arc{fill:none;stroke-width:9;stroke-linecap:round;transition:stroke-dasharray .8s ease-out}
+.hs-score.success .hs-score-arc{stroke:var(--ui-green)}
+.hs-score.warning .hs-score-arc{stroke:var(--ui-yellow)}
+.hs-score.danger .hs-score-arc{stroke:var(--ui-red)}
+.hs-score-text{position:absolute;inset:0;display:grid;place-content:center;text-align:center;line-height:1.1}
+.hs-score-text b{font-size:28px;font-weight:650;font-variant-numeric:tabular-nums}
+.hs-score-text span{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ui-text-tertiary)}
+.hs-attn{list-style:none;margin:0;padding:0;display:grid;gap:4px;align-content:start}
+.hs-attn-row{display:flex;align-items:center;gap:10px;padding:5px 8px;border-radius:8px}
+.hs-attn-row:hover{background:var(--ui-row-hover-background)}
+.hs-attn-dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--ui-yellow)}
+.hs-attn-row.danger .hs-attn-dot{background:var(--ui-red);box-shadow:0 0 0 3px color-mix(in srgb,var(--ui-red) 18%,transparent)}
+.hs-attn-main{flex:1;min-width:0;display:flex;gap:10px;align-items:baseline;border:0;background:none;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer}
+.hs-attn-main b{font-weight:550;white-space:nowrap}
+.hs-attn-main span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hs-attn-empty{padding:18px 8px}
+.hs-ask{display:inline-flex;align-items:center;gap:5px;flex:none;border:1px solid color-mix(in srgb,var(--ui-accent) 35%,transparent);background:color-mix(in srgb,var(--ui-accent) 7%,transparent);color:var(--ui-accent);border-radius:999px;padding:2px 10px;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap;transition:background .15s,transform .15s}
+.hs-ask:hover{background:color-mix(in srgb,var(--ui-accent) 15%,transparent)}
+.hs-ask:active{transform:scale(.97)}
+.hs-ask.primary{background:var(--ui-accent);color:var(--ui-bg-editor,#fff);border-color:var(--ui-accent);padding:5px 14px;font-size:12.5px;margin-top:4px}
+.hs-ask.primary:hover{background:color-mix(in srgb,var(--ui-accent) 88%,#000)}
+.hs-ask-spark{font-size:11px}
+.hs-ask:focus-visible,.hs-attn-main:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
 `;
-
 // ============================================================================
 // §3 API CLIENT AND HOST HELPERS
 // ============================================================================
@@ -946,7 +985,13 @@ function toneColor(tone) {
   if (tone === 'danger') return 'var(--ui-red, var(--ui-accent))';
   if (tone === 'warning') return 'var(--ui-yellow, var(--ui-accent))';
   if (tone === 'success') return 'var(--ui-green, var(--ui-accent))';
+  if (tone === 'muted') return 'var(--ui-text-quaternary, var(--ui-stroke-secondary))';
   return seriesColor(0);
+}
+
+// A datum's own tone wins; otherwise the categorical series colour for its position.
+function datumColor(d, i) {
+  return d && d.tone ? toneColor(d.tone) : seriesColor(i);
 }
 
 // A figure with role=img hides its children from assistive tech, so interactive charts are a labelled group.
@@ -966,7 +1011,7 @@ function ChartLegend({ data, total, showPct }) {
     children: data.map((d, i) => {
       const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
       const inner = [
-        jsx('span', { className: 'hs-chart-swatch', style: { background: seriesColor(i) } }),
+        jsx('span', { className: 'hs-chart-swatch', style: { background: datumColor(d, i) } }),
         jsx('span', { className: 'hs-chart-legend-label', children: d.label }),
         jsx('span', { className: 'hs-chart-legend-value', children: showPct ? `${d.value} (${pct}%)` : String(d.value) }),
       ];
@@ -1007,7 +1052,7 @@ function Donut({ data, size = 140, center, title }) {
               'path',
               {
                 d: a.d,
-                fill: seriesColor(a.index),
+                fill: datumColor(d, a.index),
                 ...chartMouse(d.onClick),
               },
               k,
@@ -1070,7 +1115,7 @@ function Histogram({ data, height = 120, title }) {
           const h = barWidths([d.value], top, barH)[0];
           return jsx(
             'rect',
-            { x: i * slot + slot * 0.15, y: 4 + barH - h, width: slot * 0.7, height: h, fill: seriesColor(0), ...chartMouse(d.onClick) },
+            { x: i * slot + slot * 0.15, y: 4 + barH - h, width: slot * 0.7, height: h, rx: 1.2, fill: toneColor(d.tone), ...chartMouse(d.onClick) },
             `${i}-${d.label}`,
           );
         }),
@@ -1133,8 +1178,10 @@ function StackedBar({ data, title }) {
   });
 }
 
-function Sparkline({ points, width = 160, height = 36, label, valueText }) {
-  const d = sparkPath(points || [], width, height - 4);
+function Sparkline({ points, width = 220, height = 44, label, valueText, tone }) {
+  const d = sparkPath(points || [], width, height - 6);
+  const color = tone ? toneColor(tone) : seriesColor(0);
+  const end = d ? d.split(' ').pop().slice(1).split(',').map(Number) : null;
   const text = valueText != null ? String(valueText) : '';
   const aria = [label, text].filter(Boolean).join(': ') || 'Trend';
   return jsxs('figure', {
@@ -1149,7 +1196,11 @@ function Sparkline({ points, width = 160, height = 36, label, valueText }) {
         'aria-hidden': 'true',
         focusable: 'false',
         children: d
-          ? jsx('path', { d, transform: 'translate(0 2)', fill: 'none', stroke: seriesColor(0), strokeWidth: 1.5, strokeLinejoin: 'round', strokeLinecap: 'round' })
+          ? [
+              jsx('path', { d: `${d} L${width},${height - 6} L0,${height - 6} Z`, transform: 'translate(0 3)', fill: color, opacity: 0.12 }, 'area'),
+              jsx('path', { d, transform: 'translate(0 3)', fill: 'none', stroke: color, strokeWidth: 2, strokeLinejoin: 'round', strokeLinecap: 'round' }, 'line'),
+              end && end.every(Number.isFinite) ? jsx('circle', { cx: Math.min(end[0], width - 3), cy: end[1] + 3, r: 3, fill: color }, 'dot') : null,
+            ]
           : jsx('line', { x1: 0, x2: width, y1: height / 2, y2: height / 2, stroke: 'var(--ui-stroke-tertiary)', strokeDasharray: '2 3' }),
       }),
       text ? jsx('span', { className: 'hs-chart-sparkvalue', children: text }) : null,
@@ -1759,6 +1810,13 @@ function num0(v) {
 
 const PATCH_BUCKETS = ['<7', '7-35', '35-90', '>90', 'unknown'];
 const SEEN_BUCKETS = ['<1d', '1-7d', '7-30d', '30-90d', '>90d', 'never'];
+// Bucket colours say how worried to be: fresh is green, old is amber then red, unknown is grey.
+const PATCH_TONE = { '<7': 'success', '7-35': 'success', '35-90': 'warning', '>90': 'danger', unknown: 'muted' };
+const SEEN_TONE = { '<1d': 'success', '1-7d': 'success', '7-30d': null, '30-90d': 'warning', '>90d': 'danger', never: 'muted' };
+
+function toned(buckets, tones) {
+  return buckets.map((b) => ({ ...b, tone: tones[b.label] }));
+}
 const DISK_DEFAULT_PCT = 10;
 
 function diskThreshold(monitoring) {
@@ -1778,7 +1836,7 @@ function FleetCharts({ fleet, diskPct }) {
         const osData = Object.entries(s.os_mix || {})
           .sort((a, b) => b[1] - a[1])
           .map(([label, value]) => ({ label, value, onClick: fleetGo('all', { os: label }) }));
-        const patch = orderedBuckets(s.patch_age_buckets, PATCH_BUCKETS).map((b) => (b.label === '35-90' || b.label === '>90' ? { ...b, onClick: fleetGo('patch_old') } : b));
+        const patch = toned(orderedBuckets(s.patch_age_buckets, PATCH_BUCKETS), PATCH_TONE).map((b) => (b.label === '35-90' || b.label === '>90' ? { ...b, onClick: fleetGo('patch_old') } : b));
         const lowDisk = list(d.items)
           .filter((i) => i.online && typeof i.c_free_pct === 'number')
           .sort((a, b) => a.c_free_pct - b.c_free_pct)
@@ -1794,7 +1852,7 @@ function FleetCharts({ fleet, diskPct }) {
           className: 'hs-grid3',
           children: [
             jsxs('div', { children: [jsx('div', { className: 'hs-label', children: 'Operating systems' }), osData.length ? jsx(Donut, { data: osData, center: String(num0(s.total)), title: 'Operating systems' }) : jsx('div', { className: 'hs-muted', children: 'No computers' })] }),
-            jsxs('div', { children: [jsx('div', { className: 'hs-label', children: 'Last logon' }), jsx(Histogram, { data: orderedBuckets(s.last_seen_buckets, SEEN_BUCKETS), title: 'Computers by last logon' })] }),
+            jsxs('div', { children: [jsx('div', { className: 'hs-label', children: 'Last logon' }), jsx(Histogram, { data: toned(orderedBuckets(s.last_seen_buckets, SEEN_BUCKETS), SEEN_TONE), title: 'Computers by last logon' })] }),
             jsxs('div', { children: [jsx('div', { className: 'hs-label', children: 'Patch age (days)' }), jsx(Histogram, { data: patch, title: 'Computers by days since last patch' })] }),
             jsxs('div', {
               className: 'hs-span3',
@@ -1883,15 +1941,15 @@ function InfrastructureCard({ data }) {
   const attention = num0(k.gpos_needing_attention);
   const unlinked = Math.min(num0(k.gpos_unlinked), attention);
   const gpoData = [
-    { label: 'Healthy', value: Math.max(0, total - attention), onClick: () => goTab('gpo') },
-    { label: 'Unlinked', value: unlinked, onClick: () => goTab('gpo') },
-    { label: 'Other issues', value: attention - unlinked, onClick: () => goTab('gpo') },
+    { label: 'Healthy', value: Math.max(0, total - attention), tone: 'success', onClick: () => goTab('gpo') },
+    { label: 'Unlinked', value: unlinked, tone: 'warning', onClick: () => goTab('gpo') },
+    { label: 'Other issues', value: attention - unlinked, tone: 'danger', onClick: () => goTab('gpo') },
   ].filter((d) => d.value > 0);
   const backups = list(data.backups)
     .filter((b) => typeof b.age_hours === 'number')
     .sort((a, b) => b.age_hours - a.age_hours)
     .slice(0, 8)
-    .map((b) => ({ label: shortHost(b.host), value: b.age_hours, display: ageText(b.age_hours), tone: b.state === 'bad' ? 'danger' : null, onClick: () => goTab('backups') }));
+    .map((b) => ({ label: shortHost(b.host), value: b.age_hours, display: ageText(b.age_hours), tone: b.state === 'bad' ? 'danger' : 'success', onClick: () => goTab('backups') }));
   return jsxs('div', {
     className: 'hs-stack',
     children: [
@@ -2135,6 +2193,7 @@ function OverviewTab() {
         className: 'hs-stack',
         children: [
           jsx(SectionErrors, { errors: d.errors }),
+          jsx(AttentionCard, { data: d, fleet, monitoring, alertsRef }),
           jsx(OverviewKpis, { data: d, fleet, monitoring, alertsRef }),
           jsx(FleetCharts, { fleet, diskPct: diskThreshold(monitoring) }),
           jsxs('div', { className: 'hs-grid2 hs-even', children: [jsx(IdentityCard, { data: d }), jsx(SecurityCard, { fleet })] }),
@@ -2144,6 +2203,245 @@ function OverviewTab() {
           jsx(RecentChanges, { rows: d.audit }),
         ],
       }),
+  });
+}
+// ============================================================================
+// §9a OVERVIEW: NEEDS ATTENTION + ASK HERMES
+// Pure finding logic first (attentionItems, healthScore: unit-tested), then the hero card.
+// ============================================================================
+const SEVERITY_WEIGHT = { danger: 12, warning: 5 };
+const SEVERITY_RANK = { danger: 0, warning: 1 };
+const READ_ONLY_ASK = 'Investigate with the hermes-sysadmin read tools and catalog first; do not change anything until you have shown me a plan and I approve it.';
+
+function plainCount(n, one, many) {
+  return `${n} ${n === 1 ? one : many || `${one}s`}`;
+}
+
+// One finding per problem the overview can see. Each carries where to look in the UI (go) and a
+// prompt that hands the problem to the agent (ask). Severity: danger (act now) or warning (look soon).
+function attentionItems({ kpis, fleet, dcs, alerts, diskPct }) {
+  const k = kpis || {};
+  const s = fleet || null;
+  const out = [];
+  const add = (id, severity, title, detail, go, ask) => out.push({ id, severity, title, detail, go, ask });
+  const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+
+  const dcItems = (dcs && Array.isArray(dcs.items) ? dcs.items : []);
+  const dcDown = dcItems.filter((d) => d.reachable === false || d.status === 'bad');
+  const replFail = dcItems.filter((d) => n((d.replication || {}).failures) > 0);
+  if (dcDown.length) {
+    add('dc-down', 'danger', `${plainCount(dcDown.length, 'domain controller')} unhealthy`, dcDown.map((d) => d.name).join(', '), { tab: 'overview' },
+      `Domain controller(s) ${dcDown.map((d) => d.name).join(', ')} look unhealthy. Use the domain-health-check skill to find out why. ${READ_ONLY_ASK}`);
+  }
+  if (replFail.length) {
+    add('repl', 'danger', 'AD replication failures', replFail.map((d) => `${d.name}: ${n(d.replication.failures)}`).join(', '), { tab: 'overview' },
+      `AD replication is failing on ${replFail.map((d) => d.name).join(', ')}. Use the domain-health-check skill to diagnose it. ${READ_ONLY_ASK}`);
+  }
+  if (n(alerts)) {
+    add('alerts', 'danger', plainCount(n(alerts), 'open monitoring alert'), 'raised by scheduled monitoring', { tab: 'overview', scroll: 'monitoring' },
+      `Monitoring has ${plainCount(n(alerts), 'open alert')}. Use the fleet-health-check skill to triage them and tell me what needs attention first. ${READ_ONLY_ASK}`);
+  }
+  if (n(k.backups_bad)) {
+    add('backups', 'danger', `${plainCount(n(k.backups_bad), 'server')} without a recent backup`, `${n(k.backups_ok)} of ${n(k.backups_total)} backups OK`, { tab: 'backups' },
+      `${plainCount(n(k.backups_bad), 'server')} have no recent Windows Server Backup. Use the backup-recovery-guide skill to check backup status and versions and explain the risk. ${READ_ONLY_ASK}`);
+  }
+  if (s) {
+    const online = n(s.online);
+    const pct = online > 0 ? Math.round((100 * n(s.patch_compliant)) / online) : null;
+    if (pct !== null && pct < 90) {
+      add('patch', pct < 70 ? 'danger' : 'warning', `Patch compliance ${pct}%`, `${online - n(s.patch_compliant)} of ${online} online computers not patched in 35 days`, { tab: 'fleet', fleet: { filter: 'patch_old' } },
+        `Only ${pct}% of online computers are patched within 35 days. Use the fleet-health-check skill to list the worst offenders and why they are behind (Windows Update errors, pending reboots, offline). ${READ_ONLY_ASK}`);
+    }
+    if (n(s.defender_off)) {
+      add('defender', 'danger', `Defender off on ${plainCount(n(s.defender_off), 'computer')}`, 'real-time protection disabled', { tab: 'fleet', fleet: { filter: 'defender_off' } },
+        `Microsoft Defender real-time protection is off on ${plainCount(n(s.defender_off), 'computer')}. Use the endpoint-triage skill to confirm on each and find out whether another AV replaced it. ${READ_ONLY_ASK}`);
+    }
+    if (n(s.bitlocker_off)) {
+      add('bitlocker', 'warning', `BitLocker off on ${plainCount(n(s.bitlocker_off), 'computer')}`, 'system drive not encrypted', { tab: 'fleet', fleet: { filter: 'bitlocker_off' } },
+        `BitLocker is off on ${plainCount(n(s.bitlocker_off), 'computer')}. Find out which are laptops, whether the TPM is ready, and what it would take to enable it. ${READ_ONLY_ASK}`);
+    }
+    if (n(s.rdp_no_nla)) {
+      add('nla', 'warning', `RDP without NLA on ${plainCount(n(s.rdp_no_nla), 'computer')}`, 'Network Level Authentication not required', { tab: 'fleet', fleet: { filter: 'rdp_no_nla' } },
+        `Remote Desktop is enabled without Network Level Authentication on ${plainCount(n(s.rdp_no_nla), 'computer')}. Use the remote-assist skill to confirm and preview requiring NLA with the catalog's set_nla entry. ${READ_ONLY_ASK}`);
+    }
+    if (n(s.pending_reboot)) {
+      add('reboot', 'warning', `${plainCount(n(s.pending_reboot), 'computer')} waiting to reboot`, 'updates or installs need a restart', { tab: 'fleet', fleet: { filter: 'reboot' } },
+        `${plainCount(n(s.pending_reboot), 'computer')} have a pending reboot. Group them by why (Windows Update, CBS, file rename) and suggest a reboot plan that avoids people's working hours. ${READ_ONLY_ASK}`);
+    }
+    const lowDisk = n(s.low_disk_count !== undefined ? s.low_disk_count : null);
+    if (lowDisk) {
+      add('disk', 'danger', `${plainCount(lowDisk, 'computer')} low on disk`, `under ${diskPct || 10}% free on C:`, { tab: 'fleet', fleet: { filter: 'low_disk' } },
+        `${plainCount(lowDisk, 'computer')} have under ${diskPct || 10}% free on C:. Use the endpoint-triage skill to find what is using the space and preview the catalog's clear_temp entry where it helps. ${READ_ONLY_ASK}`);
+    }
+  }
+  if (n(k.gpos_needing_attention)) {
+    add('gpo', 'warning', `${plainCount(n(k.gpos_needing_attention), 'GPO')} need attention`, `of ${n(k.gpos)} Group Policy objects`, { tab: 'gpo' },
+      `${plainCount(n(k.gpos_needing_attention), 'Group Policy object')} need attention (unlinked, empty or inconsistent). Explain each problem and what you would do about it. ${READ_ONLY_ASK}`);
+  }
+  if (n(k.users_locked)) {
+    add('locked', 'warning', `${plainCount(n(k.users_locked), 'user')} locked out`, 'can not sign in right now', { tab: 'users', users: { status: 'locked' } },
+      `${plainCount(n(k.users_locked), 'user')} are locked out. Use the lockout-triage skill to find the lockout source for each before anything is unlocked. ${READ_ONLY_ASK}`);
+  }
+  if (n(k.computers_stale)) {
+    add('stale-computers', 'warning', `${plainCount(n(k.computers_stale), 'stale computer account')}`, 'no recent logon to the domain', { tab: 'fleet', fleet: { filter: 'offline' } },
+      `There are ${plainCount(n(k.computers_stale), 'stale computer account')} in AD. List them with last logon and OU, and recommend which are safe to disable. ${READ_ONLY_ASK}`);
+  }
+  if (n(k.users_never_expire) && n(k.users) && n(k.users_never_expire) / n(k.users) >= 0.25) {
+    add('never-expire', 'warning', `${plainCount(n(k.users_never_expire), 'account')} with non-expiring passwords`, `${Math.round((100 * n(k.users_never_expire)) / n(k.users))}% of user accounts`, { tab: 'users' },
+      `${plainCount(n(k.users_never_expire), 'user account')} have passwords that never expire. Use the access-review skill to separate service accounts from people and recommend a fix. ${READ_ONLY_ASK}`);
+  }
+  return out.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
+}
+
+// 100 minus a fixed penalty per finding; a coarse "how worried should I be" number, never below 0.
+function healthScore(items) {
+  const penalty = (items || []).reduce((sum, i) => sum + (SEVERITY_WEIGHT[i.severity] || 0), 0);
+  return Math.max(0, 100 - penalty);
+}
+
+function scoreTone(score) {
+  return score >= 85 ? 'success' : score >= 60 ? 'warning' : 'danger';
+}
+
+const ASK_HEALTH_CHECK =
+  'Run a fleet and domain health check with the fleet-health-check and domain-health-check skills. Summarize the top problems by risk, with the evidence for each. ' + READ_ONLY_ASK;
+
+// Hand a prompt to the agent: open a new chat and put the prompt in its composer for the user to review
+// and send. Falls back to the clipboard on desktops without the composer API.
+async function askHermes(prompt) {
+  const composer = host && host.composer;
+  if (!composer || typeof composer.setDraft !== 'function' || typeof host.newChat !== 'function') {
+    const ok = await writeClipboardText(prompt).then(() => true, () => false);
+    host.notify({ kind: ok ? 'info' : 'error', message: ok ? 'Prompt copied: paste it into a new chat.' : 'Could not open a chat for this prompt.' });
+    return false;
+  }
+  host.newChat();
+  for (let i = 0; i < 25; i += 1) {
+    await new Promise((r) => setTimeout(r, 160));
+    let placed = false;
+    try {
+      placed = await composer.setDraft(null, prompt);
+    } catch (e) {
+      placed = false;
+    }
+    if (placed) {
+      host.notify({ kind: 'info', message: 'Prompt ready in a new chat: review it, then press Enter.' });
+      return true;
+    }
+  }
+  const ok = await writeClipboardText(prompt).then(() => true, () => false);
+  host.notify({ kind: ok ? 'info' : 'error', message: ok ? 'New chat opened; the prompt is on your clipboard.' : 'Could not place the prompt in the chat.' });
+  return false;
+}
+
+function AskButton({ prompt, label, primary }) {
+  return jsx('button', {
+    type: 'button',
+    className: `hs-ask${primary ? ' primary' : ''}`,
+    title: 'Open a new chat with this prompt ready to send',
+    onClick: (e) => {
+      e.stopPropagation();
+      askHermes(prompt);
+    },
+    children: [jsx('span', { className: 'hs-ask-spark', 'aria-hidden': 'true', children: '✦' }, 's'), label || 'Ask Hermes'],
+  });
+}
+
+function ScoreRing({ score, size = 112 }) {
+  const r = size / 2 - 7;
+  const c = 2 * Math.PI * r;
+  const tone = scoreTone(score);
+  return jsx('figure', {
+    className: `hs-score ${tone}`,
+    role: 'img',
+    'aria-label': `Health score ${score} of 100`,
+    style: { width: size, height: size },
+    children: [
+      jsx('svg', {
+        width: size,
+        height: size,
+        viewBox: `0 0 ${size} ${size}`,
+        'aria-hidden': 'true',
+        children: [
+          jsx('circle', { cx: size / 2, cy: size / 2, r, className: 'hs-score-track' }, 't'),
+          jsx('circle', {
+            cx: size / 2,
+            cy: size / 2,
+            r,
+            className: 'hs-score-arc',
+            strokeDasharray: `${(c * score) / 100} ${c}`,
+            transform: `rotate(-90 ${size / 2} ${size / 2})`,
+          }, 'a'),
+        ],
+      }, 'svg'),
+      jsx('div', { className: 'hs-score-text', children: [jsx('b', { children: String(score) }, 'v'), jsx('span', { children: 'health' }, 'l')] }, 'txt'),
+    ],
+  });
+}
+
+function goAttention(item, alertsRef) {
+  const g = item.go || {};
+  if (g.scroll === 'monitoring' && alertsRef && alertsRef.current) {
+    alertsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  const { tab, ...patch } = g;
+  if (tab && tab !== 'overview') goTab(tab, patch);
+}
+
+function AttentionCard({ data, fleet, monitoring, alertsRef }) {
+  const fleetData = fleet.res && fleet.res.ok ? fleet.res.data || {} : null;
+  const summary = fleetData ? { ...(fleetData.summary || {}) } : null;
+  const diskPct = diskThreshold(monitoring);
+  if (summary && fleetData) {
+    summary.low_disk_count = list(fleetData.items).filter((i) => i.online && typeof i.c_free_pct === 'number' && i.c_free_pct < diskPct).length;
+  }
+  const alerts = monitoring.res && monitoring.res.ok ? list((monitoring.res.data || {}).open_alerts).length : 0;
+  const items = attentionItems({ kpis: data.kpis, fleet: summary, dcs: data.dcs, alerts, diskPct });
+  const score = healthScore(items);
+  const danger = items.filter((i) => i.severity === 'danger').length;
+  const pendingFleet = !fleet.res;
+  return jsxs('section', {
+    className: 'hs-hero',
+    children: [
+      jsxs('div', {
+        className: 'hs-hero-side',
+        children: [
+          jsx(ScoreRing, { score }),
+          jsxs('div', {
+            className: 'hs-hero-copy',
+            children: [
+              jsx('div', { className: 'hs-hero-title', children: items.length ? `${plainCount(items.length, 'thing')} need${items.length === 1 ? 's' : ''} attention` : 'All clear' }),
+              jsx('div', {
+                className: 'hs-muted hs-small',
+                children: pendingFleet ? 'Fleet inventory still collecting…' : danger ? `${danger} urgent · ${items.length - danger} to review` : items.length ? 'Nothing urgent' : 'No problems found in the latest data',
+              }),
+              jsx(AskButton, { prompt: ASK_HEALTH_CHECK, label: 'Ask Hermes for a health check', primary: true }),
+            ],
+          }),
+        ],
+      }),
+      jsx('ol', {
+        className: 'hs-attn',
+        children: items.length
+          ? items.slice(0, 7).map((i) =>
+              jsxs('li', {
+                className: `hs-attn-row ${i.severity}`,
+                children: [
+                  jsx('span', { className: 'hs-attn-dot', 'aria-hidden': 'true' }),
+                  jsxs('button', {
+                    type: 'button',
+                    className: 'hs-attn-main',
+                    onClick: () => goAttention(i, alertsRef),
+                    children: [jsx('b', { children: i.title }, 't'), jsx('span', { className: 'hs-muted hs-small', children: i.detail }, 'd')],
+                  }),
+                  jsx(AskButton, { prompt: i.ask }),
+                ],
+              }, i.id),
+            )
+          : jsx('li', { className: 'hs-attn-empty hs-muted', children: pendingFleet ? 'Checking the fleet…' : 'Domain controllers, backups, patching and security posture all look fine.' }),
+      }),
+    ],
   });
 }
 // ============================================================================
