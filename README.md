@@ -2,7 +2,21 @@
 
 Manage an on-prem Windows and Active Directory environment from Hermes Agent, with local PowerShell on a domain-joined Windows machine or over WinRM through a jump host. It covers users, groups and lockouts, Group Policy, RDP sessions and access, Windows Server Backup, and (new in 0.2) a desktop fleet with a catalog of 98 vetted PowerShell tasks, remote-access helpers and scheduled monitoring. Every change goes through typed tools with tiered approvals, protected objects and a local audit log. The plugin also ships workflow skills, `/ad` commands and a Hermes Desktop dashboard.
 
-![Overview](docs/screenshots/overview.png)
+![Overview: health score, what needs attention, and one-click hand-off to the agent](docs/screenshots/overview.png)
+
+## Highlights
+
+- **Agent first, with a full UI.** The overview scores the domain, lists what needs attention (stale backups, patch compliance, low disk, Defender, BitLocker, NLA, pending reboots, GPO problems, lockouts, monitoring alerts) and puts an **Ask Hermes** button on each item. It opens a new chat with a prompt that names the right skill and tells the agent to investigate read-only first. You read the prompt and press Enter.
+- **Vetted scripts instead of improvised PowerShell.** 98 catalog entries with typed parameters, run the same way by you (generated forms) and by the agent (`catalog_run`). 80 are read-only. The 18 that change something show a preview of exactly what will change, computed on the target by the script itself, before you approve.
+- **Safety you can see.** Tiered approvals (read, write, high-risk, protected), fleet escalation (more than 10 machines, an OU, or a DC raises a change to high-risk), protected accounts that no mode can touch, and an audit log of every attempt.
+- **Remote help in one place.** Each computer's drawer shows its sessions with Shadow, Offer Remote Assistance and Log off, checks why remote access fails with a **Fix** button per check, and has a toolbox (message, lock, restart, gpupdate, restart service).
+- **Runs where Hermes runs.** On a domain-joined Windows machine Hermes runs PowerShell locally, as an account you choose. Elsewhere it uses a WinRM jump host.
+
+| Ask Hermes hands the problem to the agent | Every change shows a preview first |
+|---|---|
+| ![](docs/screenshots/ask-hermes.png) | ![](docs/screenshots/preview.png) |
+| **Catalog: 98 vetted scripts** | **Fleet drawer: sessions, checks, fixes, toolbox** |
+| ![](docs/screenshots/catalog.png) | ![](docs/screenshots/fleet-remote.png) |
 
 ## What you get
 
@@ -243,6 +257,8 @@ hermes plugins install hermes-sysadmin --enable      # from the catalog
 hermes plugins install <owner>/hermessysadmin --enable
 ```
 
+On Hermes 0.23 and later the desktop page of an installed package starts switched off. Turn it on under **Capabilities → Plugins** (the package switch turns on both the tools and the **Active Directory** page), or run `hermes plugins enable hermes-sysadmin` for the tools alone.
+
 Open **Settings → Plugins → Sysadmin · Active Directory**. Choose the transport. For WinRM, set the jump host, username and password. For local, choose **Run as**, and set the username and password if PowerShell runs as an account. The password is stored in Hermes secrets. Then click **Test connection** on the dashboard's first-run card.
 
 Settings: `transport` (auto/local/winrm), `run_as` (account/hermes_user, local transport), `host`, `port`, `use_https`, `auth` (ntlm/kerberos), `username`, `password` (secret `SYSADMIN_WINRM_PASSWORD`), `verify_tls`, `server_search_base`, `backup_stale_days`, `mode`, `protected_objects`, `privileged_groups`, `enable_powershell_escape`, and for monitoring `monitor_interval`, `alert_disk_free_pct`, `alert_offline_days`, `alert_patch_age_days`, `alert_privileged_changes`, `alert_lockouts`.
@@ -262,7 +278,7 @@ Settings: `transport` (auto/local/winrm), `run_as` (account/hermes_user, local t
 - The agent asks through Hermes's own approval prompt. High-risk approvals use a one-time key, so an "always allow" never carries over to the next high-risk call.
 - Protected accounts are matched by name, distinguished name and SID (including the domain's built-in Administrator and krbtgt SIDs). Privileged groups are matched by name, SID and GUID, so renaming or addressing a group by another identifier does not bypass escalation. An identity the policy cannot interpret is blocked rather than allowed. Every user and group-membership write script also re-checks the resolved AD object, so a protected account addressed by an alias still cannot be changed in any mode: RID 500/502, domain controller computer accounts (primary group 516/521) and objects flagged `isCriticalSystemObject` are refused with a PolicyBlocked error, including in previews.
 - The approval prompt never truncates what you are approving. Previews are length-limited with an explicit truncation marker, and for high-risk calls without a preview, including the `ad_powershell` escape hatch, every argument and the full script are shown.
-- The dashboard requires a confirm dialog for every write. High-risk changes show a server-side preview first, and destructive ones (deleting a user or GPO, restoring a GPO over its current settings, raw PowerShell) also make you type the object's name. The API refuses writes that lack that confirmation.
+- The dashboard requires a confirm dialog for every write. Every change that has a preview script shows the server-side preview in that dialog (high-risk ones always do), and destructive ones (deleting a user or GPO, restoring a GPO over its current settings, raw PowerShell) also make you type the object's name. The API refuses writes that lack that confirmation.
 - Every write attempt is logged, whether allowed, approved, denied, blocked or failed: who, what, target, tier and result. Passwords are redacted.
 - No input is ever interpolated into PowerShell. Each tool runs one vetted script with bound parameters. The single exception is the optional `ad_powershell` tool, which is off by default, high-risk on every call, and shows the full script in the approval.
 
@@ -291,11 +307,11 @@ The live suite is skipped unless `SYSADMIN_LIVE=1`. It reads `SYSADMIN_HOST`, `S
 
 ## Screenshots
 
-| Users | Group Policy | Remote Access |
+| Fleet | Users | Group Policy |
 |---|---|---|
-| ![](docs/screenshots/users.png) | ![](docs/screenshots/gpo.png) | ![](docs/screenshots/rdp.png) |
-| **Backups** | **Audit** | |
-| ![](docs/screenshots/backups.png) | ![](docs/screenshots/audit.png) | |
+| ![](docs/screenshots/fleet.png) | ![](docs/screenshots/users.png) | ![](docs/screenshots/gpo.png) |
+| **Remote Access** | **Backups** | **Audit** |
+| ![](docs/screenshots/rdp.png) | ![](docs/screenshots/backups.png) | ![](docs/screenshots/audit.png) |
 
 ## License
 
