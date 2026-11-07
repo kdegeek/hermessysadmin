@@ -72,7 +72,7 @@ def test_dns_and_dhcp_validate_inputs_and_report_missing_modules():
     assert "^[A-Za-z0-9.-]{1,253}$" in source("dns.stale_records")
     assert "^[A-Za-z0-9.-]{1,64}$" in source("dhcp.leases_for_host")
     for i in ("dns.zones", "dns.stale_records", "dhcp.scope_utilization", "dhcp.leases_for_host"):
-        assert "NotInstalled: " in source(i) and "module not present on the jump host" in source(i), i
+        assert "NotInstalled: " in source(i) and "module (RSAT) not present where Hermes runs PowerShell" in source(i), i
 
 
 def test_dhcp_runs_locally_on_each_server_without_computername():
