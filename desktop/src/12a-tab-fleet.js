@@ -646,6 +646,7 @@ function DeviceDrawer({ name }) {
               jsxs('div', { className: 'hs-muted', children: [jsx(Dot, { tone: row && row.online ? 'good' : 'muted' }), ' ', row ? (row.online ? 'online' : row.error ? `offline: ${row.error}` : 'offline') : 'status unknown', row && row.dns ? ` · ${row.dns}` : ''] }),
             ],
           }),
+          jsx(AskButton, { prompt: `Use the endpoint-triage skill on ${name}: check health, disk, pending reboot, patches, Defender and recent errors with the hermes-sysadmin read tools and catalog, then tell me what is wrong and what you would do. ${READ_ONLY_ASK}`, label: 'Ask Hermes to triage' }),
           jsx('button', { type: 'button', className: 'hs-ghost', title: 'Close', onClick: closeDevice, children: '✕' }),
         ],
       }),
