@@ -150,6 +150,30 @@ textarea.hs-input{min-height:64px;resize:vertical}
 .hs-checklist{margin:0;padding-left:18px;color:var(--ui-text-secondary);font-size:12.5px;display:grid;gap:2px}
 .hs-end{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 .hs-radio{display:flex;gap:6px;align-items:center;font-size:12.5px;cursor:pointer}
+.hs-root{--hs-series-0:var(--ui-accent,#4c8bf5);--hs-series-1:var(--ui-green,#3fb950);--hs-series-2:var(--ui-yellow,#d29922);--hs-series-3:var(--ui-red,#f85149);--hs-series-4:var(--ui-text-secondary,#8b949e);--hs-series-5:var(--ui-text-tertiary,#6e7681)}
+.hs-chart{margin:0;display:flex;flex-direction:column;gap:8px;color:var(--ui-text-primary)}
+.hs-chart-donut{flex-direction:row;align-items:center;gap:16px;flex-wrap:wrap}
+.hs-chart-center{fill:var(--ui-text-primary);font-size:16px;font-weight:600}
+.hs-chart-tick{fill:var(--ui-text-tertiary);font-size:5px}
+.hs-chart .hs-clickable{cursor:pointer}
+.hs-chart [role=button]:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
+.hs-chart path.hs-clickable:hover,.hs-chart rect.hs-clickable:hover{opacity:.8}
+.hs-chart-legend{list-style:none;margin:0;padding:0;display:grid;gap:3px;font-size:12.5px}
+.hs-chart-legend-row{display:flex;align-items:center;gap:8px;padding:1px 4px;border-radius:4px}
+.hs-chart-legend-row.hs-clickable:hover{background:var(--ui-bg-elevated)}
+.hs-chart-swatch{width:10px;height:10px;border-radius:2px;flex:none}
+.hs-chart-legend-label{flex:1;color:var(--ui-text-secondary)}
+.hs-chart-legend-value{color:var(--ui-text-primary);font-variant-numeric:tabular-nums}
+.hs-chart-bars{gap:4px}
+.hs-chart-barrow{display:grid;grid-template-columns:minmax(80px,30%) 1fr auto;align-items:center;gap:8px;padding:2px 4px;border-radius:4px}
+.hs-chart-barrow.hs-clickable:hover{background:var(--ui-bg-elevated)}
+.hs-chart-barlabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ui-text-secondary)}
+.hs-chart-bartrack{height:8px;border-radius:4px;background:var(--ui-stroke-tertiary);overflow:hidden}
+.hs-chart-bartrack i{display:block;height:100%}
+.hs-chart-barvalue{font-variant-numeric:tabular-nums;color:var(--ui-text-primary)}
+.hs-chart-spark{flex-direction:row;align-items:center;gap:8px}
+.hs-chart-sparkvalue{color:var(--ui-text-secondary);font-variant-numeric:tabular-nums}
+.hs-stat{min-width:120px}
 `;
 
 // ============================================================================
@@ -708,6 +732,332 @@ function SearchBox({ value, onChange, placeholder, focusSignal }) {
   });
 }
 
+// ============================================================================
+// §6a CHART GEOMETRY (pure functions: no imports, no JSX; unit-tested under node)
+// ============================================================================
+function chartNum(n) {
+  return n.toFixed(2);
+}
+
+function donutPoint(radius, angle) {
+  return [radius * Math.sin(angle), -radius * Math.cos(angle)];
+}
+
+function donutSlicePath(r, inner, start, end) {
+  const large = end - start > Math.PI ? 1 : 0;
+  const o1 = donutPoint(r, start);
+  const o2 = donutPoint(r, end);
+  const i1 = donutPoint(inner, start);
+  const i2 = donutPoint(inner, end);
+  return [
+    `M${chartNum(o1[0])},${chartNum(o1[1])}`,
+    `A${chartNum(r)},${chartNum(r)} 0 ${large} 1 ${chartNum(o2[0])},${chartNum(o2[1])}`,
+    `L${chartNum(i2[0])},${chartNum(i2[1])}`,
+    `A${chartNum(inner)},${chartNum(inner)} 0 ${large} 0 ${chartNum(i1[0])},${chartNum(i1[1])}`,
+    'Z',
+  ].join(' ');
+}
+
+// Arcs start at 12 o'clock and run clockwise. `index` is the position in the input values.
+function donutArcs(values, r, inner) {
+  const clean = values.map((v) => (Number.isFinite(v) && v > 0 ? v : 0));
+  const total = clean.reduce((s, v) => s + v, 0);
+  if (total <= 0) return [];
+  const arcs = [];
+  let angle = 0;
+  clean.forEach((value, index) => {
+    if (value <= 0) return;
+    const sweep = (value / total) * Math.PI * 2;
+    const pct = (value / total) * 100;
+    if (value === total) {
+      // A single slice is a full ring; one SVG arc cannot draw 360 degrees, so use two halves.
+      arcs.push({ d: donutSlicePath(r, inner, 0, Math.PI), start: 0, end: Math.PI, value, pct: pct / 2, index });
+      arcs.push({ d: donutSlicePath(r, inner, Math.PI, Math.PI * 2), start: Math.PI, end: Math.PI * 2, value, pct: pct / 2, index });
+    } else {
+      arcs.push({ d: donutSlicePath(r, inner, angle, angle + sweep), start: angle, end: angle + sweep, value, pct, index });
+    }
+    angle += sweep;
+  });
+  return arcs;
+}
+
+function barWidths(values, max, width) {
+  const finite = values.map((v) => (Number.isFinite(v) ? v : 0));
+  const top = max != null && max > 0 ? max : Math.max(0, ...finite);
+  return finite.map((v) => {
+    if (v <= 0 || top <= 0) return 0;
+    const w = (v / top) * width;
+    return Math.min(width, Math.max(2, w));
+  });
+}
+
+function histogramBins(values, edges) {
+  const counts = edges.map(() => 0);
+  values.forEach((v) => {
+    if (v == null || !Number.isFinite(v)) return;
+    for (let i = edges.length - 1; i >= 0; i -= 1) {
+      if (v >= edges[i]) {
+        counts[i] += 1;
+        return;
+      }
+    }
+  });
+  return counts;
+}
+
+// Format: "M0.00,20.00 L50.00,10.00 L100.00,0.00" (y grows downward; a flat series sits at mid-height).
+function sparkPath(points, width, height) {
+  const pts = points.filter((p) => Number.isFinite(p));
+  if (pts.length < 2) return '';
+  const lo = Math.min(...pts);
+  const hi = Math.max(...pts);
+  const span = hi - lo;
+  return pts
+    .map((p, i) => {
+      const x = (i / (pts.length - 1)) * width;
+      const y = span === 0 ? height / 2 : height - ((p - lo) / span) * height;
+      return `${i === 0 ? 'M' : 'L'}${chartNum(x)},${chartNum(y)}`;
+    })
+    .join(' ');
+}
+
+function seriesColor(i) {
+  return `var(--hs-series-${((i % 6) + 6) % 6})`;
+}
+// ============================================================================
+// §6b CHARTS (accessible SVG components; geometry lives in §6a)
+// ============================================================================
+function chartAriaLabel(title, data) {
+  const parts = (data || []).map((d) => `${d.label} ${d.value}`);
+  return title ? `${title}: ${parts.join(', ')}` : parts.join(', ');
+}
+
+// Keyboard-accessible click props: role=button, tabIndex=0, Enter/Space activate.
+function chartActivate(onClick) {
+  if (!onClick) return {};
+  return {
+    role: 'button',
+    tabIndex: 0,
+    onClick,
+    onKeyDown: (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onClick(e);
+      }
+    },
+  };
+}
+
+// A figure with role=img hides its children from assistive tech, so interactive charts are a labelled group.
+function ChartFigure({ title, data, className, children }) {
+  const interactive = (data || []).some((d) => d.onClick);
+  return jsx('figure', {
+    className: `hs-chart${className ? ` ${className}` : ''}`,
+    role: interactive ? 'group' : 'img',
+    'aria-label': chartAriaLabel(title, data),
+    children,
+  });
+}
+
+function ChartLegend({ data, total, showPct }) {
+  return jsx('ul', {
+    className: 'hs-chart-legend',
+    children: data.map((d, i) => {
+      const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
+      return jsxs(
+        'li',
+        {
+          className: `hs-chart-legend-row${d.onClick ? ' hs-clickable' : ''}`,
+          ...chartActivate(d.onClick),
+          children: [
+            jsx('span', { className: 'hs-chart-swatch', style: { background: seriesColor(i) } }),
+            jsx('span', { className: 'hs-chart-legend-label', children: d.label }),
+            jsx('span', { className: 'hs-chart-legend-value', children: showPct ? `${d.value} (${pct}%)` : String(d.value) }),
+          ],
+        },
+        `${i}-${d.label}`,
+      );
+    }),
+  });
+}
+
+function Donut({ data, size = 140, center, title }) {
+  const r = size / 2 - 2;
+  const inner = r * 0.62;
+  const total = data.reduce((s, d) => s + (d.value > 0 ? d.value : 0), 0);
+  const arcs = donutArcs(data.map((d) => d.value), r, inner);
+  return jsxs(ChartFigure, {
+    title,
+    data,
+    className: 'hs-chart-donut',
+    children: [
+      jsxs('svg', {
+        width: size,
+        height: size,
+        viewBox: `${-size / 2} ${-size / 2} ${size} ${size}`,
+        'aria-hidden': 'true',
+        focusable: 'false',
+        children: [
+          total <= 0 ? jsx('circle', { r: (r + inner) / 2, fill: 'none', stroke: 'var(--ui-stroke-tertiary)', strokeWidth: r - inner }) : null,
+          ...arcs.map((a, k) => {
+            const d = data[a.index];
+            return jsx(
+              'path',
+              {
+                d: a.d,
+                fill: seriesColor(a.index),
+                className: d.onClick ? 'hs-clickable' : undefined,
+                'aria-label': d.onClick ? `${d.label} ${d.value}` : undefined,
+                ...chartActivate(d.onClick),
+              },
+              k,
+            );
+          }),
+          center ? jsx('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'central', className: 'hs-chart-center', children: center }) : null,
+        ],
+      }),
+      jsx(ChartLegend, { data, total, showPct: true }),
+    ],
+  });
+}
+
+function BarList({ data, max = null, unit, title }) {
+  const widths = barWidths(data.map((d) => d.value), max, 100);
+  return jsx(ChartFigure, {
+    title,
+    data,
+    className: 'hs-chart-bars',
+    children: data.map((d, i) =>
+      jsxs(
+        'div',
+        {
+          className: `hs-chart-barrow${d.onClick ? ' hs-clickable' : ''}`,
+          ...chartActivate(d.onClick),
+          children: [
+            jsx('span', { className: 'hs-chart-barlabel', title: d.label, children: d.label }),
+            jsx('span', {
+              className: 'hs-chart-bartrack',
+              children: jsx('i', {
+                style: { width: `${widths[i]}%`, background: d.tone ? `var(--ui-${d.tone === 'danger' ? 'red' : d.tone === 'warning' ? 'yellow' : 'green'}, var(--ui-accent))` : seriesColor(0) },
+              }),
+            }),
+            jsx('span', { className: 'hs-chart-barvalue', children: d.display != null ? d.display : `${d.value}${unit ? ` ${unit}` : ''}` }),
+          ],
+        },
+        `${i}-${d.label}`,
+      ),
+    ),
+  });
+}
+
+function Histogram({ data, height = 120, title }) {
+  const top = Math.max(0, ...data.map((d) => d.value));
+  const barH = height - 32;
+  const slot = 100 / Math.max(1, data.length);
+  return jsx(ChartFigure, {
+    title,
+    data,
+    className: 'hs-chart-hist',
+    children: jsx('svg', {
+      width: '100%',
+      height,
+      viewBox: `0 0 100 ${height}`,
+      preserveAspectRatio: 'none',
+      'aria-hidden': 'true',
+      focusable: 'false',
+      children: data.map((d, i) => {
+        const h = barWidths([d.value], top, barH)[0];
+        const x = i * slot;
+        return jsxs(
+          'g',
+          {
+            className: d.onClick ? 'hs-clickable' : undefined,
+            'aria-label': d.onClick ? `${d.label} ${d.value}` : undefined,
+            ...chartActivate(d.onClick),
+            children: [
+              jsx('rect', { x: x + slot * 0.15, y: 14 + barH - h, width: slot * 0.7, height: h, fill: seriesColor(0) }),
+              jsx('text', { x: x + slot / 2, y: 10, textAnchor: 'middle', className: 'hs-chart-tick', children: String(d.value) }),
+              jsx('text', { x: x + slot / 2, y: height - 4, textAnchor: 'middle', className: 'hs-chart-tick', children: d.label }),
+            ],
+          },
+          `${i}-${d.label}`,
+        );
+      }),
+    }),
+  });
+}
+
+function StackedBar({ data, title }) {
+  const total = data.reduce((s, d) => s + (d.value > 0 ? d.value : 0), 0);
+  let x = 0;
+  const segs = [];
+  data.forEach((d, i) => {
+    if (!(d.value > 0) || total <= 0) return;
+    const w = (d.value / total) * 100;
+    segs.push(
+      jsx(
+        'rect',
+        {
+          x,
+          y: 0,
+          width: w,
+          height: 14,
+          fill: seriesColor(i),
+          className: d.onClick ? 'hs-clickable' : undefined,
+          'aria-label': d.onClick ? `${d.label} ${d.value}` : undefined,
+          ...chartActivate(d.onClick),
+        },
+        `${i}-${d.label}`,
+      ),
+    );
+    x += w;
+  });
+  return jsxs(ChartFigure, {
+    title,
+    data,
+    className: 'hs-chart-stacked',
+    children: [
+      jsx('svg', {
+        width: '100%',
+        height: 14,
+        viewBox: '0 0 100 14',
+        preserveAspectRatio: 'none',
+        'aria-hidden': 'true',
+        focusable: 'false',
+        children: [jsx('rect', { x: 0, y: 0, width: 100, height: 14, fill: 'var(--ui-stroke-tertiary)' }, 'bg'), ...segs],
+      }),
+      jsx(ChartLegend, { data, total, showPct: false }),
+    ],
+  });
+}
+
+function Sparkline({ points, width = 160, height = 36, label, valueText }) {
+  const d = sparkPath(points || [], width, height - 4);
+  const text = valueText != null ? String(valueText) : '';
+  const aria = [label, text].filter(Boolean).join(': ') || 'Trend';
+  return jsxs('figure', {
+    className: 'hs-chart hs-chart-spark',
+    role: 'img',
+    'aria-label': aria,
+    children: [
+      jsx('svg', {
+        width,
+        height,
+        viewBox: `0 0 ${width} ${height}`,
+        'aria-hidden': 'true',
+        focusable: 'false',
+        children: d
+          ? jsx('path', { d, transform: 'translate(0 2)', fill: 'none', stroke: seriesColor(0), strokeWidth: 1.5, strokeLinejoin: 'round', strokeLinecap: 'round' })
+          : jsx('line', { x1: 0, x2: width, y1: height / 2, y2: height / 2, stroke: 'var(--ui-stroke-tertiary)', strokeDasharray: '2 3' }),
+      }),
+      text ? jsx('span', { className: 'hs-chart-sparkvalue', children: text }) : null,
+    ],
+  });
+}
+
+function StatTile({ label, value, sub, tone, onClick }) {
+  return jsx('div', { className: 'hs-stat', children: jsx(Kpi, { label, value, sub, tone, onClick }) });
+}
 // ============================================================================
 // §7 DIALOGS AND THE CONFIRM FLOW
 // ============================================================================

@@ -60,7 +60,7 @@ def test_colours_only_through_ui_tokens(code):
 
 def test_css_variables_are_ui_tokens(code):
     names = re.findall(r"var\(--([\w-]+)", code)
-    assert names and all(name.startswith("ui-") for name in names)
+    assert names and all(name.startswith(("ui-", "hs-series-")) for name in names)  # hs-series-N are chart aliases of --ui-* tokens
 
 
 def test_op_helper_is_defined(code):

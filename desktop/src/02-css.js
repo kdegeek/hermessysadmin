@@ -109,5 +109,29 @@ textarea.hs-input{min-height:64px;resize:vertical}
 .hs-checklist{margin:0;padding-left:18px;color:var(--ui-text-secondary);font-size:12.5px;display:grid;gap:2px}
 .hs-end{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 .hs-radio{display:flex;gap:6px;align-items:center;font-size:12.5px;cursor:pointer}
+.hs-root{--hs-series-0:var(--ui-accent,#4c8bf5);--hs-series-1:var(--ui-green,#3fb950);--hs-series-2:var(--ui-yellow,#d29922);--hs-series-3:var(--ui-red,#f85149);--hs-series-4:var(--ui-text-secondary,#8b949e);--hs-series-5:var(--ui-text-tertiary,#6e7681)}
+.hs-chart{margin:0;display:flex;flex-direction:column;gap:8px;color:var(--ui-text-primary)}
+.hs-chart-donut{flex-direction:row;align-items:center;gap:16px;flex-wrap:wrap}
+.hs-chart-center{fill:var(--ui-text-primary);font-size:16px;font-weight:600}
+.hs-chart-tick{fill:var(--ui-text-tertiary);font-size:5px}
+.hs-chart .hs-clickable{cursor:pointer}
+.hs-chart [role=button]:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
+.hs-chart path.hs-clickable:hover,.hs-chart rect.hs-clickable:hover{opacity:.8}
+.hs-chart-legend{list-style:none;margin:0;padding:0;display:grid;gap:3px;font-size:12.5px}
+.hs-chart-legend-row{display:flex;align-items:center;gap:8px;padding:1px 4px;border-radius:4px}
+.hs-chart-legend-row.hs-clickable:hover{background:var(--ui-bg-elevated)}
+.hs-chart-swatch{width:10px;height:10px;border-radius:2px;flex:none}
+.hs-chart-legend-label{flex:1;color:var(--ui-text-secondary)}
+.hs-chart-legend-value{color:var(--ui-text-primary);font-variant-numeric:tabular-nums}
+.hs-chart-bars{gap:4px}
+.hs-chart-barrow{display:grid;grid-template-columns:minmax(80px,30%) 1fr auto;align-items:center;gap:8px;padding:2px 4px;border-radius:4px}
+.hs-chart-barrow.hs-clickable:hover{background:var(--ui-bg-elevated)}
+.hs-chart-barlabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ui-text-secondary)}
+.hs-chart-bartrack{height:8px;border-radius:4px;background:var(--ui-stroke-tertiary);overflow:hidden}
+.hs-chart-bartrack i{display:block;height:100%}
+.hs-chart-barvalue{font-variant-numeric:tabular-nums;color:var(--ui-text-primary)}
+.hs-chart-spark{flex-direction:row;align-items:center;gap:8px}
+.hs-chart-sparkvalue{color:var(--ui-text-secondary);font-variant-numeric:tabular-nums}
+.hs-stat{min-width:120px}
 `;
 
