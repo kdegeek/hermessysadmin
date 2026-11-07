@@ -112,6 +112,19 @@ function useSubmit(seq, o, body, opts) {
   return { busy, error, submit };
 }
 
+// A write that ships a -Preview plan shows it before the user confirms (the server runs the script in
+// preview mode: nothing changes). Its own component so the preview query only exists when it is shown.
+function WritePreview({ seq, o }) {
+  const pv = useApi(KEY.preview(o, seq), () => api.preview(o), { staleTime: Infinity });
+  return jsxs('div', {
+    className: 'hs-stack',
+    children: [
+      jsx('div', { className: 'hs-label', children: 'Preview · nothing has changed yet' }),
+      jsx(PreviewBody, { q: pv, args: o.args }),
+    ],
+  });
+}
+
 function ConfirmWriteDialog({ seq, o, dec, opts }) {
   const s = useSubmit(seq, o, { confirm: true }, opts);
   return jsx(Modal, {
@@ -119,6 +132,7 @@ function ConfirmWriteDialog({ seq, o, dec, opts }) {
     title: opts.title || 'Confirm change',
     tier: 'W',
     opName: o.name,
+    wide: !!dec.can_preview,
     footer: [
       jsx(Btn, { onClick: () => closeDialog(seq), disabled: s.busy, children: 'Cancel' }, 'cancel'),
       jsx(Btn, {
@@ -133,6 +147,7 @@ function ConfirmWriteDialog({ seq, o, dec, opts }) {
       children: [
         jsx('p', { className: 'hs-p', children: opts.body || `Run ${o.name} on ${dec.target || 'the selected object'}?` }),
         dec.target ? jsxs('div', { className: 'hs-muted hs-small', children: ['Target: ', jsx('span', { className: 'hs-mono', children: dec.target })] }) : null,
+        dec.can_preview ? jsx(WritePreview, { seq, o }) : null,
         jsx('div', { className: 'hs-muted hs-small', children: `${dec.reason} The change is written to the audit log.` }),
         s.error ? jsx(ErrorBox, { error: s.error }) : null,
       ],

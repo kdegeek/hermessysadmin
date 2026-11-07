@@ -63,8 +63,14 @@ def test_decision_describes_the_dialog(make_service):
     out = api.decision(make_service(), "ad_user_delete", {"args": {"identity": "bob"}})
     assert out["data"] == {
         "action": "approve", "tier": "H", "reason": "High-risk change: requires approval with a preview.",
-        "needs_preview": True, "target": "bob", "confirm_name": "bob", "type_to_confirm": True,
+        "needs_preview": True, "can_preview": True, "target": "bob", "confirm_name": "bob", "type_to_confirm": True,
     }
+
+
+def test_decision_says_when_a_write_can_show_a_preview(make_service):
+    out = api.decision(make_service(), "cat.remote.enable_remote_assistance", {"args": {"computers": ["PC1"]}})["data"]
+    assert out["can_preview"] is True
+    assert api.decision(make_service(), "ad_user_unlock", {"args": {"identity": "bob"}})["data"]["can_preview"] is False
 
 
 def test_confirm_name_choice():

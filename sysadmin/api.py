@@ -116,6 +116,7 @@ def decision(service: Any, name: str, body: Mapping[str, Any] | None) -> dict[st
         clean = coerce_args(op, args)
         return {"ok": True, "data": {
             "action": d.action, "tier": d.tier, "reason": d.reason, "needs_preview": d.needs_preview,
+            "can_preview": bool(op.preview),
             "target": target_of(op, clean), "confirm_name": confirm_name_of(op, clean),
             "type_to_confirm": d.action == "approve" and op.destructive,
         }}
