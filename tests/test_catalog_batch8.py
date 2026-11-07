@@ -42,7 +42,8 @@ def test_no_secret_cmdlets_anywhere():
     banned = ("Get-LapsADPassword", "Get-AdmPwdPassword", "Get-BitLockerRecoveryKey", "msFVE-RecoveryPassword",
               "ms-Mcs-AdmPwd", "msLAPS-Password", "Get-RequestArchivedKey", "cpassword =", "Invoke-WUJob")
     for f in catalog.CATALOG_DIR.glob("*/*.ps1"):
-        text = f.read_text()
+        # the expiration-time attributes are allowed (ad.laps_coverage); the password attributes never are
+        text = re.sub(r"(ms-Mcs-AdmPwd|msLAPS-Password)ExpirationTime", "", f.read_text())
         assert not [b for b in banned if b in text], f
 
 
