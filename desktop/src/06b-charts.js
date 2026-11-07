@@ -2,11 +2,11 @@
 // §6b CHARTS (accessible SVG components; geometry lives in §6a)
 // ============================================================================
 function chartAriaLabel(title, data) {
-  const parts = (data || []).map((d) => `${d.label} ${d.value}`);
+  const parts = (data || []).map((d) => `${d.label} ${d.display != null ? d.display : d.value}`);
   return title ? `${title}: ${parts.join(', ')}` : parts.join(', ');
 }
 
-// Keyboard-accessible click props: role=button, tabIndex=0, Enter/Space activate.
+// Keyboard-accessible click props for HTML (non-SVG) rows: Enter activates on keydown, Space on keyup.
 function chartActivate(onClick) {
   if (!onClick) return {};
   return {
@@ -14,12 +14,32 @@ function chartActivate(onClick) {
     tabIndex: 0,
     onClick,
     onKeyDown: (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        onClick(e);
+      } else if (e.key === ' ') {
+        e.preventDefault();
+      }
+    },
+    onKeyUp: (e) => {
+      if (e.key === ' ') {
         e.preventDefault();
         onClick(e);
       }
     },
   };
+}
+
+// SVG shapes are decorative (aria-hidden); mouse click only. The keyboard path is the HTML legend or label row.
+function chartMouse(onClick) {
+  return onClick ? { onClick, className: 'hs-clickable' } : {};
+}
+
+function toneColor(tone) {
+  if (tone === 'danger') return 'var(--ui-red, var(--ui-accent))';
+  if (tone === 'warning') return 'var(--ui-yellow, var(--ui-accent))';
+  if (tone === 'success') return 'var(--ui-green, var(--ui-accent))';
+  return seriesColor(0);
 }
 
 // A figure with role=img hides its children from assistive tech, so interactive charts are a labelled group.
@@ -38,16 +58,17 @@ function ChartLegend({ data, total, showPct }) {
     className: 'hs-chart-legend',
     children: data.map((d, i) => {
       const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
-      return jsxs(
+      const inner = [
+        jsx('span', { className: 'hs-chart-swatch', style: { background: seriesColor(i) } }),
+        jsx('span', { className: 'hs-chart-legend-label', children: d.label }),
+        jsx('span', { className: 'hs-chart-legend-value', children: showPct ? `${d.value} (${pct}%)` : String(d.value) }),
+      ];
+      return jsx(
         'li',
         {
-          className: `hs-chart-legend-row${d.onClick ? ' hs-clickable' : ''}`,
-          ...chartActivate(d.onClick),
-          children: [
-            jsx('span', { className: 'hs-chart-swatch', style: { background: seriesColor(i) } }),
-            jsx('span', { className: 'hs-chart-legend-label', children: d.label }),
-            jsx('span', { className: 'hs-chart-legend-value', children: showPct ? `${d.value} (${pct}%)` : String(d.value) }),
-          ],
+          children: d.onClick
+            ? jsx('button', { type: 'button', className: 'hs-chart-legend-row hs-chart-btn', onClick: d.onClick, children: inner })
+            : jsx('div', { className: 'hs-chart-legend-row', children: inner }),
         },
         `${i}-${d.label}`,
       );
@@ -80,9 +101,7 @@ function Donut({ data, size = 140, center, title }) {
               {
                 d: a.d,
                 fill: seriesColor(a.index),
-                className: d.onClick ? 'hs-clickable' : undefined,
-                'aria-label': d.onClick ? `${d.label} ${d.value}` : undefined,
-                ...chartActivate(d.onClick),
+                ...chartMouse(d.onClick),
               },
               k,
             );
@@ -112,7 +131,7 @@ function BarList({ data, max = null, unit, title }) {
             jsx('span', {
               className: 'hs-chart-bartrack',
               children: jsx('i', {
-                style: { width: `${widths[i]}%`, background: d.tone ? `var(--ui-${d.tone === 'danger' ? 'red' : d.tone === 'warning' ? 'yellow' : 'green'}, var(--ui-accent))` : seriesColor(0) },
+                style: { width: `${widths[i]}%`, background: toneColor(d.tone) },
               }),
             }),
             jsx('span', { className: 'hs-chart-barvalue', children: d.display != null ? d.display : `${d.value}${unit ? ` ${unit}` : ''}` }),
@@ -126,38 +145,42 @@ function BarList({ data, max = null, unit, title }) {
 
 function Histogram({ data, height = 120, title }) {
   const top = Math.max(0, ...data.map((d) => d.value));
-  const barH = height - 32;
+  const barH = height - 8;
   const slot = 100 / Math.max(1, data.length);
-  return jsx(ChartFigure, {
+  return jsxs(ChartFigure, {
     title,
     data,
     className: 'hs-chart-hist',
-    children: jsx('svg', {
-      width: '100%',
-      height,
-      viewBox: `0 0 100 ${height}`,
-      preserveAspectRatio: 'none',
-      'aria-hidden': 'true',
-      focusable: 'false',
-      children: data.map((d, i) => {
-        const h = barWidths([d.value], top, barH)[0];
-        const x = i * slot;
-        return jsxs(
-          'g',
-          {
-            className: d.onClick ? 'hs-clickable' : undefined,
-            'aria-label': d.onClick ? `${d.label} ${d.value}` : undefined,
-            ...chartActivate(d.onClick),
-            children: [
-              jsx('rect', { x: x + slot * 0.15, y: 14 + barH - h, width: slot * 0.7, height: h, fill: seriesColor(0) }),
-              jsx('text', { x: x + slot / 2, y: 10, textAnchor: 'middle', className: 'hs-chart-tick', children: String(d.value) }),
-              jsx('text', { x: x + slot / 2, y: height - 4, textAnchor: 'middle', className: 'hs-chart-tick', children: d.label }),
-            ],
-          },
-          `${i}-${d.label}`,
-        );
+    children: [
+      jsx('svg', {
+        width: '100%',
+        height,
+        viewBox: `0 0 100 ${height}`,
+        preserveAspectRatio: 'none',
+        'aria-hidden': 'true',
+        focusable: 'false',
+        children: data.map((d, i) => {
+          const h = barWidths([d.value], top, barH)[0];
+          return jsx(
+            'rect',
+            { x: i * slot + slot * 0.15, y: 4 + barH - h, width: slot * 0.7, height: h, fill: seriesColor(0), ...chartMouse(d.onClick) },
+            `${i}-${d.label}`,
+          );
+        }),
       }),
-    }),
+      jsx('div', {
+        className: 'hs-chart-histlabels',
+        children: data.map((d, i) => {
+          const inner = [
+            jsx('span', { className: 'hs-chart-histcount', children: String(d.value) }),
+            jsx('span', { className: 'hs-chart-histlabel', children: d.label }),
+          ];
+          return d.onClick
+            ? jsx('button', { type: 'button', className: 'hs-chart-histcol hs-chart-btn', onClick: d.onClick, children: inner }, `${i}-${d.label}`)
+            : jsx('div', { className: 'hs-chart-histcol', children: inner }, `${i}-${d.label}`);
+        }),
+      }),
+    ],
   });
 }
 
@@ -177,9 +200,7 @@ function StackedBar({ data, title }) {
           width: w,
           height: 14,
           fill: seriesColor(i),
-          className: d.onClick ? 'hs-clickable' : undefined,
-          'aria-label': d.onClick ? `${d.label} ${d.value}` : undefined,
-          ...chartActivate(d.onClick),
+          ...chartMouse(d.onClick),
         },
         `${i}-${d.label}`,
       ),

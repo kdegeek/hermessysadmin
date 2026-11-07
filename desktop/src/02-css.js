@@ -113,13 +113,17 @@ textarea.hs-input{min-height:64px;resize:vertical}
 .hs-chart{margin:0;display:flex;flex-direction:column;gap:8px;color:var(--ui-text-primary)}
 .hs-chart-donut{flex-direction:row;align-items:center;gap:16px;flex-wrap:wrap}
 .hs-chart-center{fill:var(--ui-text-primary);font-size:16px;font-weight:600}
-.hs-chart-tick{fill:var(--ui-text-tertiary);font-size:5px}
+.hs-chart-btn{appearance:none;border:0;background:none;color:inherit;font:inherit;text-align:inherit;cursor:pointer;width:100%}
+.hs-chart-histlabels{display:flex;gap:0}
+.hs-chart-histcol{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;padding:2px 0;border-radius:4px}
+.hs-chart-histcount{font-variant-numeric:tabular-nums;color:var(--ui-text-primary);font-size:12px}
+.hs-chart-histlabel{color:var(--ui-text-tertiary);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
 .hs-chart .hs-clickable{cursor:pointer}
-.hs-chart [role=button]:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
+.hs-chart [role=button]:focus-visible,.hs-chart-btn:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
 .hs-chart path.hs-clickable:hover,.hs-chart rect.hs-clickable:hover{opacity:.8}
 .hs-chart-legend{list-style:none;margin:0;padding:0;display:grid;gap:3px;font-size:12.5px}
 .hs-chart-legend-row{display:flex;align-items:center;gap:8px;padding:1px 4px;border-radius:4px}
-.hs-chart-legend-row.hs-clickable:hover{background:var(--ui-bg-elevated)}
+.hs-chart-btn.hs-chart-legend-row:hover,.hs-chart-btn.hs-chart-histcol:hover{background:var(--ui-bg-elevated)}
 .hs-chart-swatch{width:10px;height:10px;border-radius:2px;flex:none}
 .hs-chart-legend-label{flex:1;color:var(--ui-text-secondary)}
 .hs-chart-legend-value{color:var(--ui-text-primary);font-variant-numeric:tabular-nums}
