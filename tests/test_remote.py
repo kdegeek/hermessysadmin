@@ -90,3 +90,32 @@ def test_no_consent_shadow_needs_confirm_in_dashboard_flow(make_service, audit):
     assert done["ok"] and len(audit.query()) == 1
     d = api.decision(svc, "remote_shadow_command", body)["data"]
     assert d["tier"] == "H" and d["type_to_confirm"] is False
+
+
+def _remote_src(name):
+    from sysadmin.catalog import CATALOG_DIR
+    return (CATALOG_DIR / "remote" / f"{name}.ps1").read_text(encoding="utf-8")
+
+
+def test_native_commands_in_remote_writes_are_wrapped_and_use_exit_codes():
+    expect = {
+        "lock_workstation": "& tsdiscon.exe $id 2>$null",
+        "logoff_session": "& logoff.exe $id 2>$null",
+        "send_message": "& msg.exe '*' \"/TIME:$sec\" $msg 2>$null",
+    }
+    for name, call in expect.items():
+        src = _remote_src(name)
+        assert f"& {{ $ErrorActionPreference = 'Continue'; {call} | Out-Null; [int]$LASTEXITCODE }}" in src, name
+        assert "$code -eq 0" in src, name
+        assert "quser 2>$null" not in src.split("Invoke-HermesCatalogFanout", 2)[-1] or name == "lock_workstation"
+    for name in ("lock_workstation", "logoff_session"):
+        assert "& { $ErrorActionPreference = 'Continue'; & quser.exe 2>$null }" in _remote_src(name)
+
+
+def test_add_rdp_user_resolves_all_names_before_adding_and_survives_orphaned_sids():
+    src = _remote_src("add_rdp_user")
+    assert src.index("$resolved +=") < src.index("Add-LocalGroupMember -SID")
+    assert "no members were added" in src
+    assert "Add-LocalGroupMember -SID 'S-1-5-32-555' -Member $r.name" in src
+    assert src.count("catch {") >= 3 and src.count("[ADSI]\"WinNT://./$gn,group\"") == 2  # preview and apply both fall back to ADSI
+    assert "objectSid" in src

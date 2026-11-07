@@ -31,7 +31,7 @@ Invoke-Op {
     Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($text, $Seconds) -Script {
         param($msg, $sec)
         $ErrorActionPreference = 'Stop'
-        & msg.exe '*' "/TIME:$sec" $msg
-        [pscustomobject]@{ sent = ($LASTEXITCODE -eq 0) }
+        $code = & { $ErrorActionPreference = 'Continue'; & msg.exe '*' "/TIME:$sec" $msg 2>$null | Out-Null; [int]$LASTEXITCODE }
+        [pscustomobject]@{ sent = ($code -eq 0) }
     }
 }

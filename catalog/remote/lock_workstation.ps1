@@ -30,11 +30,12 @@ Invoke-Op {
     }
     Invoke-HermesCatalogFanout -Computers $targets -Script {
         $ErrorActionPreference = 'Stop'
-        foreach ($line in @(quser 2>$null)) {
+        $rows = & { $ErrorActionPreference = 'Continue'; & quser.exe 2>$null }
+        foreach ($line in @($rows)) {
             if ("$line" -match '^\s*>?(\S+)\s+([^\s\d]\S*)\s+(\d+)\s+\S+') {
                 $user = $Matches[1]; $id = [int]$Matches[3]
-                & tsdiscon.exe $id
-                [pscustomobject]@{ user = $user; session_id = $id; disconnected = ($LASTEXITCODE -eq 0) }
+                $code = & { $ErrorActionPreference = 'Continue'; & tsdiscon.exe $id 2>$null | Out-Null; [int]$LASTEXITCODE }
+                [pscustomobject]@{ user = $user; session_id = $id; disconnected = ($code -eq 0) }
             }
         }
     }

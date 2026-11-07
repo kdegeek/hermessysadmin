@@ -22,7 +22,18 @@ Invoke-Op {
     }
     $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Workstation
     $read = Invoke-HermesCatalogFanout -Computers $targets -Script {
-        [pscustomobject]@{ members = @(Get-LocalGroupMember -SID 'S-1-5-32-555' | ForEach-Object { "$($_.Name)" }) }
+        $ErrorActionPreference = 'Stop'
+        $names = @()
+        try {
+            $names = @(Get-LocalGroupMember -SID 'S-1-5-32-555' | ForEach-Object { "$($_.Name)" })
+        } catch {
+            # Get-LocalGroupMember fails on orphaned domain SIDs in 5.1; fall back to ADSI by the group's translated name.
+            $gn = (New-Object System.Security.Principal.SecurityIdentifier 'S-1-5-32-555').Translate([System.Security.Principal.NTAccount]).Value.Split('\')[1]
+            foreach ($mem in @(([ADSI]"WinNT://./$gn,group").Invoke('Members'))) {
+                $names += (([ADSI]$mem).Path -replace '^WinNT://', '').Replace('/', '\')
+            }
+        }
+        [pscustomobject]@{ members = $names }
     }
     if ($Preview) {
         $cur = @{}; foreach ($r in $read.items) { $cur[$r['host']] = @($r['members']) }
@@ -33,15 +44,28 @@ Invoke-Op {
     Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @(, $list) -Script {
         param($names)
         $ErrorActionPreference = 'Stop'
-        $have = @(Get-LocalGroupMember -SID 'S-1-5-32-555' | ForEach-Object { "$($_.SID.Value)" })
-        $added = @(); $skipped = @()
+        # Resolve every name first: if any fails, this computer reports the error and nobody is added.
+        $resolved = @()
         foreach ($m in @($names)) {
-            $sid = $null
-            try { $sid = (New-Object System.Security.Principal.NTAccount($m)).Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { throw "Cannot resolve '$m' to an account on this computer." }
-            if ($have -contains $sid) { $skipped += $m; continue }
-            Add-LocalGroupMember -SID 'S-1-5-32-555' -Member $m
-            $added += $m
-            $have += $sid
+            try { $resolved += [pscustomobject]@{ name = $m; sid = (New-Object System.Security.Principal.NTAccount($m)).Translate([System.Security.Principal.SecurityIdentifier]).Value } }
+            catch { throw "Cannot resolve '$m' to an account on this computer; no members were added." }
+        }
+        $have = @()
+        try {
+            $have = @(Get-LocalGroupMember -SID 'S-1-5-32-555' | ForEach-Object { "$($_.SID.Value)" })
+        } catch {
+            # Orphaned SIDs break Get-LocalGroupMember in 5.1; read the members' SIDs through ADSI instead.
+            $gn = (New-Object System.Security.Principal.SecurityIdentifier 'S-1-5-32-555').Translate([System.Security.Principal.NTAccount]).Value.Split('\')[1]
+            foreach ($mem in @(([ADSI]"WinNT://./$gn,group").Invoke('Members'))) {
+                $have += (New-Object System.Security.Principal.SecurityIdentifier(([ADSI]$mem).objectSid.Value, 0)).Value
+            }
+        }
+        $added = @(); $skipped = @()
+        foreach ($r in $resolved) {
+            if ($have -contains $r.sid) { $skipped += $r.name; continue }
+            Add-LocalGroupMember -SID 'S-1-5-32-555' -Member $r.name
+            $added += $r.name
+            $have += $r.sid
         }
         [pscustomobject]@{ added = $added; skipped = $skipped }
     }

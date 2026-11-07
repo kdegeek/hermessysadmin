@@ -34,13 +34,14 @@ Invoke-Op {
         param($id)
         $ErrorActionPreference = 'Stop'
         $user = ''
-        foreach ($line in @(quser 2>$null)) {
+        $rows = & { $ErrorActionPreference = 'Continue'; & quser.exe 2>$null }
+        foreach ($line in @($rows)) {
             if ("$line" -match '^\s*>?(\S+)\s+(?:(\S+)\s+)?(\d+)\s+\S+') {
                 if ([int]$Matches[3] -eq $id) { $user = $Matches[1] }
             }
         }
         if (-not $user) { throw "No session $id on this computer." }
-        & logoff.exe $id
-        [pscustomobject]@{ user = $user; session_id = $id; logged_off = ($LASTEXITCODE -eq 0) }
+        $code = & { $ErrorActionPreference = 'Continue'; & logoff.exe $id 2>$null | Out-Null; [int]$LASTEXITCODE }
+        [pscustomobject]@{ user = $user; session_id = $id; logged_off = ($code -eq 0) }
     }
 }
