@@ -71,6 +71,20 @@ def catalog_sample_params(op, ctx):
         "files.ntfs_access": file_sample,
         "files.ntfs_inheritance": file_sample,
         "files.ntfs_orphaned_sids": file_sample,
+        "files.broad_write_access": file_sample,
+        "files.largest_files": file_sample,
+        "files.owner_report": file_sample,
+        "files.recent_files": file_sample,
+        "files.share_permissions": {"Server": ctx["dc"]},
+        # Harmless lookups: a MAC that matches nothing, the DC's own name, a built-in account.
+        "dhcp.lease_for_mac": {"Mac": "00-00-5E-00-53-00"},
+        "dns.find_records": {"Name": (ctx["dc"] or "").split(".")[0]},
+        "network.dns_resolve": {"Name": ctx["dc"]},
+        "network.traceroute": {"Target": ctx["dc"]},
+        "gpo.settings_search": {"Keyword": "Audit"},
+        "sessions.find_user": {"User": "Administrator"},
+        "sessions.user_groups": {"Identity": "Administrator"},
+        "sessions.user_last_logon": {"Identity": "Administrator"},
     }
     extra = samples.get(meta_id, {})
     params = {**base, **extra}

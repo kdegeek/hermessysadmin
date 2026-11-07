@@ -174,7 +174,9 @@ def test_escalated_non_destructive_write_needs_confirm_but_no_typed_name(make_se
 
 
 def test_destructive_ops_are_exactly_the_irreversible_ones():
-    assert sorted(n for n, o in OPS.items() if o.destructive) == ["ad_powershell", "ad_user_delete", "gpo_delete", "gpo_restore"]
+    assert sorted(n for n, o in OPS.items() if o.destructive) == [
+        "ad_powershell", "ad_user_delete", "cat.maint.empty_recycle_bin", "cat.maint.remove_stale_profiles", "gpo_delete", "gpo_restore",
+    ]
     assert all(OPS[n].tier == "H" for n in OPS if OPS[n].destructive)
 
 
