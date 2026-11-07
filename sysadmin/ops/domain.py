@@ -51,18 +51,35 @@ def _post_dc_health(data: Any, args: Mapping[str, Any], settings: Any) -> Any:
 
 def _post_connection_test(data: Any, args: Mapping[str, Any], settings: Any) -> Any:
     data = dict(data or {})
+    local = settings.transport == "local"
     groups = [str(g) for g in data.get("groups") or []]
     data["privileged_memberships"] = [g for g in groups if is_privileged_group(g, settings)]
+    data["transport"] = settings.transport
+    data["run_as"] = settings.run_as if local else None
+    data["local_identity"] = data.get("identity")
+    error = str(data.get("network_identity_error") or "")
+    if error and settings.password:
+        error = error.replace(settings.password, "***")  # defence in depth: never echo the secret
+        data["network_identity_error"] = error
     modules = data.get("modules") or {}
+    where = "this machine" if local else "the jump host"
     warnings = []
-    if not data.get("is_domain_controller"):
+    if not local and not data.get("is_domain_controller"):
         warnings.append(
             "The jump host is not a domain controller; GPO operations will fail because "
             "GroupPolicy cmdlets cannot use explicit credentials (double hop). Use a DC as the jump host."
         )
+    if error:
+        who = settings.username if local and settings.run_as == "account" else (data.get("identity") or "this identity")
+        hint = (
+            " With 'Run as: account' Windows does not check the password when PowerShell starts; "
+            "a wrong password shows up here, on the first network logon. Check the username and password."
+            if local and settings.run_as == "account" else ""
+        )
+        warnings.append(f"{who} could not authenticate to (or run a command on) domain controller {data.get('dc') or ''}: {error}.{hint}")
     for name in ("ActiveDirectory", "GroupPolicy"):
         if not modules.get(name):
-            warnings.append(f"The {name} PowerShell module is not installed on the jump host.")
+            warnings.append(f"The {name} PowerShell module is not installed on {where}.")
     data["warnings"] = warnings
     return data
 
@@ -127,8 +144,9 @@ register(Op(
     tier="R",
     script="ad_connection_test",
     description=(
-        "Test the WinRM connection to the jump host: OS, whether it is a DC, PowerShell modules present, "
-        "the identity in use and its privileged group memberships, plus setup warnings."
+        "Test the connection: the transport (local PowerShell or WinRM jump host), the machine PowerShell runs on "
+        "(OS, whether it is a DC, modules present), the local identity, the identity a domain controller sees "
+        "(network_identity) and its privileged group memberships, plus setup warnings."
     ),
     post=_post_connection_test,
 ))

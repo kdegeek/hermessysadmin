@@ -71,6 +71,37 @@ def test_connection_test_post_flags_privileged_groups_and_warnings():
     assert any("GroupPolicy" in w for w in data["warnings"])
 
 
+
+def test_connection_test_post_reports_transport_and_identities():
+    post = OPS["ad_connection_test"].post
+    raw = {"is_domain_controller": False, "identity": "CORP\\hermes", "network_identity": "CORP\\svc-admin",
+           "dc": "dc01.corp.example", "modules": {"ActiveDirectory": True, "GroupPolicy": True}}
+    data = post(raw, {}, Settings(transport="local", run_as="account", username="CORP\\svc-admin", password="p"))
+    assert data["transport"] == "local" and data["run_as"] == "account"
+    assert data["local_identity"] == "CORP\\hermes" and data["network_identity"] == "CORP\\svc-admin"
+    # Local transport: not being a DC is expected, and the modules live on this machine.
+    assert not any("not a domain controller" in w for w in data["warnings"])
+    winrm = post(dict(raw), {}, Settings(host="dc01", username="u", password="p"))
+    assert winrm["transport"] == "winrm" and winrm["run_as"] is None
+    assert any("not a domain controller" in w for w in winrm["warnings"])
+
+
+def test_connection_test_post_surfaces_network_auth_failure_without_password():
+    post = OPS["ad_connection_test"].post
+    settings = Settings(transport="local", run_as="account", username="CORP\\svc", password="Hunter2!")
+    data = post({"is_domain_controller": False, "identity": "CORP\\hermes", "network_identity": None,
+                 "network_identity_error": "The user name or password is incorrect.", "modules": {}}, {}, settings)
+    assert any("could not authenticate" in w and "CORP\\svc" in w and "password is incorrect" in w for w in data["warnings"])
+    assert "Hunter2!" not in str(data)
+
+
+def test_connection_test_post_hermes_user_mismatch_note():
+    post = OPS["ad_connection_test"].post
+    data = post({"is_domain_controller": False, "identity": "CORP\\hermes", "network_identity": "CORP\\hermes",
+                 "modules": {"ActiveDirectory": True, "GroupPolicy": True}}, {},
+                Settings(transport="local", run_as="hermes_user"))
+    assert data["run_as"] == "hermes_user" and data["warnings"] == []
+
 def test_search_args():
     op = OPS["ad_search"]
     assert coerce_args(op, {"query": "bob"}) == {"query": "bob", "kind": "any", "limit": 25}

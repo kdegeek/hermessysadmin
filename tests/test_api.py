@@ -139,6 +139,17 @@ def test_health_configured_reports_dc_status(make_service, runner):
     assert (d["configured"], d["status"], d["host"], d["mode"]) == (True, "bad", "dc01.corp.example.local", "strict")
 
 
+
+def test_health_reports_transport_and_run_as(make_service, runner):
+    runner.responses["ad_dc_health"] = {"items": [DC], "errors": []}
+    d = api.health(make_service(settings=Settings(transport="local", run_as="account", username="CORP\\svc", password="pw")))["data"]
+    assert (d["transport"], d["run_as"], d["run_as_user"]) == ("local", "account", "CORP\\svc")
+    assert "pw" not in str(d.values())
+    d = api.health(make_service(settings=Settings(transport="local", run_as="hermes_user")))["data"]
+    assert (d["transport"], d["run_as"], d["run_as_user"]) == ("local", "hermes_user", None)
+    d = api.health(make_service())["data"]
+    assert (d["transport"], d["run_as"], d["run_as_user"]) == ("winrm", None, None)
+
 def test_audit_and_refresh(make_service, audit):
     audit.record(actor="dashboard", session="", tool="ad_user_unlock", target="bob", tier="W",
                  decision="confirmed", result="ok", params={})

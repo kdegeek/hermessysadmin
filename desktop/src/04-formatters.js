@@ -152,3 +152,24 @@ function decisionTone(row) {
   return 'red';
 }
 
+
+// How Hermes reaches the domain: "local PowerShell as CORP\svc (network only)" or "via dc01 (WinRM)".
+function connectionLabel(h) {
+  const x = h || {};
+  if (x.transport === 'local') {
+    if (x.run_as === 'account') return `local PowerShell as ${x.run_as_user || 'the configured account'} (network logons)`;
+    return 'local PowerShell as the Hermes user';
+  }
+  return `via ${x.host || 'jump host'} (WinRM)`;
+}
+
+// The identity line under a connection test result.
+function identityLine(d) {
+  const x = d || {};
+  const local = x.local_identity || x.identity || '—';
+  const transport = x.transport === 'local' ? `local PowerShell (run as ${x.run_as === 'account' ? 'account' : 'Hermes user'})` : 'WinRM';
+  const net = x.network_identity
+    ? `network identity ${x.network_identity}${x.dc ? ` at ${x.dc}` : ''}`
+    : `network identity unknown${x.network_identity_error ? ` (${x.network_identity_error})` : ''}`;
+  return `Transport ${transport} · local identity ${local} · ${net}`;
+}

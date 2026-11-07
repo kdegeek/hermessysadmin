@@ -483,6 +483,27 @@ function decisionTone(row) {
   return 'red';
 }
 
+
+// How Hermes reaches the domain: "local PowerShell as CORP\svc (network only)" or "via dc01 (WinRM)".
+function connectionLabel(h) {
+  const x = h || {};
+  if (x.transport === 'local') {
+    if (x.run_as === 'account') return `local PowerShell as ${x.run_as_user || 'the configured account'} (network logons)`;
+    return 'local PowerShell as the Hermes user';
+  }
+  return `via ${x.host || 'jump host'} (WinRM)`;
+}
+
+// The identity line under a connection test result.
+function identityLine(d) {
+  const x = d || {};
+  const local = x.local_identity || x.identity || '—';
+  const transport = x.transport === 'local' ? `local PowerShell (run as ${x.run_as === 'account' ? 'account' : 'Hermes user'})` : 'WinRM';
+  const net = x.network_identity
+    ? `network identity ${x.network_identity}${x.dc ? ` at ${x.dc}` : ''}`
+    : `network identity unknown${x.network_identity_error ? ` (${x.network_identity_error})` : ''}`;
+  return `Transport ${transport} · local identity ${local} · ${net}`;
+}
 // ============================================================================
 // §5 QUERIES, STORES AND HOOKS
 // ============================================================================
@@ -1427,11 +1448,12 @@ function TestResult({ res }) {
         icon: '✓',
         children: jsxs('div', {
           children: [
-            jsxs('div', { children: ['Connected to ', jsx('b', { children: d.hostname || '—' }), ` · ${d.os || 'Windows'} · domain ${d.domain || '—'}`] }),
+            jsxs('div', { children: [d.transport === 'local' ? 'PowerShell on ' : 'Connected to ', jsx('b', { children: d.hostname || '—' }), ` · ${d.os || 'Windows'} · domain ${d.domain || '—'}`] }),
+            jsx('div', { className: 'hs-muted', children: identityLine(d) }),
             jsx('div', { children: [mark('ActiveDirectory'), mark('GroupPolicy'), mark('WindowsServerBackup')].join(' · ') }),
             jsx('div', {
               className: 'hs-muted',
-              children: `Identity ${d.identity || '—'} · ${d.is_domain_controller ? 'domain controller' : 'not a domain controller'} · PowerShell ${d.ps_version || '—'}`,
+              children: `${d.is_domain_controller ? 'Domain controller' : 'Not a domain controller'} · PowerShell ${d.ps_version || '—'}`,
             }),
             list(d.privileged_memberships).length
               ? jsx('div', { className: 'hs-muted', children: `Privileged memberships: ${list(d.privileged_memberships).join(', ')}` })
@@ -1461,7 +1483,7 @@ function SetupCard({ health }) {
       jsx('h2', { children: 'Connect to Active Directory' }),
       jsx('p', {
         className: 'hs-muted',
-        children: 'Hermes reaches your domain through one WinRM jump host, which must be a domain controller. Credentials are stored in Hermes secrets.',
+        children: 'On a domain-joined Windows machine Hermes runs PowerShell locally (transport: local), as the Hermes user or as an account you choose. Elsewhere it reaches the domain through one WinRM jump host, which must be a domain controller. Passwords are stored in Hermes secrets.',
       }),
       jsxs('div', {
         className: 'hs-form',
@@ -1470,13 +1492,15 @@ function SetupCard({ health }) {
           jsxs('ul', {
             className: 'hs-checklist',
             children: [
-              jsx('li', { children: 'Jump host: the domain controller FQDN, e.g. dc01.corp.example.local' }),
+              jsx('li', { children: 'Transport: auto (local on a domain-joined Windows machine, else WinRM), local or winrm' }),
+              jsx('li', { children: 'Local: Run as the Hermes user, or as the account below (its network logons use that account)' }),
+              jsx('li', { children: 'WinRM: jump host, the domain controller FQDN, e.g. dc01.corp.example.local' }),
               jsx('li', { children: 'WinRM port and HTTPS: 5986 with HTTPS, or 5985 (NTLM/Kerberos still encrypts)' }),
               jsx('li', { children: 'Authentication: NTLM or Kerberos' }),
               jsx('li', { children: 'Username, e.g. CORP\\svc-hermes, and its password (kept in Hermes secrets)' }),
             ],
           }),
-          health && health.host ? jsx('div', { className: 'hs-muted hs-small', children: `Configured jump host: ${health.host}` }) : null,
+          health && (health.host || health.transport === 'local') ? jsx('div', { className: 'hs-muted hs-small', children: `Configured: ${connectionLabel(health)}` }) : null,
           jsx('div', {
             className: 'hs-muted hs-small',
             children: 'Settings → Plugins → Sysadmin · Active Directory. Save, then press Test connection.',
@@ -1514,7 +1538,7 @@ function Header({ health, overview }) {
     className: 'hs-head',
     children: [
       jsx('h1', { children: 'Active Directory' }),
-      jsx('span', { className: 'hs-domain', children: `${domain || 'domain'} · via ${health.host || 'jump host'} (WinRM)` }),
+      jsx('span', { className: 'hs-domain', children: `${domain || 'domain'} · ${connectionLabel(health)}` }),
       jsx('span', { className: 'hs-grow' }),
       jsx(Badge, { tone: 'accent', children: `mode: ${health.mode}` }),
       health.escape_enabled ? jsx(Badge, { tone: 'red', children: 'PowerShell escape hatch on' }) : null,

@@ -55,6 +55,8 @@ def health(service: Any) -> dict[str, Any]:
         s = service.settings
         data: dict[str, Any] = {
             "configured": s.configured, "host": s.host, "mode": s.mode, "version": __version__,
+            "transport": s.transport, "run_as": s.run_as if s.transport == "local" else None,
+            "run_as_user": s.username if s.transport == "local" and s.run_as == "account" else None,
             "escape_enabled": s.enable_powershell_escape, "stale_days": s.backup_stale_days,
             "status": "unconfigured", "error": None,
         }
