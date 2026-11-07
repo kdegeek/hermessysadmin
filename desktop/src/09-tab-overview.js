@@ -30,7 +30,7 @@ function fleetGo(filter, extra) {
 function fleetNum(fleet, pick) {
   if (!fleet.res) return '…';
   if (!fleet.res.ok) return '—';
-  return pick(fleet.res.data.summary || {});
+  return pick((fleet.res.data || {}).summary || {});
 }
 
 function patchPct(s) {
@@ -41,9 +41,9 @@ function OverviewKpis({ data, fleet, monitoring, alertsRef }) {
   const k = data.kpis || {};
   const usersTotal = k.users;
   const usersEnabled = k.users_enabled !== undefined && k.users_enabled !== null ? k.users_enabled : usersTotal - (k.users_disabled || 0);
-  const fs = fleet.res && fleet.res.ok ? fleet.res.data.summary || {} : null;
+  const fs = fleet.res && fleet.res.ok ? ((fleet.res.data || {}).summary || {}) : null;
   const pct = patchPct(fs);
-  const alerts = monitoring.res && monitoring.res.ok ? list(monitoring.res.data.open_alerts).length : null;
+  const alerts = monitoring.res && monitoring.res.ok ? list((monitoring.res.data || {}).open_alerts).length : null;
   const backupsTotal = k.backups_total;
   return jsxs('div', {
     className: 'hs-kpis',
@@ -111,7 +111,13 @@ const PATCH_BUCKETS = ['<7', '7-35', '35-90', '>90', 'unknown'];
 const SEEN_BUCKETS = ['<1d', '1-7d', '7-30d', '30-90d', '>90d', 'never'];
 const DISK_DEFAULT_PCT = 10;
 
-function FleetCharts({ fleet }) {
+function diskThreshold(monitoring) {
+  const m = monitoring.res && monitoring.res.ok ? monitoring.res.data || {} : {};
+  const v = (m.settings || {}).alert_disk_free_pct;
+  return typeof v === 'number' && v > 0 ? v : DISK_DEFAULT_PCT;
+}
+
+function FleetCharts({ fleet, diskPct }) {
   return jsx(Card, {
     title: 'Fleet',
     sub: 'workstations and servers',
@@ -131,7 +137,7 @@ function FleetCharts({ fleet }) {
             label: i.name,
             value: i.c_free_pct,
             display: `${i.c_free_pct}% free`,
-            tone: i.c_free_pct < DISK_DEFAULT_PCT ? 'danger' : null,
+            tone: i.c_free_pct < diskPct ? 'danger' : null,
             onClick: () => goTab('fleet', { fleet: { query: i.name } }),
           }));
         return jsxs('div', {
@@ -159,18 +165,46 @@ function IdentityCard({ data }) {
   const total = num0(k.users);
   const locked = num0(k.users_locked);
   const disabled = num0(k.users_disabled);
-  const enabled = Math.max(0, (k.users_enabled !== undefined && k.users_enabled !== null ? k.users_enabled : total - disabled) - locked);
+  const enabled = k.users_enabled !== undefined && k.users_enabled !== null ? k.users_enabled : Math.max(0, total - disabled);
+  const users = (patch) => () => goTab('users', { users: patch });
   const parts = [
-    { label: 'Enabled', value: enabled, onClick: () => goTab('users', { users: { status: 'any' } }) },
-    { label: 'Disabled', value: disabled, onClick: () => goTab('users', { users: { status: 'disabled' } }) },
-    { label: 'Locked out', value: locked, onClick: () => goTab('users', { users: { status: 'locked' } }) },
+    { label: 'Enabled', value: num0(enabled), onClick: users({ status: 'any' }) },
+    { label: 'Disabled', value: disabled, onClick: users({ status: 'disabled' }) },
+    { label: 'Locked out', value: locked, onClick: users({ status: 'locked' }) },
+    { label: 'Stale', value: num0(k.users_stale), onClick: users({ stale: true }) },
+    { label: 'Never expires', value: num0(k.users_never_expire) },
   ];
   return jsx(Card, {
     title: 'Identity',
-    sub: `${num(k.users)} user accounts`,
-    children: total > 0
-      ? jsx(StackedBar, { data: parts, title: 'User accounts by state' })
-      : jsx('div', { className: 'hs-muted', children: 'No user data' }),
+    sub: `${num(k.users)} user accounts · ${num(k.computers_stale)} stale computers`,
+    children: jsxs('div', {
+      className: 'hs-stack',
+      children: [
+        total > 0
+          ? jsx(StackedBar, { data: parts, title: 'Account hygiene (counts overlap)' })
+          : jsx('div', { className: 'hs-muted', children: 'No user data' }),
+        jsx('div', { className: 'hs-muted hs-small', children: 'Account hygiene (counts overlap)' }),
+        jsxs('div', {
+          className: 'hs-kpis',
+          children: [
+            jsx(StatTile, {
+              label: 'Passwords expiring',
+              value: num(k.passwords_expiring),
+              sub: 'soon',
+              tone: k.passwords_expiring ? 'warning' : null,
+              onClick: () => goTab('users', { users: { expiring: true } }),
+            }),
+            jsx(StatTile, {
+              label: 'Stale computers',
+              value: num(k.computers_stale),
+              sub: 'no recent logon',
+              tone: k.computers_stale ? 'warning' : null,
+              onClick: () => goTab('rdp', { rdpView: 'hosts' }),
+            }),
+          ],
+        }),
+      ],
+    }),
   });
 }
 
@@ -308,7 +342,7 @@ function disableMonitoring() {
 }
 
 function MonitoringCard({ monitoring, cardRef }) {
-  const m = monitoring.res && monitoring.res.ok ? monitoring.res.data : null;
+  const m = monitoring.res && monitoring.res.ok ? (monitoring.res.data || {}) : null;
   const alerts = m ? list(m.open_alerts) : [];
   return jsx('div', {
     ref: cardRef,
@@ -452,7 +486,7 @@ function OverviewTab() {
         children: [
           jsx(SectionErrors, { errors: d.errors }),
           jsx(OverviewKpis, { data: d, fleet, monitoring, alertsRef }),
-          jsx(FleetCharts, { fleet }),
+          jsx(FleetCharts, { fleet, diskPct: diskThreshold(monitoring) }),
           jsxs('div', { className: 'hs-grid2 hs-even', children: [jsx(IdentityCard, { data: d }), jsx(SecurityCard, { fleet })] }),
           jsx(InfrastructureCard, { data: d }),
           jsx(TrendsCard, { history }),

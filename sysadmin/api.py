@@ -185,6 +185,8 @@ def overview(service: Any) -> dict[str, Any]:
             "backups_total": bk.get("hosts"),
             "gpos_unlinked": gpo.get("unlinked"),
             "users_enabled": counts.get("users_enabled"),
+            "users_never_expire": counts.get("users_never_expire"),
+            "users_stale": counts.get("users_stale"),
             "oldest_system_state": bk.get("oldest_system_state"),
             "dc_status": data("dc_health").get("status") or "unknown",
         }

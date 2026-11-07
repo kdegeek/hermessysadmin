@@ -109,6 +109,10 @@ def _status(service: Any, args: Mapping[str, Any]) -> Any:
         "deliver": (job or {}).get("deliver"),
         "last_run": state.get("last_run"),
         "open_alerts": state.open(),
+        "settings": {
+            "alert_disk_free_pct": int(getattr(settings, "alert_disk_free_pct", 10)),
+            "alert_patch_age_days": int(getattr(settings, "alert_patch_age_days", 45)),
+        },
     }
     if error:
         out["error"] = error

@@ -250,6 +250,8 @@ function Sparkline({ points, width = 160, height = 36, label, valueText }) {
   });
 }
 
+const STAT_TONE = { danger: 'red', warning: 'yellow', success: 'green' };
+
 function StatTile({ label, value, sub, tone, onClick }) {
-  return jsx('div', { className: 'hs-stat', children: jsx(Kpi, { label, value, sub, tone, onClick }) });
+  return jsx('div', { className: 'hs-stat', children: jsx(Kpi, { label, value, sub, tone: STAT_TONE[tone] || tone, onClick }) });
 }

@@ -389,6 +389,7 @@ def test_disable_and_status(cron):
     st = OPS["monitoring_status"].local(svc(), {})
     assert st["enabled"] is True and st["job"]["id"] == "abc123" and st["interval"] == "every 30m"
     assert st["deliver"] == "origin" and st["last_run"] == "t0" and st["open_alerts"] == []
+    assert st["settings"]["alert_disk_free_pct"] == 10 and "alert_patch_age_days" in st["settings"]
     assert OPS["monitoring_disable"].local(svc(), {})["removed"] is True
     assert cron.calls[-1][0][-2:] == ["remove", "abc123"]
     cron.list_out = "No scheduled jobs"

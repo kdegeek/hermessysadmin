@@ -90,7 +90,7 @@ def test_unknown_op_and_bad_args_are_errors(make_service):
 def test_overview_builds_kpis_and_reports_section_errors(make_service, runner):
     runner.responses.update({
         "ad_domain_overview": {"domain": "corp.example.local", "counts": {
-            "users": 1240, "users_disabled": 88, "users_locked": 3, "passwords_expiring": 17,
+            "users": 1240, "users_enabled": 1152, "users_never_expire": 9, "users_stale": 31, "users_disabled": 88, "users_locked": 3, "passwords_expiring": 17,
             "computers": 410, "computers_stale": 22, "gpos": 41}},
         "ad_dc_health": {"items": [DC], "errors": []},
         "rdp_sessions": {"hosts": [{"host": "SRV1", "lines": [" alice  rdp-tcp#2  2  Active  .  11/4/2026 8:01 AM"]}], "errors": []},
@@ -105,7 +105,26 @@ def test_overview_builds_kpis_and_reports_section_errors(make_service, runner):
     assert out["data"]["errors"]["backups"]["type"] == "ConnectionError"
     assert out["data"]["domain"]["domain"] == "corp.example.local"
     assert out["data"]["backups"] == [] and k["backups_total"] is None
-    assert (k["gpos_unlinked"], k["users_enabled"]) == (1, None)
+    assert (k["gpos_unlinked"], k["users_enabled"]) == (1, 1152)
+    assert (k["users_never_expire"], k["users_stale"]) == (9, 31)
+
+
+def test_overview_maps_backup_list_and_summary(make_service, runner):
+    runner.responses.update({
+        "ad_domain_overview": {"domain": "d", "counts": {}},
+        "ad_dc_health": {"items": [DC], "errors": []},
+        "rdp_sessions": {"hosts": [], "errors": []},
+        "gpo_list": {"items": [{"name": "A", "status": "AllSettingsEnabled", "links": [{"enabled": True}],
+                                "user_version": {"ad": 1, "sysvol": 1}, "computer_version": {"ad": 1, "sysvol": 1}},
+                               {"name": "B", "status": "AllSettingsEnabled", "links": [],
+                                "user_version": {"ad": 1, "sysvol": 1}, "computer_version": {"ad": 1, "sysvol": 1}}]},
+        "backup_status": {"results": [{"host": "SRV1", "installed": True, "policy": True, "versions": 1,
+                                       "last_success": "2026-11-05T00:00:00+00:00", "last_system_state": "2026-11-05T00:00:00+00:00",
+                                       "last_result_hr": 0}], "errors": []},
+    })
+    d = api.overview(make_service())["data"]
+    assert [b["host"] for b in d["backups"]] == ["SRV1"] and set(d["backups"][0]) == {"host", "age_hours", "state"}
+    assert d["kpis"]["gpos_unlinked"] == 1 and d["kpis"]["backups_total"] == 1
 
 
 def test_health_unconfigured_makes_no_remote_call(make_service, runner):

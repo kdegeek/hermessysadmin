@@ -6,12 +6,16 @@ Invoke-Op {
     $d = Get-ADDomain
     $f = Get-ADForest
     $nowUtc = (Get-Date).ToUniversalTime()
-    $users = @(Get-ADUser -Filter * -Properties Enabled, PasswordNeverExpires, 'msDS-UserPasswordExpiryTimeComputed')
+    $users = @(Get-ADUser -Filter * -Properties Enabled, PasswordNeverExpires, LastLogonDate, WhenCreated, 'msDS-UserPasswordExpiryTimeComputed')
     $locked = @(Search-ADAccount -LockedOut -UsersOnly)
     $expiring = @($users | Where-Object {
         $ft = $_.'msDS-UserPasswordExpiryTimeComputed'
         $_.Enabled -and -not $_.PasswordNeverExpires -and $ft -gt 0 -and $ft -lt [long]::MaxValue -and
         [datetime]::FromFileTimeUtc($ft) -gt $nowUtc -and [datetime]::FromFileTimeUtc($ft) -lt $nowUtc.AddDays($ExpiringDays)
+    })
+    $userCutoff = $nowUtc.AddDays(-$StaleDays)
+    $staleUsers = @($users | Where-Object {
+        $_.Enabled -and (($_.LastLogonDate -and $_.LastLogonDate.ToUniversalTime() -lt $userCutoff) -or (-not $_.LastLogonDate -and $_.WhenCreated -and $_.WhenCreated.ToUniversalTime() -lt $userCutoff))
     })
     $computers = @(Get-ADComputer -Filter * -Properties LastLogonTimestamp)
     $cutoff = $nowUtc.AddDays(-$StaleDays).ToFileTimeUtc()
@@ -34,6 +38,8 @@ Invoke-Op {
             users_enabled      = @($users | Where-Object { $_.Enabled }).Count
             users_disabled     = @($users | Where-Object { -not $_.Enabled }).Count
             users_locked       = $locked.Count
+            users_never_expire = @($users | Where-Object { $_.PasswordNeverExpires }).Count
+            users_stale        = $staleUsers.Count
             passwords_expiring = $expiring.Count
             computers          = $computers.Count
             computers_stale    = $stale.Count
