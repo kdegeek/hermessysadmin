@@ -13,7 +13,7 @@ source: In-box ActiveDirectory (Get-ADUser)
 param()
 Invoke-Op {
     $rows = @(Get-ADUser -LDAPFilter '(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))' -Properties ServicePrincipalName, AdminCount, PasswordLastSet |
-        Where-Object { $_.SamAccountName -ne 'krbtgt' } |
+        Where-Object { ($_.SID.Value -notlike '*-502') -and ($_.SamAccountName -notlike 'krbtgt_*') -and ($_.SamAccountName -ne 'krbtgt') } |
         Sort-Object SamAccountName |
         ForEach-Object { @{ sam = $_.SamAccountName; spns = @($_.ServicePrincipalName | Select-Object -First 5 | ForEach-Object { "$_" }); admin_count = [int]$_.AdminCount; password_last_set = (Iso $_.PasswordLastSet) } })
     @{ items = @($rows | Select-Object -First 500); summary = @{ total = $rows.Count; truncated = ($rows.Count -gt 500) } }

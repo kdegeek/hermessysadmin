@@ -18,10 +18,25 @@ Invoke-Op {
         if ($null -ne $v -and [int64]::TryParse("$v", [ref]$n) -and $n -gt 0 -and $n -lt 2650467743999999999) { return [datetime]::FromFileTimeUtc($n) }
         return $null
     }
-    $all = @(Get-ADComputer -LDAPFilter '(&(objectClass=computer)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(!(userAccountControl:1.2.840.113556.1.4.803:=8192)))' -Properties 'msLAPS-PasswordExpirationTime', 'ms-Mcs-AdmPwdExpirationTime' |
+    # Requesting an attribute missing from the schema makes the computer query throw, so ask the schema first.
+    $schemaNc = (Get-ADRootDSE).schemaNamingContext
+    $inSchema = {
+        param($attr)
+        return (@(Get-ADObject -SearchBase $schemaNc -LDAPFilter "(lDAPDisplayName=$attr)").Count -gt 0)
+    }
+    $hasWin = & $inSchema 'msLAPS-PasswordExpirationTime'
+    $hasLegacy = & $inSchema 'ms-Mcs-AdmPwdExpirationTime'
+    $props = @()
+    if ($hasWin) { $props += 'msLAPS-PasswordExpirationTime' }
+    if ($hasLegacy) { $props += 'ms-Mcs-AdmPwdExpirationTime' }
+    $ldap = '(&(objectClass=computer)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(!(userAccountControl:1.2.840.113556.1.4.803:=8192)))'
+    $computers = if ($props.Count -gt 0) { Get-ADComputer -LDAPFilter $ldap -Properties $props } else { Get-ADComputer -LDAPFilter $ldap }
+    $all = @($computers |
         ForEach-Object {
-            $w = & $toDate $_.'msLAPS-PasswordExpirationTime'
-            $l = & $toDate $_.'ms-Mcs-AdmPwdExpirationTime'
+            $w = $null
+            $l = $null
+            if ($hasWin) { $w = & $toDate $_.'msLAPS-PasswordExpirationTime' }
+            if ($hasLegacy) { $l = & $toDate $_.'ms-Mcs-AdmPwdExpirationTime' }
             $exp = $null
             if ($w) { $exp = $w } elseif ($l) { $exp = $l }
             @{ name = $_.Name; windows_laps = [bool]$w; legacy_laps = [bool]$l; expires = (Iso $exp) }
@@ -34,6 +49,7 @@ Invoke-Op {
         summary = @{
             total = $all.Count; windows_laps = @($all | Where-Object { $_.windows_laps }).Count
             legacy_laps = @($all | Where-Object { $_.legacy_laps }).Count; no_laps = $none.Count; truncated = ($rows.Count -gt 500)
+            schema = @{ windows_laps = [bool]$hasWin; legacy_laps = [bool]$hasLegacy }
         }
     }
 }

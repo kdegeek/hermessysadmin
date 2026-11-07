@@ -8,8 +8,8 @@ BATCH_9A = {"ad.stale_computers", "ad.stale_users", "ad.never_expiring_passwords
             "ad.empty_groups", "ad.admincount_orphans", "ad.krbtgt_age", "ad.laps_coverage",
             "ad.replication_summary", "ad.dfs_health", "ad.last_backup", "ad.duplicate_spn", "ad.trusts",
             "ad.password_policies", "ad.kerberos_accounts", "ad.fsmo_available"}
-BANNED = ('ms-Mcs-AdmPwd"', 'msLAPS-Password"', "msLAPS-EncryptedPassword", "unicodePwd",
-          "supplementalCredentials", "PingCastle")
+BANNED = re.compile(r"ms-Mcs-AdmPwd(?!ExpirationTime)|msLAPS-Password(?!ExpirationTime)|msLAPS-EncryptedPassword"
+                    r"|unicodePwd|supplementalCredentials|PingCastle")
 
 
 def ids():
@@ -38,7 +38,7 @@ def test_every_gallery_entry_uses_the_module_loader():
 def test_no_secret_attributes_or_pingcastle():
     for i in BATCH_9A:
         text = source(i)
-        assert not [b for b in BANNED if b in text], i
+        assert not BANNED.search(text), i
 
 
 def test_laps_coverage_reads_only_expiration_attributes():
@@ -78,3 +78,19 @@ def test_replication_summary_avoids_cross_dc_rpc():
     text = source("ad.replication_summary")
     assert "-Target $me" in text and "Invoke-HermesCatalogFanout" in text
     assert "/showrepl $env:COMPUTERNAME" in text and "/showrepl *" not in text
+
+
+def test_laps_coverage_checks_schema_before_requesting_attributes():
+    text = source("ad.laps_coverage").split("#>", 1)[1]
+    assert text.index("schemaNamingContext") < text.index("Get-ADComputer")
+    assert "lDAPDisplayName" in text and "schema = @{" in text
+
+
+def test_stale_entries_require_creation_before_cutoff_and_min_14():
+    for i in ("ad.stale_users", "ad.stale_computers"):
+        assert "WhenCreated -lt $cut" in source(i) and "minimum: 14" in source(i), i
+
+
+def test_admincount_rows_flag_incomplete_and_errors_use_host():
+    text = source("ad.admincount_orphans")
+    assert "incomplete" in text and "group = " not in text
