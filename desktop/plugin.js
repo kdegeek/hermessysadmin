@@ -2262,7 +2262,7 @@ function verb(n, one, many) {
 
 // One finding per problem the overview can see. Each carries where to look in the UI (go) and a
 // prompt that hands the problem to the agent (ask). Severity: danger (act now) or warning (look soon).
-function attentionItems({ kpis, fleet, dcs, alerts, diskPct }) {
+function attentionItems({ kpis, fleet, dcs, alerts, diskPct, backups }) {
   const k = kpis || {};
   const s = fleet || null;
   const out = [];
@@ -2285,8 +2285,11 @@ function attentionItems({ kpis, fleet, dcs, alerts, diskPct }) {
       `Monitoring has ${plainCount(n(alerts), 'open alert')}. Use the fleet-health-check skill to triage them and tell me what needs attention first. ${READ_ONLY_ASK}`);
   }
   if (n(k.backups_bad)) {
-    add('backups', 'danger', `${plainCount(n(k.backups_bad), 'server')} without a recent backup`, `${n(k.backups_ok)} of ${n(k.backups_total)} backups OK`, { tab: 'backups' },
-      `${plainCount(n(k.backups_bad), 'server')} ${verb(n(k.backups_bad), 'has', 'have')} no recent Windows Server Backup. Use the backup-recovery-guide skill to check backup status and versions and explain the risk. ${READ_ONLY_ASK}`);
+    // Name the hosts when the overview has them, so the agent does not have to ask which servers.
+    const badHosts = (Array.isArray(backups) ? backups : []).filter((b) => b && b.state === 'bad' && b.host).map((b) => b.host);
+    const which = badHosts.length ? ` (${badHosts.join(', ')})` : '';
+    add('backups', 'danger', `${plainCount(n(k.backups_bad), 'server')} without a recent backup`, badHosts.length ? badHosts.join(', ') : `${n(k.backups_ok)} of ${n(k.backups_total)} backups OK`, { tab: 'backups' },
+      `${plainCount(n(k.backups_bad), 'server')}${which} ${verb(n(k.backups_bad), 'has', 'have')} no recent Windows Server Backup. Use the backup-recovery-guide skill to check backup status and versions and explain the risk. ${READ_ONLY_ASK}`);
   }
   if (s) {
     const online = n(s.online);
@@ -2440,7 +2443,7 @@ function AttentionCard({ data, fleet, monitoring, alertsRef }) {
     summary.low_disk_count = list(fleetData.items).filter((i) => i.online && typeof i.c_free_pct === 'number' && i.c_free_pct < diskPct).length;
   }
   const alerts = monitoring.res && monitoring.res.ok ? list((monitoring.res.data || {}).open_alerts).length : 0;
-  const items = attentionItems({ kpis: data.kpis, fleet: summary, dcs: data.dcs, alerts, diskPct });
+  const items = attentionItems({ kpis: data.kpis, fleet: summary, dcs: data.dcs, alerts, diskPct, backups: data.backups });
   const score = healthScore(items);
   const danger = items.filter((i) => i.severity === 'danger').length;
   const pendingFleet = !fleet.res;

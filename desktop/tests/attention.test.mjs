@@ -51,3 +51,11 @@ test('titles and prompts agree with a count of one', () => {
   assert.match(items.find((i) => i.id === 'locked').ask, /^1 user is locked out\./);
   assert.match(items.find((i) => i.id === 'backups').ask, /^1 server has no recent/);
 });
+
+test('backup finding names the servers so the agent does not have to ask', () => {
+  const items = a.attentionItems({ kpis: { backups_bad: 2, backups_ok: 0, backups_total: 2 },
+    backups: [{ host: 'DC01', state: 'bad' }, { host: 'DC02', state: 'bad' }, { host: 'FS01', state: 'ok' }] });
+  const b = items.find((i) => i.id === 'backups');
+  assert.equal(b.detail, 'DC01, DC02');
+  assert.match(b.ask, /2 servers \(DC01, DC02\) have no recent/);
+});
