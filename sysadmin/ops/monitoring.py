@@ -16,6 +16,7 @@ from ..registry import Op, Param, register
 TOOLSET = "monitoring"
 JOB_NAME = "hermes-sysadmin-watch"
 LAUNCHER = "hermes_sysadmin_watch.py"
+STATE_LAUNCHER = "hermes_sysadmin_watch_state.py"  # agent mode: prints the open-alert set, not the delta
 AGENT_PROMPT = (
     "hermes-sysadmin monitoring found changes. Use the fleet-health-check skill to triage them "
     "and summarize what needs attention."
@@ -58,10 +59,10 @@ def _fail(action: str, proc: Any) -> SysadminError:
     return SysadminError(f"hermes cron {action} failed: {_ANSI.sub('', detail)[:500]}")
 
 
-def _launcher_source() -> str:
-    target = str(PLUGIN_ROOT / "scripts" / "watch.py")
-    lit = repr(target) if '"' in target or "'" in target else f'r"{target}"'
-    return f"import runpy, sys; sys.argv=[{lit}]; runpy.run_path({lit}, run_name=\"__main__\")\n"
+def _launcher_source(*flags: str) -> str:
+    lit = repr(str(PLUGIN_ROOT / "scripts" / "watch.py"))
+    argv = ", ".join([lit, *map(repr, flags)])
+    return f"import runpy, sys; sys.argv=[{argv}]; runpy.run_path({lit}, run_name=\"__main__\")\n"
 
 
 def parse_jobs(text: str) -> list[dict[str, str]]:
@@ -78,18 +79,26 @@ def parse_jobs(text: str) -> list[dict[str, str]]:
     return jobs
 
 
-def _find_job() -> dict[str, str] | None:
+def _find_jobs() -> list[dict[str, str]]:
+    """Every job named JOB_NAME (Hermes allows duplicate names)."""
     proc = _hermes("list", "--all")
     if proc.returncode != 0:
         raise _fail("list", proc)
-    return next((j for j in parse_jobs(proc.stdout or "") if j.get("name") == JOB_NAME), None)
+    return [j for j in parse_jobs(proc.stdout or "") if j.get("name") == JOB_NAME]
+
+
+def _remove_jobs(jobs: list[dict[str, str]]) -> None:
+    for job in jobs:
+        proc = _hermes("remove", job["id"])
+        if proc.returncode != 0:
+            raise _fail("remove", proc)
 
 
 def _status(service: Any, args: Mapping[str, Any]) -> Any:
     settings = service.settings
     error = None
     try:
-        job = _find_job()
+        job = next(iter(_find_jobs()), None)
     except Exception as exc:
         job, error = None, str(getattr(exc, "message", exc))
     state = monitor.get_state()
@@ -109,12 +118,11 @@ def _status(service: Any, args: Mapping[str, Any]) -> Any:
 def _create_args(args: Mapping[str, Any], interval: str) -> list[str]:
     """Arguments after `hermes cron create`: schedule, then flags."""
     mode = args.get("mode") or "watchdog"
-    cmd = [f"every {interval}", "--name", JOB_NAME]
+    schedule = f"every {interval}"
     if mode == "agent":
-        cmd += ["--monitor-script", LAUNCHER, "--deliver", args["deliver"], AGENT_PROMPT]
-    else:
-        cmd += ["--script", LAUNCHER, "--no-agent", "--deliver", args["deliver"]]
-    return cmd
+        # The optional positional prompt must directly follow the schedule or argparse rejects it.
+        return [schedule, AGENT_PROMPT, "--name", JOB_NAME, "--monitor-script", STATE_LAUNCHER, "--deliver", args["deliver"]]
+    return [schedule, "--name", JOB_NAME, "--script", LAUNCHER, "--no-agent", "--deliver", args["deliver"]]
 
 
 def _check(args: Mapping[str, Any]) -> None:
@@ -128,14 +136,13 @@ def _enable(service: Any, args: Mapping[str, Any]) -> Any:
     scripts = _hermes_home() / "scripts"
     scripts.mkdir(parents=True, exist_ok=True)
     (scripts / LAUNCHER).write_text(_launcher_source(), encoding="utf-8")
-    existing = _find_job()
-    if existing:
-        removed = _hermes("remove", existing["id"])
-        if removed.returncode != 0:
-            raise _fail("remove", removed)
+    (scripts / STATE_LAUNCHER).write_text(_launcher_source("--state"), encoding="utf-8")
+    old = _find_jobs()  # ids captured before create so the new job is never removed
     proc = _hermes("create", *_create_args(args, interval))
     if proc.returncode != 0:
-        raise _fail("create", proc)
+        err = _fail("create", proc)
+        raise SysadminError(err.message + (" The existing monitoring job was left untouched." if old else ""))
+    _remove_jobs(old)
     return {
         "enabled": True, "job": JOB_NAME, "interval": interval, "deliver": args["deliver"],
         "mode": args.get("mode") or "watchdog", "stdout": _ANSI.sub("", proc.stdout or "").strip()[:500],
@@ -149,7 +156,7 @@ def _enable_preview(service: Any, args: Mapping[str, Any]) -> Any:
     return {
         "summary": f"Create Hermes cron job {JOB_NAME} every {interval} delivering to {args['deliver']}",
         "changes": [
-            f"write {_hermes_home() / 'scripts' / LAUNCHER}",
+            f"write {_hermes_home() / 'scripts' / (STATE_LAUNCHER if args.get('mode') == 'agent' else LAUNCHER)}",
             " ".join(f'"{a}"' if " " in a else a for a in ["hermes", "cron", "create", *_create_args(args, interval)]),
         ],
         "current": current,
@@ -157,13 +164,11 @@ def _enable_preview(service: Any, args: Mapping[str, Any]) -> Any:
 
 
 def _disable(service: Any, args: Mapping[str, Any]) -> Any:
-    job = _find_job()
-    if job is None:
+    jobs = _find_jobs()
+    if not jobs:
         return {"enabled": False, "job": None, "removed": False}
-    proc = _hermes("remove", job["id"])
-    if proc.returncode != 0:
-        raise _fail("remove", proc)
-    return {"enabled": False, "job": JOB_NAME, "removed": True, "stdout": _ANSI.sub("", proc.stdout or "").strip()[:500]}
+    _remove_jobs(jobs)
+    return {"enabled": False, "job": JOB_NAME, "removed": True, "count": len(jobs)}
 
 
 def _disable_preview(service: Any, args: Mapping[str, Any]) -> Any:

@@ -168,7 +168,7 @@ config_schema:
     type: int
     default: 7
     label: Alert when offline for (days)
-    description: A computer that was online and has not logged on for this long raises an offline alert (1-365).
+    description: Alert when a computer that was online goes offline and has not logged on for this many days (1-365).
   alert_patch_age_days:
     type: int
     default: 45

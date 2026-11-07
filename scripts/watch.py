@@ -27,8 +27,9 @@ def _load_hermes_env() -> None:
         pass
 
 
-def main() -> int:
-    logging.disable(logging.CRITICAL)  # stdout is delivered verbatim; log noise would become an alert
+def main(argv: list[str] | None = None) -> int:
+    """--state prints the currently open alerts instead of the delta (agent mode: output change wakes the agent)."""
+    state_mode = "--state" in (sys.argv[1:] if argv is None else argv)
     try:
         _load_hermes_env()
         from sysadmin import monitor, runtime
@@ -40,6 +41,8 @@ def main() -> int:
         service = runtime.build_service(settings)
         try:
             text = monitor.run_once(service, settings)
+            if state_mode:
+                text = monitor.render_open(monitor.get_state().open())
         finally:
             try:
                 service.runner.close()
@@ -57,4 +60,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    logging.disable(logging.CRITICAL)  # stdout is delivered verbatim; log noise would become an alert
     sys.exit(main())

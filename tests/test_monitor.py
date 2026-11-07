@@ -303,19 +303,63 @@ def test_enable_builds_command(cron, tmp_path):
     compile(text, "launcher", "exec")
 
 
-def test_enable_agent_mode(cron):
+def test_enable_agent_mode(cron, tmp_path):
     OPS["monitoring_enable"].local(svc(), {"deliver": "telegram", "mode": "agent"})
     argv = cron.calls[-1][0]
     assert "--monitor-script" in argv and "--no-agent" not in argv and "--script" not in argv
-    assert argv[-1].startswith("hermes-sysadmin monitoring found changes")
+    assert argv[argv.index("create") + 2].startswith("hermes-sysadmin monitoring found changes")
+    assert argv[argv.index("--monitor-script") + 1] == "hermes_sysadmin_watch_state.py"
+    state_launcher = (tmp_path / "scripts" / "hermes_sysadmin_watch_state.py").read_text(encoding="utf-8")
+    assert "'--state'" in state_launcher and "--state" not in (tmp_path / "scripts" / "hermes_sysadmin_watch.py").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("mode", ["watchdog", "agent"])
+def test_create_argv_parses_with_hermes_cli(mode):
+    import sys
+    root = "/Users/kdegeek/.hermes/hermes-agent"
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    try:
+        import argparse
+        from hermes_cli.subcommands.cron import build_cron_parser
+    except Exception:
+        argv = monitoring._create_args({"deliver": "origin", "mode": mode}, "30m")
+        flags = [i for i, a in enumerate(argv) if a.startswith("--")]
+        assert flags[0] >= 1 and all(not a.startswith("--") for a in argv[:flags[0]]) and argv[flags[0]:][0] == "--name"
+        assert mode == "watchdog" or flags[0] == 2
+        return
+    parser = argparse.ArgumentParser()
+    build_cron_parser(parser.add_subparsers(dest="cmd"), cmd_cron=lambda a: 0)
+    ns = parser.parse_args(["cron", "create", *monitoring._create_args({"deliver": "origin", "mode": mode}, "30m")])
+    assert ns.schedule == "every 30m" and ns.name == "hermes-sysadmin-watch" and ns.deliver == "origin"
+    if mode == "agent":
+        assert ns.prompt == monitoring.AGENT_PROMPT and ns.monitor_script == "hermes_sysadmin_watch_state.py" and not ns.no_agent
+    else:
+        assert ns.prompt is None and ns.script == "hermes_sysadmin_watch.py" and ns.no_agent
 
 
 def test_enable_replaces_existing_job(cron):
     cron.list_out = LIST_OUT
     OPS["monitoring_enable"].local(svc(), {"deliver": "origin"})
     subs = [c[0][c[0].index("cron") + 1] for c in cron.calls]
-    assert subs == ["list", "remove", "create"]
-    assert cron.calls[1][0][-1] == "abc123"
+    assert subs == ["list", "create", "remove"]  # create first; the old id is removed only after it succeeded
+    assert cron.calls[2][0][-1] == "abc123"
+
+
+def test_failed_create_leaves_old_job(cron):
+    from sysadmin.errors import SysadminError
+    cron.list_out = LIST_OUT
+    cron.fail = "create"
+    with pytest.raises(SysadminError, match="left untouched"):
+        OPS["monitoring_enable"].local(svc(), {"deliver": "origin"})
+    assert not any(c[0][c[0].index("cron") + 1] == "remove" for c in cron.calls)
+
+
+def test_disable_removes_every_duplicate(cron):
+    cron.list_out = LIST_OUT + "\n  dup777 [active]\n    Name:      hermes-sysadmin-watch\n"
+    assert OPS["monitoring_disable"].local(svc(), {})["count"] == 2
+    removed = [c[0][-1] for c in cron.calls if c[0][c[0].index("cron") + 1] == "remove"]
+    assert removed == ["abc123", "dup777"]
 
 
 def test_enable_failure_and_bad_target(cron):
@@ -397,3 +441,70 @@ def test_monitoring_posts_use_the_confirm_contract(cron):
     # read-only mode blocks the writes
     ro = Service(Settings(host="dc", username="u", password="p", mode="read-only"), FakeRunner(), audit)
     assert api.monitoring_enable(ro, {**body, "confirm": True})["error"]["type"] == "PolicyBlocked"
+
+
+def test_privileged_baseline_written_only_after_diff(stores, monkeypatch):
+    st, _ = stores
+    state = {"da": ["admin"]}
+    svc_ = FakeService({
+        "fleet_inventory": ok({"items": []}),
+        "ad_group_get": lambda a: ok({"members": [{"sam": m} for m in (state["da"] if a["identity"] == "Domain Admins" else [])]}),
+    })
+    monitor.run_once(svc_, S, now=NOW)  # baseline
+    state["da"] = ["admin", "eve"]
+    real = st.diff
+    monkeypatch.setattr(st, "diff", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("db locked")))
+    assert monitor.run_once(svc_, S, now=NOW) == ""
+    monkeypatch.setattr(st, "diff", real)
+    assert "eve added to Domain Admins" in monitor.run_once(svc_, S, now=NOW)
+
+
+def test_inventory_requests_every_computer_kind(stores):
+    svc_ = FakeService({"fleet_inventory": ok({"items": []})})
+    monitor.run_once(svc_, S, now=NOW)
+    assert ("fleet_inventory", {"refresh": True, "kind": "any"}, "monitor") in svc_.calls
+
+
+def test_dc_warn_only_alerts_on_replication_and_backup_errors():
+    inputs = {
+        "dc_health": {"items": [
+            {"name": "DC1", "status": "warn", "reachable": True, "services": {"DNS": "Stopped"}, "replication": {"failures": 2}},
+            {"name": "DC2", "status": "warn", "reachable": True, "time_skew_seconds": 90}]},
+        "backups": {"items": [], "errors": [{"host": "srv9", "message": "timed out"}]},
+    }
+    got = monitor.evaluate(inputs, S, now=NOW)
+    assert [(f.rule, f.host, f.bucket) for f in got] == [("backup_stale", "srv9", "unreachable"), ("dc_health", "DC1", "replication")]
+    assert got[0].message == "unreachable: timed out"
+
+
+def test_state_output_is_stable_across_runs(stores):
+    st, _ = stores
+    svc_ = FakeService({"fleet_inventory": lambda a: ok({"items": [host("B", c_free_pct=3, c_free_gb=n[0]), host("A", defender_rt=False)]})})
+    n = [5]
+    monitor.run_once(svc_, S, now=NOW)
+    first = monitor.render_open(st.open())
+    n[0] = 4  # free GB fluctuates, the alert set does not
+    monitor.run_once(svc_, S, now=NOW + timedelta(minutes=30))
+    assert monitor.render_open(st.open()) == first
+    lines = first.splitlines()
+    assert lines[0] == "**hermes-sysadmin**: 2 open alerts" and lines[1:] == sorted(lines[1:])
+    assert monitor.render_open([]) == ""
+
+
+def test_watch_state_flag(monkeypatch, capsys, stores):
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location("watch_state_under_test", Path(__file__).resolve().parent.parent / "scripts" / "watch.py")
+    watch = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(watch)
+    from sysadmin import config, runtime
+    st, _ = stores
+    st.diff([monitor.Finding("defender_off", "A", "Defender real-time protection is off")], now=NOW)
+    configured = Settings(host="dc", username="u", password="p")
+    monkeypatch.setattr(config, "load_settings", lambda: configured)
+    monkeypatch.setattr(runtime, "build_service", lambda s: SimpleNamespace(runner=SimpleNamespace(close=lambda: None)))
+    monkeypatch.setattr(monitor, "run_once", lambda service, settings: "delta text")
+    assert watch.main(["--state"]) == 0
+    out = capsys.readouterr().out
+    assert "1 open alert" in out and "delta text" not in out
+    assert watch.main([]) == 0 and capsys.readouterr().out.strip() == "delta text"

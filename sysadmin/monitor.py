@@ -98,6 +98,8 @@ def _dc_problems(dc: Mapping[str, Any]) -> list[tuple[str, str]]:
     repl = dc.get("replication") or {}
     if _num(repl.get("failures")):
         problems.append(("replication", f"{int(repl['failures'])} replication failure(s)"))
+    elif repl.get("error"):
+        problems.append(("replication", f"replication check failed: {str(repl['error'])[:120]}"))
     return problems
 
 
@@ -133,12 +135,24 @@ def evaluate(inputs: Mapping[str, Any], settings: Any, *, now: datetime) -> list
         host = str(bk.get("host") or "")
         if host and (bk.get("stale") is True or bk.get("state") == "bad"):
             out.append(Finding("backup_stale", host, f"backup stale/failed: {bk.get('message') or 'see backup_status'}"))
+    errors = inputs.get("backups")
+    for err in (errors.get("errors") if isinstance(errors, Mapping) else None) or []:
+        host = str(err.get("host") or "") if isinstance(err, Mapping) else ""
+        if host:
+            out.append(Finding("backup_stale", host, f"unreachable: {str(err.get('message') or 'no answer')[:160]}", "unreachable"))
 
     for dc in _items(inputs.get("dc_health")):
         name = str(dc.get("name") or dc.get("hostname") or "")
-        if name and dc.get("status") == "bad":
-            for check, detail in _dc_problems(dc) or [("status", "reported bad")]:
-                out.append(Finding("dc_health", name, f"{check}: {detail}", check))
+        status = dc.get("status")
+        if not name or status not in ("bad", "warn"):
+            continue
+        problems = _dc_problems(dc)
+        if status == "warn":  # warnings are silent except replication
+            problems = [p for p in problems if p[0] == "replication"]
+        elif not problems:
+            problems = [("status", "reported bad")]
+        for check, detail in problems:
+            out.append(Finding("dc_health", name, f"{check}: {detail}", check))
     return out
 
 
@@ -168,7 +182,7 @@ class AlertState:
                 "SELECT fingerprint, rule, host, message, first_seen FROM alerts WHERE active = 1")}
             for fp, f in seen.items():
                 if fp in active:
-                    self._conn.execute("UPDATE alerts SET last_seen = ?, message = ? WHERE fingerprint = ?", (stamp, f.message, fp))
+                    self._conn.execute("UPDATE alerts SET last_seen = ? WHERE fingerprint = ?", (stamp, fp))
                 else:
                     new.append(f)
                     self._conn.execute(
@@ -215,6 +229,7 @@ def get_state() -> AlertState:
                 from plugins.plugin_storage import plugin_db
                 _state = AlertState(plugin_db(PLUGIN_ID, "monitor.db"))
             except ImportError:
+                log.warning("hermes-sysadmin monitor: plugin_storage unavailable; alert state is in memory only")
                 _state = AlertState(sqlite3.connect(":memory:", check_same_thread=False))
         return _state
 
@@ -236,6 +251,15 @@ def render(new: list[Finding], resolved: list[dict[str, Any]]) -> str:
     if len(resolved) > MAX_LINES:
         lines.append(f"- … and {len(resolved) - MAX_LINES} more resolved")
     return "\n".join(lines)
+
+
+def render_open(alerts: list[dict[str, Any]]) -> str:
+    """Stable rendering of the open alerts (no timestamps), for agent mode where a change of output wakes the agent."""
+    if not alerts:
+        return ""
+    lines = sorted(f"- {a['host']}: {a['message']}" for a in alerts)
+    shown = lines[:MAX_LINES] + ([f"- … and {len(lines) - MAX_LINES} more"] if len(lines) > MAX_LINES else [])
+    return "\n".join([f"**hermes-sysadmin**: {len(lines)} open alert{'s' if len(lines) != 1 else ''}", *shown])
 
 
 def _call(service: Any, op: str, args: dict[str, Any]) -> Any:
@@ -272,9 +296,11 @@ def _scope(inputs: Mapping[str, Any]) -> set[str]:
     return {rule for key, rules in _SOURCE_RULES.items() if key in inputs for rule in rules}
 
 
-def _gather(service: Any, settings: Any, state: AlertState) -> dict[str, Any]:
+def _gather(service: Any, settings: Any, state: AlertState) -> tuple[dict[str, Any], str | None]:
+    """Inputs for evaluate plus the privileged baseline to store once the run has succeeded."""
     inputs: dict[str, Any] = {}
-    inv = _call(service, "fleet_inventory", {"refresh": True})
+    baseline: str | None = None
+    inv = _call(service, "fleet_inventory", {"refresh": True, "kind": "any"})
     if isinstance(inv, Mapping):
         inputs["fleet"] = inv
         try:
@@ -306,12 +332,12 @@ def _gather(service: Any, settings: Any, state: AlertState) -> dict[str, Any]:
             inputs["previous_privileged"] = previous if isinstance(previous, dict) else None
             merged = dict(previous) if isinstance(previous, dict) else {}
             merged.update(current)  # groups that failed to read keep their old baseline
-            state.put("privileged", json.dumps(merged))
+            baseline = json.dumps(merged)
     for key, op in (("gpo_health", "gpo_health"), ("backups", "backup_status"), ("dc_health", "ad_dc_health")):
         data = _call(service, op, {})
         if data is not None:
             inputs[key] = data
-    return inputs
+    return inputs, baseline
 
 
 def run_once(service: Any, settings: Any, *, now: datetime | None = None) -> str:
@@ -319,9 +345,11 @@ def run_once(service: Any, settings: Any, *, now: datetime | None = None) -> str
     try:
         now = now or datetime.now(timezone.utc)
         state = get_state()
-        inputs = _gather(service, settings, state)
+        inputs, baseline = _gather(service, settings, state)
         findings = evaluate(inputs, settings, now=now)
         new, resolved = state.diff(findings, now=now, scope=_scope(inputs))
+        if baseline is not None:  # only after diff succeeded, or a failed run would swallow the addition
+            state.put("privileged", baseline)
         state.put("last_run", now.isoformat())
         return render(new, resolved)
     except Exception:
