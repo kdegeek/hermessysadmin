@@ -182,6 +182,7 @@ Every tile and chart segment is clickable and opens the matching filtered Fleet,
   4. When `signer` is set, `Get-AuthenticodeSignature` on every `.psd1`/`.psm1`/`.ps1` must be `Valid` and from that signer. Unsigned modules rely on the hash pin plus code review when the lock is bumped.
   5. Install the `requires` modules first, the same way. Record what was installed in `installed.json` beside the modules.
 - **No global installs.** Nothing goes into `Program Files`, the machine-level `PSModulePath` is never changed, and nothing runs `Install-Module` or `Update-Module`. `Use-HermesModule` prepends the plugin module root to `$env:PSModulePath` for its own runspace only, so pinned dependencies resolve. It then runs `Import-Module -Name <n> -RequiredVersion <v>`.
+- **Status in v0.2.** The pinned-module mechanism ships for future modules that run locally on the jump host. The lock is empty in v0.2 (see §5.1), so `catalog_module_install` is disabled until a module is pinned.
 - **Internet.** Only the install step needs the internet. An admin can instead place the `.nupkg` in the staging folder (an offline drop). Entries never use module features that download things (for example CDN-backed HTML output).
 - **`catalog_module_status`** (R) lists each lock entry and whether it's installed and verified.
 
@@ -217,18 +218,14 @@ Categories are fixed: Endpoint health, Security posture, Patching, Users & sessi
 | DNS & DHCP | zones & aging/scavenging; stale DNS records; DHCP scope utilization; leases for host |
 | Certificates | expiring machine certificates (fleet); ADCS template audit (Gallery, read-only) |
 | Event logs | failed logons (4625) summary; account lockouts (4740) with source; RDP logons (4624 type 10); service install events (7045); event search by ID/time |
-| File permissions | NTFS access, effective access, orphaned SIDs, inheritance (Gallery NTFSSecurity, see §5.1) |
+| File permissions | NTFS access, orphaned SIDs, inheritance (in-box `Get-Acl` run locally on the file server through the fan-out; see §5.1) |
 | Maintenance | gpupdate (W); restart service (W); flush DNS (W); clear temp folders (W, plan shows sizes); restart computer (H, plan) |
 
 ### 5.1 Gallery modules (pinned)
 
-Facts come from the PSGallery API and package inspection on 2026-11-06. Signatures and remote behaviour are checked live (read-only) before an entry ships.
+**No Gallery modules ship in v0.2.** The jump-host session is a non-delegating NTLM WinRM logon, so a Gallery module that runs on the jump host cannot authenticate to other machines (the double hop). NTFSSecurity was the last candidate: run against UNC paths it would need SMB to other file servers. The `files.*` entries are therefore implemented in-box: each takes a `Server` and a local `Path` and runs `Get-Acl` / `Get-ChildItem` on that server through the credentialed fan-out. `files.ntfs_effective_access` is dropped, because effective access cannot be computed reliably in-box without `Add-Type`. `catalog/modules.lock.json` is empty (`{"modules": []}`); the install/status machinery stays for future modules that run locally on the jump host.
 
-| Module@version (lock) | License | Signed by | Wrapped entries (all R unless marked) |
-|---|---|---|---|
-| NTFSSecurity@4.2.6 | MIT | unsigned (hash pin + review) | `files.ntfs_access` (path), `files.ntfs_effective_access` (path, account), `files.ntfs_orphaned_sids` (path), `files.ntfs_inheritance` (path). File servers are reached with the fan-out, and the module runs on the DC against UNC paths |
-
-Evaluated and **not** shipped in v0.2: Testimo (slow, may reach PSGallery on import); Locksmith (MIT plus Commons Clause; no ADCS confirmed in this domain); PSPKI (ADCS only; would exclude `Get-RequestArchivedKey`); Carbon (duplicates in-box cmdlets); BurntToast (archived, invisible from WinRM); kbupdate (needs internet, stale); DSInternals and PSWinDocumentation.AD (credential-dumping features, **never**); AdmPwd.PS and `Get-LapsADPassword` (return passwords, so excluded); PSWindowsUpdate (its -ComputerName mode needs DCOM plus delegated credentials from the jump host, which a non-delegating WinRM session cannot provide; in-box Windows Update Agent COM entries cover the same data); ADEssentials@1.0.7 (with PSEventViewer, PSWriteHTML, PSSharedGoods) and GPOZaurr@1.1.13 (their functions query other DCs/servers directly, which a non-delegating jump-host session cannot authenticate; the entries are implemented in-box with credentialed fan-out instead).
+Evaluated and **not** shipped in v0.2: NTFSSecurity@4.2.6 (MIT, unsigned; double hop against file servers, see above); Testimo (slow, may reach PSGallery on import); Locksmith (MIT plus Commons Clause; no ADCS confirmed in this domain); PSPKI (ADCS only; would exclude `Get-RequestArchivedKey`); Carbon (duplicates in-box cmdlets); BurntToast (archived, invisible from WinRM); kbupdate (needs internet, stale); DSInternals and PSWinDocumentation.AD (credential-dumping features, **never**); AdmPwd.PS and `Get-LapsADPassword` (return passwords, so excluded); PSWindowsUpdate (its -ComputerName mode needs DCOM plus delegated credentials from the jump host, which a non-delegating WinRM session cannot provide; in-box Windows Update Agent COM entries cover the same data); ADEssentials@1.0.7 (with PSEventViewer, PSWriteHTML, PSSharedGoods) and GPOZaurr@1.1.13 (their functions query other DCs/servers directly, which a non-delegating jump-host session cannot authenticate; the entries are implemented in-box with credentialed fan-out instead).
 
 ## 6. Error handling
 

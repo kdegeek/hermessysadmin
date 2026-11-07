@@ -43,4 +43,5 @@ register(Op(
     ),
     params=(Param("name", "string", "Pinned module name.", required=True, enum=lock_names()),),
     preview=True, inject=_inject_lock,
+    enabled=lambda settings: bool(lock_names()),  # nothing is pinned in v0.2, so there is nothing to install
 ))

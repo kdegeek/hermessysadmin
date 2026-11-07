@@ -1,14 +1,3 @@
 {
-  "modules": [
-    {
-      "name": "NTFSSecurity",
-      "version": "4.2.6",
-      "package_hash": "XrE9nKnMkBmK2m1FmuySzYjdH+etAmzEdkNvNPft1tGm2aAO25vuaShLI5PpvWEs/oP6q4tvV/bIoZettwPoDw==",
-      "hash_algorithm": "SHA512",
-      "license": "https://github.com/raandree/NTFSSecurity/blob/master/LICENSE",
-      "project_url": "https://github.com/raandree/NTFSSecurity",
-      "signer": null,
-      "requires": []
-    }
-  ]
+  "modules": []
 }

@@ -1,44 +1,59 @@
 import json
 from dataclasses import replace
 
+import pytest
+
 from sysadmin import catalog
 from sysadmin.catalog import CATALOG_DIR
+from sysadmin.ops import modules
 from sysadmin.registry import OPS
 
 
-def lock():
-    return json.loads((CATALOG_DIR / "modules.lock.json").read_text(encoding="utf-8"))
+SYNTHETIC = {"modules": [{
+    "name": "FakeMod", "version": "1.2.3", "package_hash": "A" * 88, "hash_algorithm": "SHA512",
+    "license": "MIT", "project_url": "https://example.invalid/fakemod", "signer": None, "requires": [],
+}]}
 
 
-def test_lock_pins_exact_versions_with_sha512():
-    mods = {m["name"]: m for m in lock()["modules"]}
-    assert mods["NTFSSecurity"]["version"]
-    for m in mods.values():
-        assert m["hash_algorithm"] == "SHA512" and len(m["package_hash"]) == 88  # base64 of 64 bytes
-        assert all(r in mods for r in m["requires"])
+@pytest.fixture
+def synthetic_lock(tmp_path, monkeypatch):
+    """Point the module ops at a temp lock holding one synthetic (never downloaded) module."""
+    path = tmp_path / "modules.lock.json"
+    path.write_text(json.dumps(SYNTHETIC), encoding="utf-8")
+    monkeypatch.setattr(modules, "LOCK_PATH", path)
+    return path
 
 
-def test_lock_dependency_closure_and_signers():
-    # ADEssentials and GPOZaurr (and their tree) were dropped: their functions query other DCs directly.
-    mods = {m["name"]: m for m in lock()["modules"]}
-    assert set(mods) == {"NTFSSecurity"}
-    assert mods["NTFSSecurity"]["signer"] is None and mods["NTFSSecurity"]["requires"] == []
+def test_shipped_lock_is_empty_and_ops_follow_it():
+    # v0.2 ships no Gallery modules (double hop); the machinery stays for future local modules.
+    shipped = json.loads((CATALOG_DIR / "modules.lock.json").read_text(encoding="utf-8"))
+    assert shipped == {"modules": []}
+    assert modules.lock_names() == ()
+    op = OPS["catalog_module_install"]
+    assert op.enabled is not None and op.enabled(None) is False
+    assert OPS["catalog_module_status"].enabled is None
 
 
-def test_install_is_high_risk_with_preview_and_enum():
+def test_install_is_high_risk_with_preview_and_is_enabled_once_a_module_is_pinned(synthetic_lock):
     op = OPS["catalog_module_install"]
     assert op.tier == "H" and op.preview
-    assert set(op.params[0].enum) == {m["name"] for m in lock()["modules"]}
+    assert modules.lock_names() == ("FakeMod",)
+    assert op.enabled(None) is True
 
 
-def test_install_preview_injects_lock(make_service, runner):
+def test_install_disabled_with_an_empty_lock_is_blocked(make_service, runner):
+    out = make_service().preview("catalog_module_install", {"name": "NTFSSecurity"})
+    assert out["ok"] is False and not runner.calls
+
+
+def test_install_preview_injects_lock(synthetic_lock, make_service, runner):
     runner.responses["catalog_module_install"] = {"summary": "s", "changes": [], "current": {}}
-    make_service().preview("catalog_module_install", {"name": "NTFSSecurity"})
+    make_service().preview("catalog_module_install", {"name": "FakeMod"})
     _, params, _ = runner.calls[-1]
-    assert json.loads(params["Lock"])["modules"] and params["Preview"] is True
+    assert json.loads(params["Lock"])["modules"][0]["name"] == "FakeMod" and params["Preview"] is True
 
 
-def test_status_is_a_cached_read_that_injects_the_lock(make_service, runner):
+def test_status_is_a_cached_read_that_injects_the_lock(synthetic_lock, make_service, runner):
     status = {"root": "C:\\ProgramData\\HermesSysadmin\\Modules", "items": []}
     runner.responses["catalog_module_status"] = status
     svc = make_service()
@@ -48,6 +63,12 @@ def test_status_is_a_cached_read_that_injects_the_lock(make_service, runner):
     assert len(runner.calls) == 1 and json.loads(runner.calls[0][1]["Lock"])["modules"]
 
 
+def test_status_works_with_the_empty_shipped_lock(make_service, runner):
+    runner.responses["catalog_module_status"] = {"root": "r", "items": []}
+    make_service().call("catalog_module_status", {}, actor="agent")
+    assert json.loads(runner.calls[0][1]["Lock"]) == {"modules": []}
+
+
 def _gallery_entry(monkeypatch, module):
     base = OPS["catalog_get"]
     op = replace(base, name="cat.t", meta={"id": "t.entry", "title": "T", "category": "ad", "target": "dc", "module": module})
@@ -55,18 +76,18 @@ def _gallery_entry(monkeypatch, module):
 
 
 def test_catalog_get_reports_module_installed(monkeypatch, make_service, runner):
-    _gallery_entry(monkeypatch, "gallery:NTFSSecurity@4.2.6")
+    _gallery_entry(monkeypatch, "gallery:FakeMod@1.2.3")
     runner.responses["catalog_module_status"] = {"root": "r", "items": [
-        {"name": "NTFSSecurity", "version": "4.2.6", "installed": True, "verified": True, "signer_ok": True}]}
+        {"name": "FakeMod", "version": "1.2.3", "installed": True, "verified": True, "signer_ok": True}]}
     out = make_service().call("catalog_get", {"id": "t.entry"}, actor="agent")
     assert out["data"]["module_installed"] is True
     runner.responses["catalog_module_status"] = {"root": "r", "items": [
-        {"name": "NTFSSecurity", "version": "4.2.6", "installed": False, "verified": False, "signer_ok": None}]}
+        {"name": "FakeMod", "version": "1.2.3", "installed": False, "verified": False, "signer_ok": None}]}
     assert make_service().call("catalog_get", {"id": "t.entry"}, actor="agent")["data"]["module_installed"] is False
 
 
 def test_catalog_get_module_installed_is_null_on_error_or_inbox(monkeypatch, make_service, runner):
-    _gallery_entry(monkeypatch, "gallery:NTFSSecurity@4.2.6")
+    _gallery_entry(monkeypatch, "gallery:FakeMod@1.2.3")
     runner.responses["catalog_module_status"] = RuntimeError("winrm down")
     assert make_service().call("catalog_get", {"id": "t.entry"}, actor="agent")["data"]["module_installed"] is None
     _gallery_entry(monkeypatch, "inbox:ActiveDirectory")
