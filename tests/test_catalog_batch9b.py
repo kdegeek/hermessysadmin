@@ -25,10 +25,17 @@ def test_batch_9b_present_read_only_dc():
         assert got[i].tier == "R" and got[i].meta["target"] == "dc", i
 
 
-def test_every_gallery_entry_uses_the_module_loader():
-    for i in BATCH_9B:
-        if str(ids()[i].meta["module"]).startswith("gallery:"):
-            assert "Use-HermesModule" in source(i), i
+def test_batch_is_in_box_and_every_shipped_gallery_module_is_pinned():
+    import json
+    from sysadmin import catalog
+    assert not [i for i in BATCH_9B if str(ids()[i].meta["module"]).startswith("gallery:")]
+    lock = json.loads((catalog.CATALOG_DIR / "modules.lock.json").read_text(encoding="utf-8"))
+    pinned = {f"{m['name']}@{m['version']}" for m in lock["modules"]}
+    for op in catalog.entries():
+        mod = str(op.meta["module"])
+        if mod.startswith("gallery:"):
+            assert mod[len("gallery:"):] in pinned, op.name
+            assert "Use-HermesModule" in source(op.meta["id"]) if op.meta["id"] in BATCH_9B else True
 
 
 def test_rows_are_capped_and_flag_truncation():

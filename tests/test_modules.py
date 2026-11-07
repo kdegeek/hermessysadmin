@@ -55,18 +55,18 @@ def _gallery_entry(monkeypatch, module):
 
 
 def test_catalog_get_reports_module_installed(monkeypatch, make_service, runner):
-    _gallery_entry(monkeypatch, "gallery:GPOZaurr@1.1.13")
+    _gallery_entry(monkeypatch, "gallery:NTFSSecurity@4.2.6")
     runner.responses["catalog_module_status"] = {"root": "r", "items": [
-        {"name": "GPOZaurr", "version": "1.1.13", "installed": True, "verified": True, "signer_ok": True}]}
+        {"name": "NTFSSecurity", "version": "4.2.6", "installed": True, "verified": True, "signer_ok": True}]}
     out = make_service().call("catalog_get", {"id": "t.entry"}, actor="agent")
     assert out["data"]["module_installed"] is True
     runner.responses["catalog_module_status"] = {"root": "r", "items": [
-        {"name": "GPOZaurr", "version": "1.1.13", "installed": False, "verified": False, "signer_ok": None}]}
+        {"name": "NTFSSecurity", "version": "4.2.6", "installed": False, "verified": False, "signer_ok": None}]}
     assert make_service().call("catalog_get", {"id": "t.entry"}, actor="agent")["data"]["module_installed"] is False
 
 
 def test_catalog_get_module_installed_is_null_on_error_or_inbox(monkeypatch, make_service, runner):
-    _gallery_entry(monkeypatch, "gallery:GPOZaurr@1.1.13")
+    _gallery_entry(monkeypatch, "gallery:NTFSSecurity@4.2.6")
     runner.responses["catalog_module_status"] = RuntimeError("winrm down")
     assert make_service().call("catalog_get", {"id": "t.entry"}, actor="agent")["data"]["module_installed"] is None
     _gallery_entry(monkeypatch, "inbox:ActiveDirectory")
