@@ -102,6 +102,16 @@ def test_connection_test_post_hermes_user_mismatch_note():
                 Settings(transport="local", run_as="hermes_user"))
     assert data["run_as"] == "hermes_user" and data["warnings"] == []
 
+
+def test_connection_test_post_hermes_user_without_network_credentials_gets_the_hint():
+    from sysadmin.local_transport import NO_NETWORK_CREDENTIALS_HINT
+
+    post = OPS["ad_connection_test"].post
+    data = post({"is_domain_controller": False, "identity": "CORP\\hermes", "network_identity": None,
+                 "network_identity_error": "Access is denied.", "modules": {"ActiveDirectory": True, "GroupPolicy": True}},
+                {}, Settings(transport="local", run_as="hermes_user"))
+    assert any(NO_NETWORK_CREDENTIALS_HINT in w for w in data["warnings"])
+
 def test_search_args():
     op = OPS["ad_search"]
     assert coerce_args(op, {"query": "bob"}) == {"query": "bob", "kind": "any", "limit": 25}

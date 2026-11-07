@@ -125,6 +125,28 @@ def test_ad_powershell_credential_warning_is_winrm_only(monkeypatch, make_servic
     d = hooks.pre_tool_call(tool_name="ad_powershell", args={"script": "$x = $Global:hermescred", "reason": "r"})
     assert "service credential" not in d["message"]
 
+
+@pytest.mark.parametrize("run_as,user,expect", [
+    ("hermes_user", "", "as the Hermes user"),
+    ("account", "CORP\\svc", "as CORP\\svc"),
+])
+def test_ad_powershell_local_mode_says_where_it_runs(monkeypatch, make_service, run_as, user, expect):
+    settings = Settings(transport="local", run_as=run_as, username=user, password="p" if user else "",
+                        enable_powershell_escape=True)
+    service = make_service(settings=settings)
+    monkeypatch.setattr(runtime, "get_service", lambda: service)
+    monkeypatch.setenv("COMPUTERNAME", "HERMES-1")
+    d = hooks.pre_tool_call(tool_name="ad_powershell", args={"script": "Get-Date", "reason": "r"})
+    assert "runs on this machine (HERMES-1)" in d["message"] and expect in d["message"]
+    assert "it can read Hermes's files" in d["message"]
+
+
+def test_ad_powershell_winrm_mode_has_no_local_machine_line(monkeypatch, make_service):
+    service = make_service(settings=Settings(host="h", username="u", password="p", enable_powershell_escape=True))
+    monkeypatch.setattr(runtime, "get_service", lambda: service)
+    d = hooks.pre_tool_call(tool_name="ad_powershell", args={"script": "Get-Date", "reason": "r"})
+    assert "runs on this machine" not in d["message"]
+
 def test_escalated_read_op_is_gated_and_audited(svc, audit):
     import json
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import uuid
 from typing import Any
 
@@ -83,6 +84,8 @@ def _gate(op: Any, raw_args: dict | None, display: str, tool_name: str) -> dict 
         else:
             # No preview: the human must see every argument they approve, untruncated.
             lines.append("Arguments:\n" + format_preview({"details": redact(clean)}, limit=None))
+        if op.name == "ad_powershell" and service.settings.transport == "local":
+            lines.append(f"⚠ {local_powershell_note(service.settings)}")
         # Only the WinRM transport holds a service credential; on the local transport HermesCred is $null.
         if (op.name == "ad_powershell" and service.settings.transport == "winrm"
                 and "hermescred" in str(clean.get("script", "")).lower()):
@@ -101,6 +104,23 @@ def _gate(op: Any, raw_args: dict | None, display: str, tool_name: str) -> dict 
                        "Approve only if you intended this change.",
             "rule_key": f"hermes-sysadmin:{tool_name}:once:{uuid.uuid4().hex}",
         }
+
+
+
+def local_powershell_note(settings: Any) -> str:
+    """Where raw PowerShell runs on the local transport, for the approval prompt."""
+    import getpass
+    import socket
+
+    computer = os.environ.get("COMPUTERNAME") or socket.gethostname()
+    if settings.run_as == "account":
+        who = f"{settings.username} (network logons; locally the Hermes user)"
+    else:
+        try:
+            who = f"the Hermes user ({getpass.getuser()})"
+        except Exception:
+            who = "the Hermes user"
+    return f"This script runs on this machine ({computer}) as {who}; it can read Hermes's files."
 
 
 def post_tool_call(tool_name: str = "", args: dict | None = None, result: Any = None, status: str = "", **kwargs: Any) -> None:

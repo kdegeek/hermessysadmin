@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from ..local_transport import ACCOUNT_PROBE_HINT, NO_NETWORK_CREDENTIALS_HINT
 from ..policy import is_privileged_group
 from ..registry import Op, Param, register
 
@@ -71,11 +72,11 @@ def _post_connection_test(data: Any, args: Mapping[str, Any], settings: Any) -> 
         )
     if error:
         who = settings.username if local and settings.run_as == "account" else (data.get("identity") or "this identity")
-        hint = (
-            " With 'Run as: account' Windows does not check the password when PowerShell starts; "
-            "a wrong password shows up here, on the first network logon. Check the username and password."
-            if local and settings.run_as == "account" else ""
-        )
+        hint = ""
+        if local and settings.run_as == "account":
+            hint = " " + ACCOUNT_PROBE_HINT
+        elif local:
+            hint = " " + NO_NETWORK_CREDENTIALS_HINT
         warnings.append(f"{who} could not authenticate to (or run a command on) domain controller {data.get('dc') or ''}: {error}.{hint}")
     for name in ("ActiveDirectory", "GroupPolicy"):
         if not modules.get(name):
