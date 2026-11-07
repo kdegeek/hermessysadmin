@@ -105,3 +105,32 @@ def test_hook_escalates_fleet_wide_catalog_writes(monkeypatch, make_service, ext
         assert res["action"] == "approve" and "HIGH-RISK" in res["message"]
     finally:
         OPS.pop("cat.t.catwrite2", None)
+
+
+class _DCFacts:
+    def domain_controllers(self):
+        return ["DC01.corp.local"]
+
+
+def _w_endpoint_op():
+    from sysadmin.catalog import _fleet_escalate
+    from sysadmin.registry import Op, Param
+    return Op("cat.t.dcalias", "catalog", "W", "x", "d",
+              params=(Param("computers", "array", "c"), Param("ou", "string", "o")), catalog=True,
+              escalate=_fleet_escalate, meta={"id": "t.dcalias", "title": "t"})
+
+
+@pytest.mark.parametrize("computers", [
+    ["localhost"], ["LOCALHOST"], ["localhost.corp.local"], ["127.0.0.1"], ["."], ["10.0.0.10"], ["::1"], ["fe80::1%eth0"],
+    ["PC1", "10.0.0.10"], ["PC1", 5], ["PC1", None], "PC1", ["DC01"], ["dc01.corp.local"],
+])
+def test_catalog_write_targeting_dc_aliases_is_tier_h(computers):
+    from sysadmin.config import Settings
+    from sysadmin.policy import decide
+    assert decide(_w_endpoint_op(), {"computers": computers}, Settings(), _DCFacts()).tier == "H"
+
+
+def test_catalog_write_to_ordinary_workstations_stays_w():
+    from sysadmin.config import Settings
+    from sysadmin.policy import decide
+    assert decide(_w_endpoint_op(), {"computers": ["PC1", "pc2.corp.local"]}, Settings(), _DCFacts()).tier == "W"

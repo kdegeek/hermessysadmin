@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import ipaddress
 import re
 from typing import Any, Mapping
 from urllib.parse import quote
 
-from ..policy import is_domain_controller_name
+from ..policy import is_domain_controller_name, is_ip_or_loopback
 from ..registry import Op, Param, register
 
 TOOLSET = "ad_rdp"
@@ -102,9 +101,6 @@ def rdp_uri(host: str, username: str = "") -> str:
     return "rdp://" + "&".join(parts)
 
 
-_LOOPBACK = {"localhost", ".", "::1"}
-
-
 def _hosts_of(args: Mapping[str, Any]) -> list[Any]:
     """Target hosts; non-string entries / containers are kept so callers can fail closed."""
     raw: list[Any] = []
@@ -119,17 +115,6 @@ def _hosts_of(args: Mapping[str, Any]) -> list[Any]:
     return [h for h in raw if h != ""]
 
 
-def _is_ip_or_loopback(host: str) -> bool:
-    h = host.strip().strip("[]")
-    if h.lower() in _LOOPBACK:
-        return True
-    try:
-        ipaddress.ip_address(h.split("%", 1)[0])
-    except ValueError:
-        return False
-    return True
-
-
 def _touches_dc(args: Mapping[str, Any], settings: Any, facts: Any) -> bool:
     hosts = _hosts_of(args)
     if not hosts:
@@ -138,7 +123,7 @@ def _touches_dc(args: Mapping[str, Any], settings: Any, facts: Any) -> bool:
     if not dcs:
         return True
     for h in hosts:
-        if not isinstance(h, str) or _is_ip_or_loopback(h):
+        if not isinstance(h, str) or is_ip_or_loopback(h):
             return True
         if is_domain_controller_name(h, dcs):
             return True

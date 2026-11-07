@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import re
 from dataclasses import dataclass
@@ -113,6 +114,22 @@ def is_privileged_group(name: str, settings: Any) -> bool:
 def is_domain_controller_name(host: str, dcs: Iterable[str]) -> bool:
     short = host.strip().lower().split(".", 1)[0]
     return any(short == d.strip().lower().split(".", 1)[0] for d in dcs)
+
+
+_LOOPBACK = {"localhost", ".", "::1"}
+
+
+def is_ip_or_loopback(host: str) -> bool:
+    """True for an IP literal, '.', or localhost (with or without a domain suffix): names that can hide a DC."""
+    h = host.strip().strip("[]")
+    low = h.lower()
+    if low in _LOOPBACK or low.split(".", 1)[0] == "localhost":
+        return True
+    try:
+        ipaddress.ip_address(h.split("%", 1)[0])
+    except ValueError:
+        return False
+    return True
 
 
 def _protected_hit(op: Any, args: Mapping[str, Any], settings: Any) -> tuple[str, str] | None:

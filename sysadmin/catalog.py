@@ -16,7 +16,7 @@ except ImportError:  # the Hermes runtime ships ruamel-backed hermes_yaml instea
     from ruamel.yaml.error import YAMLError as _YAMLError
 
 from .errors import InvalidArguments
-from .policy import is_domain_controller_name
+from .policy import is_domain_controller_name, is_ip_or_loopback
 from .registry import OPS, Op, Param, register
 from .runner import CATALOG_DIR
 
@@ -144,8 +144,14 @@ def parse_entry(path: Path) -> dict[str, Any]:
 
 
 def _fleet_escalate(args: Mapping[str, Any], settings: Any, facts: Any) -> bool:
-    computers = [c for c in (args.get("computers") or []) if c]
+    raw = args.get("computers") or []
+    if not isinstance(raw, (list, tuple)):
+        return True  # uninterpretable: fail closed
+    computers = [c for c in raw if c != ""]
     if args.get("ou") or not computers or len(computers) > FLEET_LIMIT:
+        return True
+    # Non-strings, IP literals, loopback, '.' and localhost can all name the jump host (a DC): fail closed.
+    if any(not isinstance(c, str) or is_ip_or_loopback(c) for c in computers):
         return True
     dcs = facts.domain_controllers() if facts is not None else None
     if not dcs:
