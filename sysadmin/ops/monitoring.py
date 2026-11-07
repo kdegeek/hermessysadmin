@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import subprocess
 import sys
@@ -48,9 +49,13 @@ def _hermes_root() -> str | None:
 
 
 def _hermes(*args: str) -> subprocess.CompletedProcess:
+    # The Hermes CLI prints UTF-8 (box drawing, emoji). Without these, Windows decodes with cp1252 and the
+    # reader thread crashes, so `cron list` came back empty and status showed an active job as disabled.
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
     return subprocess.run(
         [sys.executable, "-m", "hermes_cli.main", "cron", *args],
-        capture_output=True, text=True, timeout=TIMEOUT, cwd=_hermes_root(),
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=TIMEOUT, cwd=_hermes_root(), env=env,
     )
 
 

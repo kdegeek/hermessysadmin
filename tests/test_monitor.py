@@ -518,3 +518,11 @@ def test_monitor_previous_ignores_other_kinds(stores):
     fs.record({"taken_at": "2026-11-06T10:00:00+00:00", "items": [host("ONLYWS")], "kind": "workstation"})
     inputs, _ = monitor._gather(FakeService({"fleet_inventory": ok({"items": [host("A")]})}), S, monitor.get_state())
     assert inputs["previous_fleet"] == []
+
+
+def test_cron_cli_output_decoded_as_utf8(cron):
+    """Hermes prints UTF-8 (box drawing, emoji); Windows' default cp1252 decode crashed and hid the job."""
+    monitoring._hermes("list", "--all")
+    _, kw = cron.calls[-1]
+    assert kw["encoding"] == "utf-8" and kw["errors"] == "replace"
+    assert kw["env"]["PYTHONIOENCODING"] == "utf-8" and kw["env"]["PYTHONUTF8"] == "1"
