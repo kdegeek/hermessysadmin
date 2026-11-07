@@ -181,6 +181,10 @@ def overview(service: Any) -> dict[str, Any]:
             "rdp_sessions": rdp.get("sessions"),
             "rdp_active": rdp.get("active"),
             "backups_bad": bk.get("bad"),
+            "backups_ok": bk.get("ok"),
+            "backups_total": bk.get("hosts"),
+            "gpos_unlinked": gpo.get("unlinked"),
+            "users_enabled": counts.get("users_enabled"),
             "oldest_system_state": bk.get("oldest_system_state"),
             "dc_status": data("dc_health").get("status") or "unknown",
         }
@@ -188,6 +192,8 @@ def overview(service: Any) -> dict[str, Any]:
             "kpis": kpis,
             "domain": data("domain") or None,
             "dcs": data("dc_health") or None,
+            "backups": [{"host": h.get("host"), "age_hours": h.get("age_hours"), "state": h.get("state")}
+                        for h in data("backups").get("items") or []],
             "audit": service.audit.query(limit=10),
             "errors": {k: r["error"] for k, r in sections.items() if not r["ok"]},
         }}

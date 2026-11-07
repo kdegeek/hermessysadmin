@@ -21,47 +21,342 @@ function SectionErrors({ errors }) {
   });
 }
 
-function OverviewKpis({ data }) {
+const FLEET_LOADING = 'Collecting the fleet inventory (can take up to a minute)…';
+
+function fleetGo(filter, extra) {
+  return () => goTab('fleet', { fleet: { filter, ...(extra || {}) } });
+}
+
+function fleetNum(fleet, pick) {
+  if (!fleet.res) return '…';
+  if (!fleet.res.ok) return '—';
+  return pick(fleet.res.data.summary || {});
+}
+
+function patchPct(s) {
+  return s && s.online > 0 ? Math.round((100 * (s.patch_compliant || 0)) / s.online) : null;
+}
+
+function OverviewKpis({ data, fleet, monitoring, alertsRef }) {
   const k = data.kpis || {};
-  const dom = data.domain || {};
-  const staleDays = dom.stale_days || 90;
-  const expDays = dom.expiring_days || 7;
-  const oldest = k.oldest_system_state;
+  const usersTotal = k.users;
+  const usersEnabled = k.users_enabled !== undefined && k.users_enabled !== null ? k.users_enabled : usersTotal - (k.users_disabled || 0);
+  const fs = fleet.res && fleet.res.ok ? fleet.res.data.summary || {} : null;
+  const pct = patchPct(fs);
+  const alerts = monitoring.res && monitoring.res.ok ? list(monitoring.res.data.open_alerts).length : null;
+  const backupsTotal = k.backups_total;
   return jsxs('div', {
     className: 'hs-kpis',
     children: [
-      jsx(Kpi, { value: num(k.users), label: 'Users', sub: `${num(k.users_disabled)} disabled`, onClick: () => goTab('users', { users: { status: 'any' } }) }),
-      jsx(Kpi, {
-        value: num(k.users_locked),
-        label: 'Locked out',
-        sub: k.users_locked ? 'unlock from the Users tab' : 'none locked',
-        tone: k.users_locked ? 'red' : null,
-        onClick: () => goTab('users', { users: { status: 'locked' } }),
+      jsx(StatTile, { label: 'Users enabled', value: `${num(usersEnabled)} / ${num(usersTotal)}`, sub: `${num(k.users_disabled)} disabled`, onClick: () => goTab('users') }),
+      jsx(StatTile, {
+        label: 'Computers online',
+        value: fleet.res ? (fs ? `${num(fs.online)} / ${num(fs.total)}` : '—') : '…',
+        sub: fs ? `${num(fs.offline)} offline` : fleet.res ? 'inventory failed' : 'collecting…',
+        onClick: fleetGo('offline'),
       }),
-      jsx(Kpi, {
-        value: num(k.passwords_expiring),
-        label: `Passwords expiring ≤${expDays} d`,
-        sub: k.passwords_expiring ? 'review in Users' : 'none soon',
-        tone: k.passwords_expiring ? 'yellow' : null,
-        onClick: () => goTab('users', { users: { expiring: true } }),
+      jsx(StatTile, {
+        label: 'Patch compliance',
+        value: pct === null ? (fleet.res ? '—' : '…') : `${pct}%`,
+        sub: 'patched within 35 days',
+        tone: pct === null ? null : pct < 70 ? 'danger' : pct < 90 ? 'warning' : null,
+        onClick: fleetGo('patch_old'),
       }),
-      jsx(Kpi, { value: num(k.computers), label: 'Computers', sub: `${num(k.computers_stale)} stale >${staleDays} d`, onClick: () => goTab('rdp', { rdpView: 'hosts' }) }),
-      jsx(Kpi, {
-        value: num(k.gpos),
-        label: 'GPOs',
-        sub: `${num(k.gpos_needing_attention)} need attention`,
-        tone: k.gpos_needing_attention ? 'yellow' : null,
-        onClick: () => goTab('gpo'),
+      jsx(StatTile, {
+        label: 'Pending reboots',
+        value: fleetNum(fleet, (s) => num(s.pending_reboot)),
+        sub: 'computers',
+        tone: fs && fs.pending_reboot ? 'warning' : null,
+        onClick: fleetGo('reboot'),
       }),
-      jsx(Kpi, { value: num(k.rdp_sessions), label: 'RDP sessions', sub: `${num(k.rdp_active)} active`, onClick: () => goTab('rdp', { rdpView: 'sessions' }) }),
-      jsx(Kpi, {
-        value: oldest ? ageText(oldest.age_hours) : '—',
-        label: 'Oldest system-state backup',
-        sub: oldest ? oldest.host : 'no data',
-        tone: k.backups_bad ? 'red' : null,
+      jsx(StatTile, {
+        label: 'Backups OK',
+        value: backupsTotal === null || backupsTotal === undefined ? '—' : `${num(k.backups_ok)} / ${num(backupsTotal)}`,
+        sub: k.backups_bad ? `${num(k.backups_bad)} need attention` : 'servers',
+        tone: k.backups_bad ? 'danger' : null,
         onClick: () => goTab('backups'),
       }),
+      jsx(StatTile, {
+        label: 'GPOs needing attention',
+        value: num(k.gpos_needing_attention),
+        sub: `of ${num(k.gpos)}`,
+        tone: k.gpos_needing_attention ? 'warning' : null,
+        onClick: () => goTab('gpo'),
+      }),
+      jsx(StatTile, {
+        label: 'Open alerts',
+        value: alerts === null ? (monitoring.res ? '—' : '…') : String(alerts),
+        sub: 'monitoring',
+        tone: alerts ? 'danger' : null,
+        onClick: () => { if (alertsRef.current) alertsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+      }),
     ],
+  });
+}
+
+// Fleet-dependent card body: spinner while loading, ErrorBox on failure, children(data) otherwise.
+function FleetBody({ fleet, children }) {
+  return jsx(Pending, { q: fleet, label: FLEET_LOADING, children });
+}
+
+function orderedBuckets(obj, keys) {
+  return keys.map((key) => ({ label: key, value: num0((obj || {})[key]) }));
+}
+
+function num0(v) {
+  return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+}
+
+const PATCH_BUCKETS = ['<7', '7-35', '35-90', '>90', 'unknown'];
+const SEEN_BUCKETS = ['<1d', '1-7d', '7-30d', '30-90d', '>90d', 'never'];
+const DISK_DEFAULT_PCT = 10;
+
+function FleetCharts({ fleet }) {
+  return jsx(Card, {
+    title: 'Fleet',
+    sub: 'workstations and servers',
+    children: jsx(FleetBody, {
+      fleet,
+      children: (d) => {
+        const s = d.summary || {};
+        const osData = Object.entries(s.os_mix || {})
+          .sort((a, b) => b[1] - a[1])
+          .map(([label, value]) => ({ label, value, onClick: fleetGo('all', { os: label }) }));
+        const patch = orderedBuckets(s.patch_age_buckets, PATCH_BUCKETS).map((b) => (b.label === '35-90' || b.label === '>90' ? { ...b, onClick: fleetGo('patch_old') } : b));
+        const lowDisk = list(d.items)
+          .filter((i) => i.online && typeof i.c_free_pct === 'number')
+          .sort((a, b) => a.c_free_pct - b.c_free_pct)
+          .slice(0, 8)
+          .map((i) => ({
+            label: i.name,
+            value: i.c_free_pct,
+            display: `${i.c_free_pct}% free`,
+            tone: i.c_free_pct < DISK_DEFAULT_PCT ? 'danger' : null,
+            onClick: () => goTab('fleet', { fleet: { query: i.name } }),
+          }));
+        return jsxs('div', {
+          className: 'hs-grid3',
+          children: [
+            jsxs('div', { children: [jsx('div', { className: 'hs-label', children: 'Operating systems' }), osData.length ? jsx(Donut, { data: osData, center: String(num0(s.total)), title: 'Operating systems' }) : jsx('div', { className: 'hs-muted', children: 'No computers' })] }),
+            jsxs('div', { children: [jsx('div', { className: 'hs-label', children: 'Last logon' }), jsx(Histogram, { data: orderedBuckets(s.last_seen_buckets, SEEN_BUCKETS), title: 'Computers by last logon' })] }),
+            jsxs('div', { children: [jsx('div', { className: 'hs-label', children: 'Patch age (days)' }), jsx(Histogram, { data: patch, title: 'Computers by days since last patch' })] }),
+            jsxs('div', {
+              className: 'hs-span3',
+              children: [
+                jsx('div', { className: 'hs-label', children: 'Lowest free space on C:' }),
+                lowDisk.length ? jsx(BarList, { data: lowDisk, max: 100, title: 'Lowest free space on C:' }) : jsx('div', { className: 'hs-muted', children: 'No disk data' }),
+              ],
+            }),
+          ],
+        });
+      },
+    }),
+  });
+}
+
+function IdentityCard({ data }) {
+  const k = data.kpis || {};
+  const total = num0(k.users);
+  const locked = num0(k.users_locked);
+  const disabled = num0(k.users_disabled);
+  const enabled = Math.max(0, (k.users_enabled !== undefined && k.users_enabled !== null ? k.users_enabled : total - disabled) - locked);
+  const parts = [
+    { label: 'Enabled', value: enabled, onClick: () => goTab('users', { users: { status: 'any' } }) },
+    { label: 'Disabled', value: disabled, onClick: () => goTab('users', { users: { status: 'disabled' } }) },
+    { label: 'Locked out', value: locked, onClick: () => goTab('users', { users: { status: 'locked' } }) },
+  ];
+  return jsx(Card, {
+    title: 'Identity',
+    sub: `${num(k.users)} user accounts`,
+    children: total > 0
+      ? jsx(StackedBar, { data: parts, title: 'User accounts by state' })
+      : jsx('div', { className: 'hs-muted', children: 'No user data' }),
+  });
+}
+
+function SecurityCard({ fleet }) {
+  return jsx(Card, {
+    title: 'Security posture',
+    sub: 'computers that need a look',
+    children: jsx(FleetBody, {
+      fleet,
+      children: (d) => {
+        const s = d.summary || {};
+        const tile = (label, n, filter) =>
+          jsx(StatTile, { label, value: num(n), sub: 'computers', tone: n ? 'danger' : 'success', onClick: fleetGo(filter) });
+        return jsxs('div', {
+          className: 'hs-kpis',
+          children: [tile('Defender off', s.defender_off, 'defender_off'), tile('BitLocker off', s.bitlocker_off, 'bitlocker_off'), tile('RDP without NLA', s.rdp_no_nla, 'rdp_no_nla')],
+        });
+      },
+    }),
+  });
+}
+
+function InfrastructureCard({ data }) {
+  const k = data.kpis || {};
+  const total = num0(k.gpos);
+  const attention = num0(k.gpos_needing_attention);
+  const unlinked = Math.min(num0(k.gpos_unlinked), attention);
+  const gpoData = [
+    { label: 'Healthy', value: Math.max(0, total - attention), onClick: () => goTab('gpo') },
+    { label: 'Unlinked', value: unlinked, onClick: () => goTab('gpo') },
+    { label: 'Other issues', value: attention - unlinked, onClick: () => goTab('gpo') },
+  ].filter((d) => d.value > 0);
+  const backups = list(data.backups)
+    .filter((b) => typeof b.age_hours === 'number')
+    .sort((a, b) => b.age_hours - a.age_hours)
+    .slice(0, 8)
+    .map((b) => ({ label: shortHost(b.host), value: b.age_hours, display: ageText(b.age_hours), tone: b.state === 'bad' ? 'danger' : null, onClick: () => goTab('backups') }));
+  return jsxs('div', {
+    className: 'hs-stack',
+    children: [
+      jsx(DcCard, { dcs: data.dcs }),
+      jsx(Card, {
+        title: 'Infrastructure',
+        sub: 'GPO health and backup age',
+        children: jsxs('div', {
+          className: 'hs-grid2 hs-even',
+          children: [
+            jsxs('div', { children: [jsx('div', { className: 'hs-label', children: 'GPO health' }), gpoData.length ? jsx(Donut, { data: gpoData, center: String(total), title: 'GPO health' }) : jsx('div', { className: 'hs-muted', children: 'No GPO data' })] }),
+            jsxs('div', { children: [jsx('div', { className: 'hs-label', children: 'Last system-state backup age' }), backups.length ? jsx(BarList, { data: backups, title: 'Backup age per server' }) : jsx('div', { className: 'hs-muted', children: 'No backup data' })] }),
+          ],
+        }),
+      }),
+    ],
+  });
+}
+
+function TrendsCard({ history }) {
+  return jsx(Card, {
+    title: 'Trends',
+    sub: 'last 30 days of inventory runs',
+    children: jsx(Pending, {
+      q: history,
+      label: 'Loading history…',
+      children: (d) => {
+        const rows = list(d.items)
+          .map((r) => r.summary || {})
+          .filter((s) => s.total !== undefined);
+        if (rows.length < 2) return jsx('div', { className: 'hs-muted', children: 'Collecting history: trends appear after a few inventory runs' });
+        const onlinePct = rows.map((s) => (s.total > 0 ? (100 * s.online) / s.total : NaN));
+        const patchPcts = rows.map((s) => (s.online > 0 ? (100 * (s.patch_compliant || 0)) / s.online : NaN));
+        const reboots = rows.map((s) => num0(s.pending_reboot));
+        const last = (arr, f) => (Number.isFinite(arr[arr.length - 1]) ? f(arr[arr.length - 1]) : '—');
+        return jsxs('div', {
+          className: 'hs-grid3',
+          children: [
+            jsxs('div', { children: [jsx('div', { className: 'hs-label', children: 'Online' }), jsx(Sparkline, { points: onlinePct, label: 'Computers online', valueText: last(onlinePct, (v) => `${Math.round(v)}%`) })] }),
+            jsxs('div', { children: [jsx('div', { className: 'hs-label', children: 'Patch compliance' }), jsx(Sparkline, { points: patchPcts, label: 'Patch compliance', valueText: last(patchPcts, (v) => `${Math.round(v)}%`) })] }),
+            jsxs('div', { children: [jsx('div', { className: 'hs-label', children: 'Pending reboots' }), jsx(Sparkline, { points: reboots, label: 'Pending reboots', valueText: String(reboots[reboots.length - 1]) })] }),
+          ],
+        });
+      },
+    }),
+  });
+}
+
+function MonitoringEnableDialog({ seq }) {
+  const [deliver, setDeliver] = useState('origin');
+  const [mode, setMode] = useState('watchdog');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    const r = await runWrite(op('monitoring_enable', { deliver: deliver.trim(), mode }), {
+      confirmed: true,
+      title: 'Enable monitoring',
+      confirmLabel: 'Enable monitoring',
+      doneMessage: 'Scheduled monitoring enabled',
+    });
+    if (r.state === 'error') {
+      setBusy(false);
+      setError(r.error);
+    } else if (r.state === 'done') {
+      closeDialog(seq);
+    }
+  };
+  return jsx(Modal, {
+    seq,
+    title: 'Enable monitoring',
+    tier: 'W',
+    opName: 'monitoring_enable',
+    footer: [
+      jsx(Btn, { onClick: () => closeDialog(seq), disabled: busy, children: 'Cancel' }, 'cancel'),
+      jsx(Btn, { kind: 'primary', onClick: submit, disabled: busy || !deliver.trim(), children: busy ? 'Working…' : 'Enable' }, 'ok'),
+    ],
+    children: jsxs('div', {
+      className: 'hs-stack',
+      children: [
+        jsx(Field, { label: 'Deliver alerts to', children: jsx(TextInput, { value: deliver, onChange: setDeliver, mono: true, autoFocus: true, placeholder: 'origin, local, telegram' }) }),
+        jsx(Field, { label: 'Mode', children: jsx(Seg, { value: mode, options: [['watchdog', 'Watchdog'], ['agent', 'Agent']], onChange: setMode }) }),
+        jsx('p', { className: 'hs-muted hs-small hs-p', children: mode === 'agent' ? 'Hermes triages findings before delivering them.' : 'Findings are delivered directly; no agent run when nothing is wrong.' }),
+        error ? jsx(ErrorBox, { error }) : null,
+      ],
+    }),
+  });
+}
+
+function disableMonitoring() {
+  return runWrite(op('monitoring_disable', {}), {
+    title: 'Disable monitoring',
+    body: 'Stop the scheduled monitoring job? Open alerts stay recorded.',
+    confirmLabel: 'Disable monitoring',
+    doneMessage: 'Scheduled monitoring disabled',
+  });
+}
+
+function MonitoringCard({ monitoring, cardRef }) {
+  const m = monitoring.res && monitoring.res.ok ? monitoring.res.data : null;
+  const alerts = m ? list(m.open_alerts) : [];
+  return jsx('div', {
+    ref: cardRef,
+    children: jsx(Card, {
+      title: 'Monitoring',
+      sub: 'scheduled checks',
+      right: m
+        ? m.enabled
+          ? jsx(Btn, { small: true, onClick: disableMonitoring, children: 'Disable' })
+          : jsx(Btn, { small: true, kind: 'primary', onClick: () => openDialog(MonitoringEnableDialog, {}), children: 'Enable' })
+        : null,
+      children: jsx(Pending, {
+        q: monitoring,
+        label: 'Loading monitoring status…',
+        children: () =>
+          jsxs('div', {
+            className: 'hs-stack',
+            children: [
+              jsxs('div', {
+                className: 'hs-actions',
+                children: [
+                  jsx(Badge, { tone: m.enabled ? 'green' : null, children: m.enabled ? 'enabled' : 'disabled' }),
+                  jsx('span', { className: 'hs-muted hs-small', children: `Interval: ${m.interval || '—'}` }),
+                  jsx('span', { className: 'hs-muted hs-small', children: `Deliver to: ${m.deliver || '—'}` }),
+                  jsx('span', { className: 'hs-muted hs-small', children: `Last run: ${m.last_run ? ago(m.last_run) : 'never'}` }),
+                ],
+              }),
+              m.error ? jsx(Callout, { tone: 'yellow', icon: '⚠', children: m.error }) : null,
+              jsx(Table, {
+                head: ['Rule', 'Host', 'Message', 'First seen'],
+                children: alerts.length
+                  ? alerts.slice(0, 8).map((a) =>
+                      jsxs('tr', {
+                        children: [
+                          jsx('td', { className: 'hs-mono', children: a.rule }),
+                          jsx('td', { children: a.host }),
+                          jsx('td', { children: a.message }),
+                          jsx('td', { className: 'hs-muted hs-nowrap', children: ago(a.first_seen) }),
+                        ],
+                      }, a.fingerprint || `${a.rule}-${a.host}`),
+                    )
+                  : jsx(EmptyRow, { cols: 4, text: 'No open alerts' }),
+              }),
+              alerts.length > 8 ? jsx('div', { className: 'hs-muted hs-small', children: `${alerts.length - 8} more not shown` }) : null,
+            ],
+          }),
+      }),
+    }),
   });
 }
 
@@ -144,17 +439,26 @@ function RecentChanges({ rows }) {
 
 function OverviewTab() {
   const ov = useOverview(true);
+  const fleet = useFleet(true);
+  const history = useFleetHistory(30, true);
+  const monitoring = useMonitoring(true);
+  const alertsRef = useRef(null);
   return jsx(Pending, {
     q: ov,
     label: 'Loading the domain overview…',
     children: (d) =>
       jsxs('div', {
+        className: 'hs-stack',
         children: [
           jsx(SectionErrors, { errors: d.errors }),
-          jsx(OverviewKpis, { data: d }),
-          jsxs('div', { className: 'hs-grid2', children: [jsx(DcCard, { dcs: d.dcs }), jsx(RecentChanges, { rows: d.audit })] }),
+          jsx(OverviewKpis, { data: d, fleet, monitoring, alertsRef }),
+          jsx(FleetCharts, { fleet }),
+          jsxs('div', { className: 'hs-grid2 hs-even', children: [jsx(IdentityCard, { data: d }), jsx(SecurityCard, { fleet })] }),
+          jsx(InfrastructureCard, { data: d }),
+          jsx(TrendsCard, { history }),
+          jsx(MonitoringCard, { monitoring, cardRef: alertsRef }),
+          jsx(RecentChanges, { rows: d.audit }),
         ],
       }),
   });
 }
-

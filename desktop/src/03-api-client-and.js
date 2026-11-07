@@ -66,6 +66,15 @@ const api = {
   read: (o) => rest(`/ops/${o.name}`, { method: 'POST', body: { args: o.args }, timeoutMs: OP_TIMEOUT_MS }),
   decision: (o) => rest(`/ops/${o.name}/decision`, { method: 'POST', body: { args: o.args }, timeoutMs: 30000 }),
   preview: (o) => rest(`/ops/${o.name}/preview`, { method: 'POST', body: { args: o.args }, timeoutMs: OP_TIMEOUT_MS }),
+  catalog: () => rest('/catalog', { timeoutMs: 30000 }),
+  fleet: (refresh) => rest(`/fleet?${queryString({ refresh: refresh ? 'true' : '' })}`, { timeoutMs: OP_TIMEOUT_MS }),
+  fleetHistory: (days) => rest(`/fleet/history?${queryString({ days })}`, { timeoutMs: 30000 }),
+  fleetDevice: (computer) => rest(`/fleet/${encodeURIComponent(computer)}`, { timeoutMs: OP_TIMEOUT_MS }),
+  monitoring: () => rest('/monitoring', { timeoutMs: 30000 }),
+  remoteSessions: (computers) => rest(`/remote/sessions?${queryString({ computers: list(computers).join(',') })}`, { timeoutMs: OP_TIMEOUT_MS }),
+  remoteCheck: (computer) => rest(`/remote/${encodeURIComponent(computer)}/check`, { timeoutMs: OP_TIMEOUT_MS }),
+  remoteShadow: (computer, q) => rest(`/remote/${encodeURIComponent(computer)}/shadow?${queryString(q)}`, { timeoutMs: OP_TIMEOUT_MS }),
+  remoteAssist: (computer) => rest(`/remote/${encodeURIComponent(computer)}/assist`, { timeoutMs: OP_TIMEOUT_MS }),
   run: (o, extra) => rest(`/ops/${o.name}`, { method: 'POST', body: { args: o.args, ...(extra || {}) }, timeoutMs: OP_TIMEOUT_MS }),
 };
 

@@ -104,6 +104,8 @@ def test_overview_builds_kpis_and_reports_section_errors(make_service, runner):
     assert k["oldest_system_state"] is None and k["backups_bad"] is None
     assert out["data"]["errors"]["backups"]["type"] == "ConnectionError"
     assert out["data"]["domain"]["domain"] == "corp.example.local"
+    assert out["data"]["backups"] == [] and k["backups_total"] is None
+    assert (k["gpos_unlinked"], k["users_enabled"]) == (1, None)
 
 
 def test_health_unconfigured_makes_no_remote_call(make_service, runner):

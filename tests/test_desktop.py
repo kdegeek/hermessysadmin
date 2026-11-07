@@ -19,7 +19,7 @@ from sysadmin.registry import OPS
 PLUGIN = Path(__file__).resolve().parents[1] / "desktop" / "plugin.js"
 ALLOWED_IMPORTS = {"react", "react/jsx-runtime", "@hermes/plugin-sdk"}
 FORBIDDEN = ["eval(", "new Function", "document.", "window.", "localStorage", "sessionStorage", "import(", "require(", "innerHTML"]
-REST_PATHS = {"/health", "/test-connection", "/overview", "/audit", "/refresh", "/ops/"}
+REST_PATHS = {"/health", "/test-connection", "/overview", "/audit", "/refresh", "/ops/", "/catalog", "/fleet", "/fleet/history", "/fleet/", "/monitoring", "/remote/sessions", "/remote/"}
 
 
 @pytest.fixture(scope="module")
@@ -105,3 +105,10 @@ def test_node_syntax_check(tmp_path):
     copy.write_text(PLUGIN.read_text(encoding="utf-8"), encoding="utf-8")
     out = subprocess.run([node, "--check", str(copy)], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
+
+
+@pytest.mark.parametrize("needle", [
+    "'monitoring_enable'", "'monitoring_disable'", "function Donut(", "function Sparkline(", "goTab('fleet'",
+])
+def test_overview_rebuild_markers(code, needle):
+    assert needle in code

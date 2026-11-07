@@ -7,6 +7,10 @@ const KEY = {
   all: [PLUGIN_ID],
   health: [PLUGIN_ID, 'health'],
   overview: [PLUGIN_ID, 'overview'],
+  fleet: [PLUGIN_ID, 'fleet'],
+  fleetHistory: (days) => [PLUGIN_ID, 'fleet-history', days],
+  monitoring: [PLUGIN_ID, 'monitoring'],
+  catalog: [PLUGIN_ID, 'catalog'],
   audit: (q) => [PLUGIN_ID, 'audit', q],
   op: (o) => [PLUGIN_ID, 'op', o.name, o.args],
   decision: (o) => [PLUGIN_ID, 'decision', o.name, o.args],
@@ -49,6 +53,23 @@ function useOverview(enabled) {
   return useApi(KEY.overview, api.overview, { refetchInterval: POLL.overview, enabled });
 }
 
+// Inventory can take up to a minute on a cold cache, so nothing waits on it.
+function useFleet(enabled) {
+  return useApi(KEY.fleet, () => api.fleet(false), { refetchInterval: POLL.fleet, staleTime: POLL.fleet, enabled });
+}
+
+function useFleetHistory(days, enabled) {
+  return useApi(KEY.fleetHistory(days), () => api.fleetHistory(days), { refetchInterval: POLL.fleet, staleTime: POLL.fleet, enabled });
+}
+
+function useMonitoring(enabled) {
+  return useApi(KEY.monitoring, api.monitoring, { refetchInterval: POLL.overview, enabled });
+}
+
+function useCatalog(enabled) {
+  return useApi(KEY.catalog, api.catalog, { staleTime: 300000, enabled });
+}
+
 function useDebounced(value, ms) {
   const [v, setV] = useState(value);
   useEffect(() => CTX.setTimeout(() => setV(value), ms), [value, ms]);
@@ -63,6 +84,8 @@ function useTick(ms) {
 // Page state lives in atoms so palette commands can steer the page from outside React.
 const $tab = atom('overview');
 const $users = atom({ query: '', status: 'any', stale: false, expiring: false, privileged: false, limit: 200 });
+// Fleet tab filter, set by Overview drill-downs: filter in all|online|offline|low_disk|reboot|patch_old|defender_off|bitlocker_off|rdp_no_nla.
+const $fleet = atom({ filter: 'all', os: '', query: '' });
 const $rdpView = atom('sessions');
 const $focusSearch = atom(0);
 const $drawer = atom(null);
@@ -87,6 +110,7 @@ function closeDialog(seq) {
 function goTab(key, patch) {
   if (!TABS.some((t) => t.key === key)) return false;
   if (patch && patch.users) $users.set({ ...$users.get(), ...patch.users });
+  if (patch && patch.fleet) $fleet.set({ filter: 'all', os: '', query: '', ...patch.fleet });
   if (patch && patch.rdpView) $rdpView.set(patch.rdpView);
   if (key !== 'users') $drawer.set(null);
   $tab.set(key);
