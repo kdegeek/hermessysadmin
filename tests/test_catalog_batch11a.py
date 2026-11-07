@@ -187,3 +187,48 @@ def test_time_resync_only_resyncs():
     text = source("maint.time_resync")
     assert "w32tm.exe /resync 2>&1" in text and "/config" not in text and "/register" not in text
     assert "Set-ItemProperty" not in text and "-ArgumentList @($false)" in text
+
+
+def test_stop_process_refuses_servers_security_agents_and_servicing():
+    text = source("maint.stop_process")
+    for p in ("'msmpeng'", "'mpdefendercoreservice'", "'nissrv'", "'mssense'", "'sense'", "'senseir'", "'sensecncproxy'",
+              "'sysmon'", "'sysmon64'", "'csfalconservice'", "'sentinelagent'", "'splunkd'", "'winlogbeat'", "'healthservice'",
+              "'tiworker'", "'trustedinstaller'", "'msiexec'"):
+        assert p in text, p
+    b = body("maint.stop_process")
+    # both the preview and the apply scriptblock check the host type and Defender image paths on the computer itself
+    assert b.count("[int]$os.ProductType -ne 1") == 2 and b.count("Windows Defender") >= 4
+    assert "if ($why) { throw \"PolicyBlocked: refusing to stop '$n'" in b
+    assert b.index("if ($why) { throw") < b.index("Stop-Process -Id $x.Id -Force")
+    assert "$_['refused']" in b
+
+
+def test_set_service_startup_refuses_more_services_and_dcs():
+    text = source("maint.set_service_startup")
+    for svc in ("'adws'", "'kdssvc'", "'usermanager'", "'sens'", "'appinfo'", "'scardsvr'", "'scdeviceenum'", "'certsvc'",
+                "'dhcpserver'", "'clussvc'", "'vmms'", "'sysmon'", "'sysmon64'", "'sense'", "'windefend'", "'wdnissvc'",
+                "'eventlog'", "'netlogon'", "'ntds'", "'dns'", "'dfsr'", "'kdc'", "'w32time'", "'ntfrs'", "'certpropsvc'"):
+        assert svc in text, svc
+    b = body("maint.set_service_startup")
+    assert "ProductType -eq 2" in b and "it is a domain controller" in b and "refused, domain controller" in b
+    assert b.index("it is a domain controller") < b.index("Set-Service -Name $n")
+
+
+def test_clear_wu_cache_and_empty_recycle_bin_refuse_dcs():
+    wu = body("maint.clear_wu_cache")
+    assert "ProductType -eq 2) { $row.skipped = $true; $row.reason = 'refused: domain controller'" in wu
+    assert wu.index("refused: domain controller") < wu.index("Stop-Service")
+    rb = body("maint.empty_recycle_bin")
+    assert "(Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).ProductType -eq 2" in rb
+    assert "refusing to empty recycle bins" in rb and rb.index("ProductType -eq 2") < rb.index("function Clear-Entry")
+
+
+def test_remove_stale_profiles_refuses_servers_and_keeps_service_and_task_accounts():
+    b = body("maint.remove_stale_profiles")
+    assert "ProductType -ne 1" in b and "refusing to remove profiles" in b
+    assert "Get-CimInstance Win32_Service" in b and "StartName" in b
+    assert "Get-ScheduledTask -ErrorAction Stop" in b and "Principal.UserId" in b
+    assert "kept: account runs a service or scheduled task" in b
+    assert "task accounts cannot be protected" in b  # an unreadable task list refuses rather than deletes
+    assert b.index("ProductType -ne 1") < b.index("Remove-CimInstance")
+    assert b.index("$svcSids -contains $sid") < b.index("Remove-CimInstance")

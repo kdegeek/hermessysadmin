@@ -155,3 +155,17 @@ def test_group_nesting_is_iterative_and_bounded():
     text = body("ad.group_nesting")
     assert "System.Collections.Stack" in text and "$cyclic" in text and "$hops -lt 20" in text
     assert "function " not in text  # no recursion
+
+
+def test_disable_stale_computers_skips_seamless_sso_and_spn_holders():
+    text = body("ad.disable_stale_computers")
+    assert "$n -ieq 'AZUREADSSOACC'" in text and "Seamless SSO" in text
+    assert r"-notmatch '\A(?i:HOST|RestrictedKrbHost|TERMSRV|WSMAN)/'" in text and "holds non-default service principal names" in text
+    # the skip reasons are decided before anything is disabled and shown as skipped rows
+    assert text.index("AZUREADSSOACC") < text.index("Disable-ADAccount") and 'result = "skipped: $($p.reason)"' in text
+
+
+def test_find_user_reports_the_host_cap():
+    text = body("sessions.find_user")
+    assert "eligible_hosts = $eligibleCount" in text and "hosts_capped = $hostsCapped" in text
+    assert "truncated = ((@($fan.items).Count -gt 500) -or $hostsCapped)" in text

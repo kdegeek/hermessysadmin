@@ -185,3 +185,26 @@ def test_point_and_print_risk_rule():
     text = body("printers.point_and_print")
     assert "RestrictDriverInstallationToAdministrators" in text
     assert "risky = ($restrict -eq 0 -and ($noWarn -eq 1 -or $update -ge 1))" in text
+
+
+def test_proxy_settings_strip_pac_query_and_proxy_credentials():
+    text = body("network.proxy_settings")
+    assert r"$v -replace '[?#].*\z', ''" in text and "Get-Clean \"$($is.AutoConfigURL)\" $true" in text
+    assert "Get-Clean \"$($is.ProxyServer)\" $false" in text and r"(?<=://)[^/@\s;]*@" in text
+
+
+def test_dns_resolve_only_asks_dcs_or_configured_servers():
+    text = body("network.dns_resolve")
+    assert "Get-ADDomainController -Filter *" in text and "$isDc = $true" in text
+    assert "Get-DnsClientServerAddress" in text and "$configured -notcontains $srv" in text
+    assert "refused: $srv is neither a domain controller" in text
+    assert text.index("$configured -notcontains $srv") < text.index("$splat.Server = $srv")
+
+
+def test_dns_cache_and_register_dns_report_real_state():
+    cache = body("dns.clear_server_cache")
+    assert "Show-DnsServerCache" in cache and "$before = Get-CacheCount" in cache and "after = (Get-CacheCount)" in cache
+    assert "cached answers present" not in cache
+    reg = body("network.register_dns")
+    assert "$before = Get-OwnA" in reg and "after = (Get-OwnA)" in reg and "-DnsOnly" in reg
+    assert "registration not requested" not in reg

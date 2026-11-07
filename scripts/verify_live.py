@@ -95,6 +95,41 @@ def catalog_sample_params(op, ctx):
     return params
 
 
+#: Catalog writes previewed (-Preview only: the script reads current state and returns its plan) on the
+#: first online workstation, with harmless sample arguments. Entries that need a specific printer, OU or
+#: session are not previewed here.
+ENDPOINT_WRITE_PREVIEWS = {
+    "cat.remote.set_nla": {"Required": True},
+    "cat.remote.restart_computer": {"Reason": "verify"},
+    "cat.remote.enable_rdp": {},
+    "cat.remote.enable_remote_assistance": {},
+    "cat.remote.open_rdp_firewall": {},
+    "cat.remote.set_shadow_policy": {},
+    "cat.remote.lock_workstation": {},
+    "cat.remote.send_message": {"Message": "verify"},
+    "cat.maint.gpupdate": {},
+    "cat.maint.clear_temp": {},
+    "cat.maint.flush_dns": {},
+    "cat.maint.restart_service": {"Name": "Spooler"},
+    "cat.maint.time_resync": {},
+    "cat.maint.set_service_startup": {"Name": "Spooler", "StartupType": "Automatic"},
+    "cat.maint.stop_process": {"Name": "notepad"},
+    "cat.maint.empty_recycle_bin": {},
+    "cat.maint.clear_wu_cache": {},
+    "cat.maint.remove_stale_profiles": {"MinDaysUnused": 365},
+    "cat.network.register_dns": {},
+    "cat.network.dhcp_renew": {},
+    "cat.patch.trigger_scan": {},
+    "cat.patch.wu_install": {},
+    "cat.printers.restart_spooler": {},
+    "cat.security.defender_quick_scan": {},
+    "cat.security.defender_update_signatures": {},
+    "cat.security.disable_llmnr": {},
+    "cat.security.disable_smb1_server": {},
+    "cat.security.enable_firewall_profiles": {},
+}
+
+
 def first_online_workstation(inventory):
     items = (inventory or {}).get("items") or []
     return next((i.get("name") for i in items if i.get("online") and i.get("name")), None)
@@ -245,9 +280,11 @@ def main(argv):
     run("rdp_set_enabled", {"hosts": [dc], "enabled": True}, preview=True)
     run("ad_user_unlock", {"identity": me}, preview=True)
     if ws:
-        run("cat.remote.set_nla", {"computers": [ws], "Required": True}, preview=True)
-        run("cat.maint.gpupdate", {"computers": [ws]}, preview=True)
-        run("cat.remote.restart_computer", {"computers": [ws], "Reason": "verify"}, preview=True)
+        for name, extra in ENDPOINT_WRITE_PREVIEWS.items():
+            run(name, {"computers": [ws], **extra}, preview=True)
+        run("cat.ad.disable_stale_computers", {"Names": [ws.split(".")[0]]}, preview=True)
+    run("cat.ad.protect_ous", {"All": True}, preview=True)
+    run("cat.dns.clear_server_cache", {"Server": dc}, preview=True)
     run("monitoring_enable", {"deliver": "origin"}, preview=True)
     transport.close()
 

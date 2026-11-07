@@ -2,7 +2,7 @@
 id: sessions.find_user
 title: Find where a user is signed in
 category: Users & sessions
-description: Sessions of one user on the chosen computers (every enabled computer when none are given, up to 200), read with quser, with session name, ID, state, idle time and logon time. quser shows at most 20 characters of a user name, so longer names are matched on their first 20 characters. Computers that cannot be reached are listed under errors.
+description: Sessions of one user on the chosen computers (every enabled computer when none are given, up to 200), read with quser, with session name, ID, state, idle time and logon time. quser shows at most 20 characters of a user name, so longer names are matched on their first 20 characters. Computers that cannot be reached are listed under errors. When more computers qualify than the 200 checked, the summary says truncated and gives eligible_hosts, so a user not found may still be signed in elsewhere.
 module: inbox:Microsoft.PowerShell.Management
 target: endpoint
 tier: R
@@ -18,6 +18,13 @@ Invoke-Op {
     $want = $User.ToLowerInvariant()
     if ($want.Length -gt 20) { $want = $want.Substring(0, 20) }
     $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Any
+    # Get-HermesTargets stops at 200 computers; count how many qualified so a capped search is reported.
+    $named = @($Computers | Where-Object { $_ })
+    $eligible = $named
+    if ($Ou) { $eligible += @(Get-ADComputer -Filter "Enabled -eq 'True'" -SearchBase $Ou -Properties DNSHostName | ForEach-Object { $_.DNSHostName } | Where-Object { $_ }) }
+    elseif ($named.Count -eq 0) { $eligible = @(Get-ADComputer -Filter "Enabled -eq 'True'" -Properties DNSHostName | ForEach-Object { $_.DNSHostName } | Where-Object { $_ }) }
+    $eligibleCount = @($eligible | Sort-Object -Unique).Count
+    $hostsCapped = ($eligibleCount -gt $targets.Count)
     $fan = Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($want) -Script {
         param($w)
         # quser writes "No User exists" to stderr and exits 1 when nobody is logged on; that means zero rows.
@@ -33,7 +40,8 @@ Invoke-Op {
         }
     }
     @{ items = @($fan.items | Select-Object -First 500); errors = $fan.errors
-       summary = @{ user = $User; total = @($fan.items).Count; truncated = (@($fan.items).Count -gt 500)
+       summary = @{ user = $User; total = @($fan.items).Count; truncated = ((@($fan.items).Count -gt 500) -or $hostsCapped)
+                    eligible_hosts = $eligibleCount; hosts_capped = $hostsCapped
                     computers_with_sessions = @($fan.items | ForEach-Object { $_['host'] } | Sort-Object -Unique).Count
                     hosts = $fan.summary.hosts; reached = ($fan.summary.hosts - $fan.summary.failed); failed = $fan.summary.failed } }
 }

@@ -124,6 +124,11 @@ def test_defender_actions_use_fixed_command_lines():
 
 def test_smb1_disable_refuses_dcs_and_live_smb1_clients():
     text = body("security.disable_smb1_server")
+    assert "LogName = 'Microsoft-Windows-SMBServer/Audit'; Id = 3000" in text and "AddDays(-30)" in text
+    assert "-MaxEvents 1000" in text and "NoMatchingEventsFound" in text and "AuditSmb1Access" in text
+    assert "refused: $($ev.Count) SMB1 access event(s) in the last 30 days from $evClients" in text
+    assert "refused: could not read the SMB1 access audit log" in text
+    assert "intermittent SMB1 clients" in text and "will turn SMB1 server off$warn" in text
     assert "DomainRole" in text and "$role -ge 4" in text and "refused: domain controller" in text
     assert "Dialect" in text and "'1.*'" in text and "refused: $($s1.Count) SMB1 session(s)" in text
     assert "-EnableSMB1Protocol $false" in text and "-EnableSMB1Protocol $true" not in text
@@ -136,7 +141,7 @@ def test_firewall_write_only_turns_profiles_on_and_protects_management():
     assert "-Enabled False" not in text and "Disable-NetFirewallRule" not in text and "Set-NetFirewallRule" not in text
     assert "-LocalPort 5985, 5986" in text and "fDenyTSConnections" in text and "PortNumber" in text
     assert "refused:" in text and "AllowInboundRules" in text and "'Block'" in text
-    assert "PolicyStore RSOP" in text and "Get-NetConnectionProfile" in text
+    assert "PolicyStore RSOP" in text and "Get-NetConnectionProfile" not in text
     # problems short-circuit before the change
     assert text.index("if ($problems.Count -gt 0)") < text.index("Set-NetFirewallProfile")
 
@@ -160,3 +165,26 @@ def test_boolean_params_have_safe_defaults():
 def test_fleet_writes_escalate():
     for i in WRITES:
         assert ids()[i].escalate is not None, i
+
+
+def test_firewall_write_refuses_servers_checks_every_profile_and_fails_closed():
+    text = body("security.enable_firewall_profiles")
+    # workstations only, checked on the computer before anything else
+    assert "ProductType -ne 1" in text and "refused: not a workstation" in text
+    assert text.index("ProductType -ne 1") < text.index("Get-NetFirewallProfile -PolicyStore ActiveStore")
+    # every profile that would be turned on is checked, not only the one in use
+    assert "foreach ($prof in $toOn)" in text and "$live" not in text
+    # block rules on 5985/5986 (and RDP / 3389 when RDP is on) count whatever their address scope
+    assert "@(5985, 5986) | ForEach-Object" in text and "if ($rport -ne 3389)" in text
+    block = text.split("foreach ($bp in $blockPorts)")[1].split("DefaultInboundAction")[0]
+    assert "Test-Scope" in block and "Test-Allow" not in block and "RemoteAddress" not in block
+    # allow rules only count without IPsec, user, interface-type, interface or local-address restrictions
+    for f in ("Get-NetFirewallSecurityFilter", "Get-NetFirewallInterfaceTypeFilter", "Get-NetFirewallInterfaceFilter",
+              "Get-NetFirewallServiceFilter"):
+        assert f in text, f
+    allow = text.split("function Test-Allow")[1].split("foreach ($prof in $toOn)")[0]
+    for check in ("$af.LocalAddress", "'NotRequired'", "$sc.LocalUser, $sc.RemoteUser, $sc.RemoteMachine",
+                  "$($it.InterfaceType)\" -ne 'Any'", "$ifc.InterfaceAlias", "Test-Covers $ra $c"):
+        assert check in allow, check
+    assert "if (@($callers).Count -eq 0) { return $false }" in allow
+    assert ids()["security.enable_firewall_profiles"].tier == "W"

@@ -2,11 +2,11 @@
 id: gpo.scripts
 title: GPO startup, shutdown, logon and logoff scripts
 category: Group Policy
-description: Scripts that GPOs run at computer startup or shutdown and user logon or logoff, read from each GPO's scripts.ini and psscripts.ini in SYSVOL. Shows the script path, whether it is a batch or PowerShell script, where it lives and, for scripts stored inside the GPO, whether the file exists. Script parameters are never shown (they sometimes carry credentials); has_parameters says whether any are set. Script contents are not read.
+description: Scripts that GPOs run at computer startup or shutdown and user logon or logoff, read from each GPO's scripts.ini and psscripts.ini in SYSVOL. Shows the script path, whether it is a batch or PowerShell script, where it lives and, for scripts stored inside the GPO, whether the file exists. Script parameters are never shown (they sometimes carry credentials); has_parameters says whether any are set. The command is shown only when it is a plain path to a script or program; a command line with spaces before switches, shell syntax or anything after the file name is replaced by a hidden-inline-command marker with inline_command true, because admins sometimes put whole commands with passwords there. Script contents are not read.
 module: inbox:GroupPolicy
 target: dc
 tier: R
-columns: [gpo, side, phase, kind, script, has_parameters, location, exists, side_enabled]
+columns: [gpo, side, phase, kind, script, inline_command, has_parameters, location, exists, side_enabled]
 tags: [gpo, group policy, startup script, shutdown script, logon script, logoff script, scripts.ini, psscripts.ini, sysvol]
 source: In-box GroupPolicy (Get-GPO) and read-only SYSVOL file reads (Get-Content of scripts.ini and psscripts.ini)
 #>
@@ -16,6 +16,8 @@ Invoke-Op {
     $pol = Get-HermesSysvolPath -Child Policies
     $errs = @()
     $rows = @()
+    # Only a bare path (optionally quoted) to a script or program is returned; anything else may be an inline command.
+    $pathLike = '\A"?[^"&|<>^%;]+\.(?i:bat|cmd|ps1|vbs|js|wsf|exe|kix)"?\z'
     $gpos = @(Get-GPO -All | Sort-Object DisplayName)
     foreach ($g in $gpos) {
         $dir = Join-Path $pol ('{' + $g.Id.ToString().ToUpperInvariant() + '}')
@@ -44,10 +46,12 @@ Invoke-Op {
                         $e = $entries[$key]
                         $cmd = "$($e['cmd'])".Trim()
                         if (-not $cmd) { continue }
+                        $inline = ($cmd -notmatch $pathLike -or $cmd -match '\s[/-]' -or $cmd.Length -gt 300)
                         $location = 'inside the GPO'
                         $exists = $null
                         if ($cmd -match '^\\\\') { $location = 'UNC path' }
                         elseif ($cmd -match '^[A-Za-z]:') { $location = 'local path on the client' }
+                        elseif ($inline) { $location = 'unknown (inline command)' }
                         elseif ($cmd -notmatch '\.\.' -and $cmd -notmatch '[*?:]') {
                             $exists = Test-Path -LiteralPath (Join-Path $dir "$side\Scripts\$($e['section'])\$cmd") -PathType Leaf
                         }
@@ -56,7 +60,8 @@ Invoke-Op {
                             side = $label
                             phase = "$($e['section'])"
                             kind = $(if ($file -eq 'psscripts.ini') { 'PowerShell' } else { 'batch or executable' })
-                            script = $(if ($cmd.Length -gt 300) { $cmd.Substring(0, 300) } else { $cmd })
+                            script = $(if ($inline) { '[hidden: inline command]' } else { $cmd })
+                            inline_command = $inline
                             has_parameters = ("$($e['params'])".Trim() -ne '')
                             location = $location
                             exists = $exists
@@ -67,5 +72,5 @@ Invoke-Op {
             }
         }
     }
-    @{ items = @($rows | Select-Object -First 500); errors = $errs; summary = @{ total = $rows.Count; gpos = $gpos.Count; gpos_with_scripts = @($rows | ForEach-Object { $_.gpo } | Sort-Object -Unique).Count; missing_files = @($rows | Where-Object { $_.exists -eq $false }).Count; truncated = ($rows.Count -gt 500) } }
+    @{ items = @($rows | Select-Object -First 500); errors = $errs; summary = @{ total = $rows.Count; gpos = $gpos.Count; gpos_with_scripts = @($rows | ForEach-Object { $_.gpo } | Sort-Object -Unique).Count; missing_files = @($rows | Where-Object { $_.exists -eq $false }).Count; inline_commands = @($rows | Where-Object { $_.inline_command }).Count; truncated = ($rows.Count -gt 500) } }
 }

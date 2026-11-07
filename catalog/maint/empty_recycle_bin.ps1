@@ -2,7 +2,7 @@
 id: maint.empty_recycle_bin
 title: Empty recycle bins
 category: Maintenance
-description: Permanently deletes items from every user's Recycle Bin on each fixed drive, optionally only items deleted more than OlderThanDays ago (0 means all). Deleted items cannot be restored. Junctions and symlinks inside deleted folders are removed as links and never followed. Each computer stops after 45 seconds; partial is then true and the rest is left in place.
+description: Permanently deletes items from every user's Recycle Bin on each fixed drive, optionally only items deleted more than OlderThanDays ago (0 means all). Deleted items cannot be restored. Junctions and symlinks inside deleted folders are removed as links and never followed. Each computer stops after 45 seconds; partial is then true and the rest is left in place. Domain controllers are refused on the computer itself.
 module: inbox:Microsoft.PowerShell.Management
 target: endpoint
 tier: H
@@ -22,6 +22,10 @@ Invoke-Op {
     $script = {
         param($days, $delete)
         $ErrorActionPreference = 'Continue'
+        if ([int](Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).ProductType -eq 2) {
+            if ($delete) { throw "PolicyBlocked: refusing to empty recycle bins on $env:COMPUTERNAME`: it is a domain controller." }
+            return [pscustomobject]@{ items = 0; files = 0; mb = 0; failed = 0; partial = $false; refused = 'domain controller' }
+        }
         $clock = [Diagnostics.Stopwatch]::StartNew()
         $cutoff = (Get-Date).AddDays(-$days)
         $rp = [IO.FileAttributes]::ReparsePoint
@@ -85,7 +89,7 @@ Invoke-Op {
         $cur = @{}; foreach ($r in $read.items) { $cur[$r['host']] = @{ items = $r['items']; files = $r['files']; mb = $r['mb'] } }
         $scope = if ($OlderThanDays -gt 0) { "deleted more than $OlderThanDays day(s) ago" } else { 'in the bins' }
         return @{ summary = "Permanently delete Recycle Bin items $scope on $($targets.Count) computer(s)"
-                  changes = @($read.items | ForEach-Object { "$($_['host']): permanently delete $($_['items']) item(s), $($_['files']) file(s), $($_['mb']) MB" + $(if ($_['partial']) { ' (count incomplete: time limit)' } else { '' }) }) + @($read.errors | ForEach-Object { "$($_.host): unreachable ($($_.message))" })
+                  changes = @($read.items | ForEach-Object { if ($_['refused']) { "$($_['host']): refused, $($_['refused']); nothing changes" } else { "$($_['host']): permanently delete $($_['items']) item(s), $($_['files']) file(s), $($_['mb']) MB" + $(if ($_['partial']) { ' (count incomplete: time limit)' } else { '' }) } }) + @($read.errors | ForEach-Object { "$($_.host): unreachable ($($_.message))" })
                   current = $cur }
     }
     Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($OlderThanDays, $true) -Script $script

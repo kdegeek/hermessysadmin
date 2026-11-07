@@ -2,7 +2,7 @@
 id: gpo.settings_search
 title: Search GPO settings by keyword
 category: Group Policy
-description: Finds GPOs whose settings mention a keyword (case-insensitive, plain text, not a pattern), for example a registry key, a server name, a share path or a policy name. Reads each GPO's XML settings report and returns the GPO, side, settings area, the setting's name and a short excerpt around the match. Excerpts are hidden for any setting that mentions a password, secret, key or credential, and Group Policy Preferences cpassword values are never read into the search. Reports are generated one GPO at a time, so large domains take a while; at most MaxGpos GPOs and 20 matches per GPO are checked.
+description: Finds GPOs whose settings mention a keyword (case-insensitive, plain text, not a pattern), for example a registry key, a server name, a share path or a policy name. Reads each GPO's XML settings report and returns the GPO, side, settings area, the setting's name and a short excerpt around the match. Settings that mention a password, secret, key, token or credential are skipped entirely; they are neither matched nor returned, so no keyword can reveal anything about their values. Script parameters, command-line arguments, run-as accounts and Group Policy Preferences cpassword values are never read into the search, and a script command is only searched when it is a plain path to a script or program. Reports are generated one GPO at a time, so large domains take a while; at most MaxGpos GPOs and 20 matches per GPO are checked.
 module: inbox:GroupPolicy
 target: dc
 tier: R
@@ -18,7 +18,12 @@ Invoke-Op {
     if ($Keyword -cnotmatch '\A[A-Za-z0-9 ._\\/:{}-]{2,64}\z' -or $Keyword.Trim().Length -lt 2) { throw 'InvalidArguments: Keyword must be 2-64 characters of letters, digits, spaces and . _ - \ / : { }' }
     if ($MaxGpos -lt 1) { $MaxGpos = 1 }
     if ($MaxGpos -gt 1000) { $MaxGpos = 1000 }
-    $secret = '(?i)password|passwd|pwd|secret|credential|cpassword|token|api.?key|private.?key|shared.?key|psk'
+    $secret = '(?i)password|passwd|pwd|secret|credential|cpassword|token|api.?key|private.?key|shared.?key|psk|passphrase|(?<!by)pass(?!(through|thru|ive|port))|licen[cs]e.?key|product.?key|access.?key|conn(ection)?[ ._-]?str|sas.?sig'
+    # Never indexed: arguments and parameters of scripts, tasks and shortcuts, run-as accounts and stored passwords.
+    $noIndexAttr = @('cpassword', 'password', 'arguments', 'args', 'parameters', 'params', 'runas', 'commandline', 'cmdline')
+    $noIndexEl = '\A(?i:Parameters|Arguments|Args|Params|CommandLine|CmdLine|RunAs|cpassword|Password)\z'
+    # A script/program command is searchable only when it is a bare path (no switches, no shell syntax).
+    $pathLike = '\A"?[^"&|<>^%;]+\.(?i:bat|cmd|ps1|vbs|js|wsf|exe|kix)"?\z'
     $cmp = [System.StringComparison]::OrdinalIgnoreCase
     $dcName = Get-HermesDc
     $all = @(Get-GPO -All | Sort-Object DisplayName)
@@ -40,13 +45,26 @@ Invoke-Op {
                 if (-not $ext) { continue }
                 foreach ($node in @($ext.SelectNodes('.//*'))) {
                     if ($hits -ge 20) { break }
-                    # The element's own text: its attributes (never cpassword) and its direct text, not its children.
+                    # Skip anything that is, or sits inside, a parameters/arguments/run-as/password element.
+                    $inside = $false
+                    $up = $node
+                    while ($up -and -not [object]::ReferenceEquals($up, $ext)) {
+                        if ("$($up.LocalName)" -match $noIndexEl) { $inside = $true; break }
+                        $up = $up.ParentNode
+                    }
+                    if ($inside) { continue }
+                    # The element's own text: its attributes (never cpassword, arguments or run-as) and its direct text, not its children.
                     $parts = @()
                     foreach ($a in @($node.Attributes)) {
-                        if ($a -and $a.LocalName -ne 'cpassword' -and $a.Prefix -ne 'xmlns' -and $a.LocalName -ne 'xmlns') { $parts += "$($a.LocalName)=$($a.Value)" }
+                        if ($a -and $a.LocalName -ne 'cpassword' -and $noIndexAttr -notcontains "$($a.LocalName)".ToLowerInvariant() -and $a.Prefix -ne 'xmlns' -and $a.LocalName -ne 'xmlns') { $parts += "$($a.LocalName)=$($a.Value)" }
                     }
                     foreach ($c in @($node.ChildNodes)) {
                         if ($c -and ($c.NodeType -eq 'Text' -or $c.NodeType -eq 'CDATA')) { $parts += "$($c.Value)" }
+                    }
+                    # Script and task commands: only a bare path is searchable; an inline command line is skipped.
+                    if ("$($node.LocalName)" -match '\A(?i:Command)\z' -and @($parts).Count -gt 0) {
+                        $txt = (($parts -join ' ') -replace '\s+', ' ').Trim()
+                        if ($txt -and ($txt -notmatch $pathLike -or $txt -match '\s[/-]')) { continue }
                     }
                     $own = (($parts -join ' ') -replace '\s+', ' ').Trim()
                     $at = $own.IndexOf($Keyword, $cmp)
@@ -63,11 +81,12 @@ Invoke-Op {
                         $cur = $cur.ParentNode
                     }
                     if (-not $set) { $set = $node.ParentNode }
+                    # A setting that mentions a credential is skipped whole: no row, no excerpt, so it cannot be probed.
+                    if ((("$($set.OuterXml)" -replace 'cpassword="[^"]*"', '') -match $secret) -or $own -match $secret -or $setName -match $secret) { continue }
                     if ($setName.Length -gt 200) { $setName = $setName.Substring(0, 200) }
                     $start = [math]::Max(0, $at - 80)
                     $len = [math]::Min($own.Length - $start, 200)
                     $excerpt = $own.Substring($start, $len)
-                    if ((("$($set.OuterXml)" -replace 'cpassword=""', '') -match $secret) -or $own -match $secret) { $excerpt = '(hidden: this setting may hold a credential)' }
                     $key = "$sideName|$area|$setName|$excerpt"
                     if ($seen.ContainsKey($key)) { continue }
                     $seen[$key] = $true

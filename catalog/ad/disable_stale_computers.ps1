@@ -2,7 +2,7 @@
 id: ad.disable_stale_computers
 title: Disable stale computer accounts
 category: AD hygiene
-description: Disables the listed computer accounts (up to 100), but only those that are still stale - no logon for at least Days days (or never, and created before then) and no machine password change in that time either. Domain controllers, protected or critical objects and failover cluster name objects are refused, and accounts that do not qualify are skipped with the reason. Nothing is deleted; re-enable an account to undo. A computer that is in fact still in use loses its domain trust until it is re-enabled.
+description: Disables the listed computer accounts (up to 100), but only those that are still stale - no logon for at least Days days (or never, and created before then) and no machine password change in that time either. Domain controllers, protected or critical objects, failover cluster name objects, the Entra/Azure AD Seamless SSO account AZUREADSSOACC and any account holding service principal names other than the default HOST/, RestrictedKrbHost/, TERMSRV/ and WSMAN/ ones (keytab, appliance and service accounts that never log on but are in use) are refused, and accounts that do not qualify are skipped with the reason. Nothing is deleted; re-enable an account to undo. A computer that is in fact still in use loses its domain trust until it is re-enabled.
 module: inbox:ActiveDirectory
 target: dc
 tier: H
@@ -32,6 +32,11 @@ Invoke-Op {
         $uac = [int]$c.userAccountControl
         if (-not $reason -and (($uac -band 8192) -or ($uac -band 67108864))) { $reason = 'domain controller' }
         elseif (-not $reason -and @($c.servicePrincipalName | Where-Object { "$_" -like 'MSClusterVirtualServer/*' -or "$_" -like 'MSServerCluster/*' }).Count -gt 0) { $reason = 'failover cluster name object' }
+        elseif (-not $reason -and $n -ieq 'AZUREADSSOACC') { $reason = 'Entra/Azure AD Seamless SSO account (AZUREADSSOACC); disabling it breaks Seamless SSO for every user' }
+        elseif (-not $reason -and @($c.servicePrincipalName | Where-Object { "$_" -notmatch '\A(?i:HOST|RestrictedKrbHost|TERMSRV|WSMAN)/' }).Count -gt 0) {
+            $extra = @($c.servicePrincipalName | Where-Object { "$_" -notmatch '\A(?i:HOST|RestrictedKrbHost|TERMSRV|WSMAN)/' } | ForEach-Object { ("$_" -split '/')[0] } | Sort-Object -Unique)
+            $reason = "holds non-default service principal names ($($extra -join ', ')); it may be a keytab, appliance or service account still in use"
+        }
         elseif (-not $reason -and -not $c.Enabled) { $reason = 'already disabled' }
         elseif (-not $reason -and $c.LastLogonDate -and $c.LastLogonDate -ge $cut) { $reason = "logged on $(Iso $c.LastLogonDate)" }
         elseif (-not $reason -and -not $c.LastLogonDate -and $c.WhenCreated -ge $cut) { $reason = "never logged on but created $(Iso $c.WhenCreated)" }

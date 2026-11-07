@@ -2,7 +2,7 @@
 id: maint.clear_wu_cache
 title: Reset the Windows Update download cache
 category: Maintenance
-description: Fixes stuck or corrupt update downloads - stops the Windows Update (wuauserv) and BITS services, renames C:\Windows\SoftwareDistribution\Download to Download.old-<timestamp> (Windows recreates it and downloads again) and starts the services that were running. The update history database is not touched and the old folder is kept for you to delete later. Skipped where an update install or servicing operation is in progress.
+description: Fixes stuck or corrupt update downloads - stops the Windows Update (wuauserv) and BITS services, renames C:\Windows\SoftwareDistribution\Download to Download.old-<timestamp> (Windows recreates it and downloads again) and starts the services that were running. The update history database is not touched and the old folder is kept for you to delete later. Skipped where an update install or servicing operation is in progress. Domain controllers are refused on the computer itself (BITS and Windows Update are not reset on a DC).
 module: inbox:Microsoft.PowerShell.Management
 target: endpoint
 tier: H
@@ -20,6 +20,7 @@ Invoke-Op {
         $ErrorActionPreference = 'Stop'
         $dl = Join-Path $env:windir 'SoftwareDistribution\Download'
         $row = [ordered]@{ mb = $null; files = $null; renamed_to = ''; restarted = ''; skipped = $false; reason = '' }
+        if ([int](Get-CimInstance Win32_OperatingSystem).ProductType -eq 2) { $row.skipped = $true; $row.reason = 'refused: domain controller'; return [pscustomobject]$row }
         $item = Get-Item -LiteralPath $dl -Force -ErrorAction SilentlyContinue
         if (-not $item) { $row.skipped = $true; $row.reason = 'no Download folder'; return [pscustomobject]$row }
         if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { $row.skipped = $true; $row.reason = 'Download is a junction or symlink; left alone'; return [pscustomobject]$row }

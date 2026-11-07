@@ -2,7 +2,7 @@
 id: network.proxy_settings
 title: Machine proxy settings
 category: Network
-description: The WinHTTP proxy (what services, Windows Update and many agents use) and the machine-wide Internet Settings proxy policy on each computer. winhttp is 'direct' when no WinHTTP proxy is set. Per-user browser proxy settings (HKCU) are not read. Values that hold credentials are never read.
+description: The WinHTTP proxy (what services, Windows Update and many agents use) and the machine-wide Internet Settings proxy policy on each computer. winhttp is 'direct' when no WinHTTP proxy is set. Per-user browser proxy settings (HKCU) are not read. Values that hold credentials are never read. Query strings and fragments are stripped from PAC (AutoConfigURL) addresses and user:password@ parts from proxy addresses, because some vendors put tenant keys or tokens there.
 module: inbox:Microsoft.PowerShell.Management
 target: endpoint
 tier: R
@@ -38,11 +38,19 @@ Invoke-Op {
         try { $perUser = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\Internet Settings' -Name ProxySettingsPerUser -ErrorAction Stop).ProxySettingsPerUser } catch { $perUser = $null }
         $is = $null
         try { $is = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings' -ErrorAction Stop } catch { $is = $null }
+        # Strip user:password@ from proxy addresses and the query string / fragment from PAC URLs (they can carry keys).
+        function Get-Clean([string]$v, [bool]$isUrl) {
+            if (-not $v) { return $v }
+            $v = $v -replace '(?<=://)[^/@\s;]*@', '' -replace '(?<=[=;\s]|\A)[^/@\s;=]*:[^/@\s;=]*@', ''
+            if ($isUrl) { $v = $v -replace '[?#].*\z', '' }
+            return $v
+        }
+        if ($proxy) { $proxy = Get-Clean $proxy $false }
         $enable = $null; $mproxy = $null; $pac = $null
         if ($is) {
             if ($null -ne $is.ProxyEnable) { $enable = ([int]$is.ProxyEnable -eq 1) }
-            if ($is.ProxyServer) { $mproxy = "$($is.ProxyServer)" }
-            if ($is.AutoConfigURL) { $pac = "$($is.AutoConfigURL)" }
+            if ($is.ProxyServer) { $mproxy = Get-Clean "$($is.ProxyServer)" $false }
+            if ($is.AutoConfigURL) { $pac = Get-Clean "$($is.AutoConfigURL)" $true }
         }
         [pscustomobject]@{
             winhttp = $mode; winhttp_proxy = $proxy; winhttp_bypass = $bypass

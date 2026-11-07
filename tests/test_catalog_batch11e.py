@@ -107,7 +107,7 @@ def test_gpo_settings_search_validates_and_hides_secrets():
     text = body("gpo.settings_search")
     assert r"$Keyword -cnotmatch '\A[A-Za-z0-9 ._\\/:{}-]{2,64}\z'" in text
     assert "$a.LocalName -ne 'cpassword'" in text
-    assert "cpassword|token" in text and "(hidden: this setting may hold a credential)" in text
+    assert "cpassword|token" in text and "(hidden" not in text
     assert "IndexOf($Keyword, $cmp)" in text and "-match $Keyword" not in text and "-like" not in text.split("$secret =")[1].split("$dcName")[0]
     assert "if ($hits -ge 20) { break }" in text
 
@@ -158,3 +158,24 @@ def test_no_secret_sources():
                         r"key=clear|DSInternals|Install-Module|Invoke-Expression", re.I)
     for i in BATCH_11E:
         assert not banned.search(source(i)), i
+
+
+def test_gpo_settings_search_never_indexes_arguments_or_probes_secrets():
+    text = body("gpo.settings_search")
+    for a in ("'cpassword'", "'arguments'", "'args'", "'parameters'", "'runas'", "'cmdline'"):
+        assert a in text.split("$noIndexAttr = @(")[1].split(")")[0], a
+    assert "$noIndexEl = '\\A(?i:Parameters|Arguments|Args|Params|CommandLine|CmdLine|RunAs|cpassword|Password)\\z'" in text
+    assert "if ($inside) { continue }" in text and "$noIndexAttr -notcontains" in text
+    # a secret-classed setting emits no row at all, so prefix probing cannot work
+    gate = "$setName -match $secret) { continue }"
+    assert gate in text and text.index(gate) < text.index("$rows += @{")
+    # script commands are only searched when they are a bare path
+    assert "'\\A(?i:Command)\\z'" in text and "$txt -notmatch $pathLike" in text
+
+
+def test_gpo_scripts_hide_inline_command_lines():
+    op = ids()["gpo.scripts"]
+    assert "inline_command" in op.meta["columns"]
+    text = body("gpo.scripts")
+    assert "script = $(if ($inline) { '[hidden: inline command]' } else { $cmd })" in text
+    assert "$inline = ($cmd -notmatch $pathLike -or $cmd -match '\\s[/-]' -or $cmd.Length -gt 300)" in text
