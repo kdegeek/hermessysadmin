@@ -45,11 +45,10 @@ _collector_mod = importlib.import_module(f"{_CORE}.collector")
 
 router = APIRouter()
 # Keeps the dashboard's snapshots warm in the background; started by the first dashboard request.
-_collector = _collector_mod.Collector(_runtime.get_service, _api)
+_collector = _collector_mod.Collector(_api)
 
 
 async def _with_service(fn_name: str, *args: Any, **kwargs: Any) -> dict[str, Any]:
-    _collector.touch()
     try:
         _collector.ensure_started()
     except Exception:  # never let the collector break a request
@@ -57,7 +56,10 @@ async def _with_service(fn_name: str, *args: Any, **kwargs: Any) -> dict[str, An
 
     def work() -> dict[str, Any]:
         try:  # never surface a 500 to the Desktop page
-            return getattr(_api, fn_name)(_runtime.get_service(), *args, **kwargs)
+            # Resolved here, inside the request: the run-as password comes from Hermes's secret scope.
+            service = _runtime.get_service()
+            _collector.touch(service)
+            return getattr(_api, fn_name)(service, *args, **kwargs)
         except Exception as exc:
             return _errors.error_result(exc)
 

@@ -8,6 +8,9 @@ down and skips the per-computer sweep.
 
 Read-only by construction: it only calls read views (api.warm / api.warm_device), which go
 through the service and its policy like any other read.
+
+It never loads settings itself: the run-as password comes from Hermes's secret scope, which only
+a dashboard request has. It works on the service the latest request resolved (touch(service)).
 """
 
 from __future__ import annotations
@@ -36,14 +39,7 @@ DISABLE_ENV = "HERMES_SYSADMIN_COLLECTOR"
 
 
 class Collector:
-    def __init__(
-        self,
-        get_service: Callable[[], Any],
-        api: Any,
-        *,
-        clock: Callable[[], float] = time.monotonic,
-    ) -> None:
-        self._get_service = get_service
+    def __init__(self, api: Any, *, clock: Callable[[], float] = time.monotonic) -> None:
         self._api = api
         self._clock = clock
         self._lock = threading.Lock()
@@ -51,14 +47,17 @@ class Collector:
         self._stop = threading.Event()
         self._last_activity = float("-inf")
         self._last_run: dict[str, float] = {}
-        self._service: Any = None
+        self._service: Any = None  # the service the latest dashboard request used
+        self._swept_service: Any = None
         self._failed_this_sweep: set[str] = set()
 
     # ---- control -----------------------------------------------------------
 
-    def touch(self) -> None:
-        """A dashboard request arrived: use the active schedule."""
+    def touch(self, service: Any = None) -> None:
+        """A dashboard request arrived (with the service it resolved): use the active schedule."""
         self._last_activity = self._clock()
+        if service is not None:
+            self._service = service
 
     def ensure_started(self) -> bool:
         """Start the collector thread once (unless HERMES_SYSADMIN_COLLECTOR=0)."""
@@ -90,10 +89,13 @@ class Collector:
 
     def run_once(self) -> list[str]:
         """Run every task that is due; returns their names (one pass of the loop)."""
-        service = self._get_service()
-        if service is not self._service:  # settings changed: a new service starts with empty snapshots
-            self._service = service
+        service = self._service
+        if service is None:
+            return []
+        if service is not self._swept_service:  # settings changed: a new service starts with empty snapshots
+            self._swept_service = service
             self._last_run.clear()
+            self._failed_this_sweep.clear()
         if not getattr(service.settings, "configured", False):
             return []
         ran = []

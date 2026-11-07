@@ -169,8 +169,9 @@ def test_collector_runs_the_active_schedule_and_sweeps_one_computer_per_pass():
     clock = Clock()
     fake = FakeApi(["PC1", "BAD", "PC2"])
     svc = Svc()
-    c = Collector(lambda: svc, fake, clock=clock)
-    c.touch()
+    c = Collector(fake, clock=clock)
+    assert c.run_once() == []  # no dashboard request yet: no service to collect for
+    c.touch(svc)
     assert c.run_once() == ["health", "overview", "monitoring", "fleet", "devices"]
     assert fake.devices == ["PC1"]
     clock.t += 5
@@ -189,7 +190,9 @@ def test_collector_runs_the_active_schedule_and_sweeps_one_computer_per_pass():
 def test_collector_idles_without_the_device_sweep_and_skips_an_unconfigured_service():
     clock = Clock()
     fake = FakeApi(["PC1"])
-    c = Collector(lambda: Svc(), fake, clock=clock)  # never touched: idle schedule
+    c = Collector(fake, clock=clock)
+    c.touch(Svc())
+    c._last_activity = float("-inf")  # nobody has used the dashboard for a while: idle schedule
     assert "devices" not in c.run_once()
     assert fake.devices == []
 
@@ -197,4 +200,6 @@ def test_collector_idles_without_the_device_sweep_and_skips_an_unconfigured_serv
         class settings:
             configured = False
 
-    assert Collector(lambda: Unconfigured(), fake, clock=clock).run_once() == []
+    c = Collector(fake, clock=clock)
+    c.touch(Unconfigured())
+    assert c.run_once() == []
