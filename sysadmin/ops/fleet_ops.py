@@ -23,24 +23,27 @@ def _post_inventory(data: Any, args: Mapping[str, Any], settings: Any) -> Any:
     now = datetime.now(timezone.utc)
     taken_at = str(data.get("taken_at") or now.isoformat())
     summary = fleet.summarize(items, now=now, disk_pct=int(getattr(settings, "alert_disk_free_pct", 10)))
-    try:
-        store = fleet.get_store()
-        store.record({"taken_at": taken_at, "summary": summary, "items": items})
-        store.prune(90)
-    except Exception:
-        log.exception("hermes-sysadmin: fleet snapshot store failed")
+    # Only whole-fleet runs are snapshots: an OU run is a subset and would corrupt trends and offline diffs.
+    # Each snapshot carries its kind (workstation|server|any) and history/previous are filtered by it.
+    if not args.get("ou"):
+        try:
+            store = fleet.get_store()
+            store.record({"taken_at": taken_at, "summary": summary, "items": items, "kind": str(args.get("kind") or "workstation")})
+            store.prune(90)
+        except Exception:
+            log.exception("hermes-sysadmin: fleet snapshot store failed")
     return {"items": items, "summary": summary, "taken_at": taken_at}
 
 
 def _history(service: Any, args: Mapping[str, Any]) -> Any:
-    return {"items": fleet.get_store().history(int(args.get("days") or 30))}
+    return {"items": fleet.get_store().history(int(args.get("days") or 30), kind=str(args.get("kind") or "workstation"))}
 
 
 register(Op(
     name="fleet_inventory", toolset=TOOLSET, tier="R", script="fleet_inventory",
     description=(
         "Fleet inventory: every enabled AD computer with online state, OS, last logon, disk, uptime, pending reboot, "
-        "patch age, Defender, BitLocker and RDP/NLA posture, plus a summary. Each run is saved as a snapshot."
+        "patch age, Defender, BitLocker and RDP/NLA posture, plus a summary. Each whole-fleet run (no ou) is saved as a snapshot of its kind."
     ),
     params=(
         Param("ou", "string", "DN of an OU to limit the inventory to."),
@@ -62,6 +65,10 @@ register(Op(
 register(Op(
     name="fleet_history", toolset=TOOLSET, tier="R", script="",
     description="Fleet summary snapshots over time (oldest first), from earlier fleet_inventory runs.",
-    params=(Param("days", "integer", "How many days back (1-90).", default=30, minimum=1, maximum=90),),
+    params=(
+        Param("days", "integer", "How many days back (1-90).", default=30, minimum=1, maximum=90),
+        Param("kind", "string", "Which snapshots: the Overview trend uses workstation (the default).",
+              enum=("workstation", "server", "any"), default="workstation"),
+    ),
     local=_history,
 ))

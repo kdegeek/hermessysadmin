@@ -173,7 +173,7 @@ def ok(data):
 
 def test_run_once_end_to_end_dedupes_and_resolves(stores):
     st, fs = stores
-    fs.record({"taken_at": "2026-11-06T10:00:00+00:00", "items": [host("A")]})
+    fs.record({"taken_at": "2026-11-06T10:00:00+00:00", "items": [host("A")], "kind": "any"})
     state = {"free": 3, "da": ["admin"]}
     svc = FakeService({
         "fleet_inventory": lambda a: ok({"items": [host("A", c_free_pct=state["free"])]}),
@@ -202,9 +202,9 @@ def test_failed_source_does_not_resolve_its_alerts(stores):
 def test_offline_alert_survives_next_snapshot(stores):
     st, fs = stores
     old = (NOW - timedelta(days=10)).isoformat()
-    fs.record({"taken_at": "2026-11-06T10:00:00+00:00", "items": [host("E")]})
+    fs.record({"taken_at": "2026-11-06T10:00:00+00:00", "items": [host("E")], "kind": "any"})
     offline = ok({"items": [host("E", online=False, last_logon=old)]})
-    svc = FakeService({"fleet_inventory": lambda a: (fs.record({"taken_at": svc_clock.pop(0), "items": [host("E", online=False, last_logon=old)]}), offline)[1]})
+    svc = FakeService({"fleet_inventory": lambda a: (fs.record({"taken_at": svc_clock.pop(0), "items": [host("E", online=False, last_logon=old)], "kind": "any"}), offline)[1]})
     svc_clock = ["2026-11-06T11:00:00+00:00", "2026-11-06T11:30:00+00:00"]
     assert "E: offline" in monitor.run_once(svc, S, now=NOW)
     assert monitor.run_once(svc, S, now=NOW) == ""  # previous snapshot already offline, alert still open
@@ -509,3 +509,10 @@ def test_watch_state_flag(monkeypatch, capsys, stores):
     out = capsys.readouterr().out
     assert "1 open alert" in out and "delta text" not in out
     assert watch.main([]) == 0 and capsys.readouterr().out.strip() == "delta text"
+
+
+def test_monitor_previous_ignores_other_kinds(stores):
+    _, fs = stores
+    fs.record({"taken_at": "2026-11-06T10:00:00+00:00", "items": [host("ONLYWS")], "kind": "workstation"})
+    inputs, _ = monitor._gather(FakeService({"fleet_inventory": ok({"items": [host("A")]})}), S, monitor.get_state())
+    assert inputs["previous_fleet"] == []

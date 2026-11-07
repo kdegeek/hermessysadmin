@@ -304,7 +304,7 @@ def _gather(service: Any, settings: Any, state: AlertState) -> tuple[dict[str, A
     if isinstance(inv, Mapping):
         inputs["fleet"] = inv
         try:
-            prev = fleet.get_store().previous()
+            prev = fleet.get_store().previous(kind="any")  # same kind the monitor records below
             items = list((prev or {}).get("items") or [])
             # A host with an open offline alert still counts as "was online", or the alert would resolve next run.
             items += [{"name": a["host"], "online": True} for a in state.open() if a["rule"] == "offline"]

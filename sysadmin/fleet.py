@@ -97,23 +97,29 @@ class FleetStore:
         self._conn = conn
         self._lock = threading.Lock()
         with self._lock:
-            self._conn.execute("CREATE TABLE IF NOT EXISTS snapshots (taken_at TEXT PRIMARY KEY, summary TEXT, items TEXT)")
+            self._conn.execute("CREATE TABLE IF NOT EXISTS snapshots (taken_at TEXT PRIMARY KEY, summary TEXT, items TEXT, kind TEXT NOT NULL DEFAULT 'workstation')")
+            cols = {r[1] for r in self._conn.execute("PRAGMA table_info(snapshots)")}
+            if "kind" not in cols:  # migrate a pre-kind database: old rows were workstation-scoped
+                self._conn.execute("ALTER TABLE snapshots ADD COLUMN kind TEXT NOT NULL DEFAULT 'workstation'")
             self._conn.commit()
 
     def record(self, snapshot: Mapping[str, Any]) -> bool:
         with self._lock:
             cur = self._conn.execute(
-                "INSERT OR IGNORE INTO snapshots (taken_at, summary, items) VALUES (?, ?, ?)",
+                "INSERT OR IGNORE INTO snapshots (taken_at, summary, items, kind) VALUES (?, ?, ?, ?)",
                 (str(snapshot["taken_at"]), json.dumps(snapshot.get("summary") or {}, default=str),
-                 json.dumps(snapshot.get("items") or [], default=str)),
+                 json.dumps(snapshot.get("items") or [], default=str), str(snapshot.get("kind") or "workstation")),
             )
             self._conn.commit()
             return cur.rowcount == 1
 
-    def _ordered(self) -> list[tuple[datetime, str]]:
-        """(time, taken_at key) for every snapshot, oldest first. Keys that do not parse sort first."""
+    def _ordered(self, kind: str | None = None) -> list[tuple[datetime, str]]:
+        """(time, taken_at key) for every snapshot of `kind` (all kinds when None), oldest first. Keys that do not parse sort first."""
         with self._lock:
-            keys = [r[0] for r in self._conn.execute("SELECT taken_at FROM snapshots")]
+            if kind is None:
+                keys = [r[0] for r in self._conn.execute("SELECT taken_at FROM snapshots")]
+            else:
+                keys = [r[0] for r in self._conn.execute("SELECT taken_at FROM snapshots WHERE kind = ?", (kind,))]
         floor = datetime.min.replace(tzinfo=timezone.utc)
         return sorted(((parse_time(k) or floor, k) for k in keys), key=lambda p: p[0])
 
@@ -124,17 +130,17 @@ class FleetStore:
             return None
         return {"taken_at": row[0], "summary": json.loads(row[1] or "{}"), "items": json.loads(row[2] or "[]")}
 
-    def latest(self) -> dict[str, Any] | None:
-        order = self._ordered()
+    def latest(self, kind: str | None = None) -> dict[str, Any] | None:
+        order = self._ordered(kind)
         return self._load(order[-1][1]) if order else None
 
-    def previous(self) -> dict[str, Any] | None:
-        order = self._ordered()
+    def previous(self, kind: str | None = None) -> dict[str, Any] | None:
+        order = self._ordered(kind)
         return self._load(order[-2][1]) if len(order) > 1 else None
 
-    def history(self, days: int, now: datetime | None = None) -> list[dict[str, Any]]:
+    def history(self, days: int, now: datetime | None = None, kind: str | None = None) -> list[dict[str, Any]]:
         cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=days)
-        keys = [k for t, k in self._ordered() if t >= cutoff]
+        keys = [k for t, k in self._ordered(kind) if t >= cutoff]
         if not keys:
             return []
         with self._lock:

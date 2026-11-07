@@ -105,3 +105,45 @@ def test_ad_fleet_command(make_service, runner, monkeypatch):
 
 def test_ops_are_read_only():
     assert all(OPS[n].tier == "R" for n in ("fleet_inventory", "fleet_device", "fleet_history"))
+
+
+def test_snapshots_are_kept_per_kind():
+    st = fleet.FleetStore(sqlite3.connect(":memory:"))
+    st.record({"taken_at": "2026-11-05T12:00:00+00:00", "summary": {"n": 1}, "items": [], "kind": "workstation"})
+    st.record({"taken_at": "2026-11-05T13:00:00+00:00", "summary": {"n": 9}, "items": [], "kind": "any"})
+    st.record({"taken_at": "2026-11-06T12:00:00+00:00", "summary": {"n": 2}, "items": []})  # default kind
+    assert [h["summary"]["n"] for h in st.history(7, now=NOW, kind="workstation")] == [1, 2]
+    assert [h["summary"]["n"] for h in st.history(7, now=NOW, kind="any")] == [9]
+    assert st.previous(kind="workstation")["summary"]["n"] == 1 and st.previous(kind="any") is None
+    assert st.latest(kind="any")["summary"]["n"] == 9
+
+
+def test_store_migrates_database_without_kind_column():
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE snapshots (taken_at TEXT PRIMARY KEY, summary TEXT, items TEXT)")
+    conn.execute("INSERT INTO snapshots VALUES ('2026-11-05T12:00:00+00:00', '{\"n\": 1}', '[]')")
+    conn.commit()
+    st = fleet.FleetStore(conn)
+    assert [h["summary"]["n"] for h in st.history(7, now=NOW, kind="workstation")] == [1]
+    assert st.history(7, now=NOW, kind="any") == []
+    assert st.record({"taken_at": NOW.isoformat(), "summary": {"n": 2}, "items": [], "kind": "any"})
+    fleet.FleetStore(conn)  # re-opening an already migrated database is a no-op
+
+
+def test_inventory_records_kind_and_skips_ou_runs(make_service, runner):
+    st = fleet.get_store()
+    runner.responses["fleet_inventory"] = {"taken_at": NOW.isoformat(), "items": [item("A")]}
+    make_service().call("fleet_inventory", {"ou": "OU=Lab,DC=corp,DC=local"}, actor="agent")
+    assert st.latest() is None
+    runner.responses["fleet_inventory"] = {"taken_at": (NOW + timedelta(minutes=1)).isoformat(), "items": [item("A")]}
+    make_service().call("fleet_inventory", {"kind": "any", "refresh": True}, actor="agent")
+    assert st.latest(kind="any") is not None and st.latest(kind="workstation") is None
+
+
+def test_history_op_filters_by_kind(make_service):
+    st = fleet.get_store()
+    now = datetime.now(timezone.utc)
+    st.record({"taken_at": now.isoformat(), "summary": {"total": 3}, "items": []})
+    st.record({"taken_at": (now - timedelta(hours=1)).isoformat(), "summary": {"total": 30}, "items": [], "kind": "any"})
+    svc = make_service()
+    assert [h["summary"]["total"] for h in api.fleet_history(svc, 30)["data"]["items"]] == [3]
