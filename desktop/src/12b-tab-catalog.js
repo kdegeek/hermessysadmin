@@ -24,6 +24,15 @@ async function catalogCopy(text, done) {
   host.notify({ kind: ok ? 'success' : 'error', message: ok ? done : 'Copy failed' });
 }
 
+// PowerShell 5.1 can emit a single object where an array is expected.
+function catalogAsList(x) {
+  return Array.isArray(x) ? x : x ? [x] : [];
+}
+
+function catalogInstall(entry) {
+  return runWrite(op('catalog_module_install', { name: catalogModuleName(entry) }), { title: `Install ${catalogModuleName(entry)}` });
+}
+
 function catalogDefaults(entry) {
   const v = {};
   list(entry.params).forEach((p) => {
@@ -42,7 +51,9 @@ function catalogBuildParams(entry, values) {
     if (CATALOG_TARGET_PARAMS.has(p.name)) continue;
     const raw = values[p.name];
     if (p.type === 'boolean') {
-      args[p.name] = !!raw;
+      // Never override a script default with false when the param declares no default.
+      if (p.default !== null && p.default !== undefined) args[p.name] = !!raw;
+      else if (raw === true) args[p.name] = true;
       continue;
     }
     const text = String(raw === undefined ? '' : raw).trim();
@@ -136,14 +147,26 @@ function catalogSummaryText(s) {
 function CatalogResult({ entry, data }) {
   const payload = data === null || data === undefined ? {} : data;
   const rowsRaw = Array.isArray(payload.items) ? payload.items : Array.isArray(payload) ? payload : null;
-  const errors = Array.isArray(payload.errors) ? payload.errors : [];
+  const errors = catalogAsList(payload.errors);
   const summary = catalogSummaryText(payload.summary);
+  const errorStrip = errors.length
+    ? jsx(Callout, {
+        tone: 'red',
+        icon: '⚠',
+        children: jsx('div', {
+          children: errors.map((e, i) => jsx('div', { className: 'hs-small', children: e && typeof e === 'object' ? `${e.host || '?'}: ${e.message || JSON.stringify(e)}` : String(e) }, i)),
+        }),
+      })
+    : null;
+  const summaryLine = summary ? jsx('div', { className: 'hs-muted hs-small', children: summary }) : null;
   if (!rowsRaw) {
-    const rows = typeof payload === 'object' ? Object.entries(payload).map(([k, v]) => [k, typeof v === 'object' && v !== null ? jsx('span', { className: 'hs-mono', children: JSON.stringify(v) }) : String(v)]) : [['value', String(payload)]];
+    const rows = typeof payload === 'object' ? Object.entries(payload).filter(([k]) => k !== 'errors' && k !== 'summary').map(([k, v]) => [k, typeof v === 'object' && v !== null ? jsx('span', { className: 'hs-mono', children: JSON.stringify(v) }) : String(v)]) : [['value', String(payload)]];
     return jsxs('div', {
       className: 'hs-stack',
       children: [
         rows.length ? jsx(KV, { rows }) : jsx('div', { className: 'hs-muted', children: 'No data returned.' }),
+        errorStrip,
+        summaryLine,
         jsx(CatalogExport, { entry, rows: [], data: payload }),
       ],
     });
@@ -172,16 +195,8 @@ function CatalogResult({ entry, data }) {
             }),
           })
         : jsx('div', { className: 'hs-muted', children: 'No rows returned.' }),
-      errors.length
-        ? jsx(Callout, {
-            tone: 'red',
-            icon: '⚠',
-            children: jsx('div', {
-              children: errors.map((e, i) => jsx('div', { className: 'hs-small', children: e && typeof e === 'object' ? `${e.host || '?'}: ${e.message || JSON.stringify(e)}` : String(e) }, i)),
-            }),
-          })
-        : null,
-      summary ? jsx('div', { className: 'hs-muted hs-small', children: summary }) : null,
+      errorStrip,
+      summaryLine,
       jsx(CatalogExport, { entry, rows, cols, data: payload }),
     ],
   });
@@ -229,7 +244,7 @@ function CatalogTargetPicker({ mode, onMode, selected, onSelected, typed, onType
 }
 
 // The shared form and actions. Used inline by CatalogTab and inside CatalogRunDialog.
-function CatalogRunner({ entry, computers, onDone }) {
+function CatalogRunner({ entry, computers, inDialog }) {
   const endpoint = entry.target === 'endpoint';
   const writes = entry.tier !== 'R';
   const preset = list(computers);
@@ -293,14 +308,16 @@ function CatalogRunner({ entry, computers, onDone }) {
       title: entry.title,
       destructive: !!entry.destructive,
       onDone: (data) => {
-        setResult(data);
-        if (onDone) onDone(data);
+        const failed = catalogAsList(data && data.errors).length;
+        if (failed) host.notify({ kind: 'warning', message: `${entry.title}: finished with ${failed} failed host${failed === 1 ? '' : 's'}. See the results.` });
+        // The confirm dialog replaced this one, so the dialog path shows results in a new dialog.
+        if (inDialog) openDialog(CatalogResultDialog, { entry, data });
+        else setResult(data);
       },
     });
     if (out.state === 'error') setError(out.error);
   };
-  const install = () => runWrite(op('catalog_module_install', { name: catalogModuleName(entry) }), { title: `Install ${catalogModuleName(entry)}` });
-
+  const install = () => catalogInstall(entry);
   const needsInstall = entry.module_installed === false;
   return jsxs('div', {
     className: 'hs-stack',
@@ -334,7 +351,6 @@ function CatalogRunner({ entry, computers, onDone }) {
 }
 
 function CatalogEntryDetail({ entry }) {
-  const install = () => runWrite(op('catalog_module_install', { name: catalogModuleName(entry) }), { title: `Install ${catalogModuleName(entry)}` });
   return jsxs('div', {
     className: 'hs-stack',
     children: [
@@ -345,7 +361,6 @@ function CatalogEntryDetail({ entry }) {
           jsx(TierTag, { tier: entry.tier }),
           jsx(Badge, { children: entry.target === 'dc' ? 'DC' : 'Endpoints' }),
           jsx(ModuleBadge, { e: entry }),
-          entry.module_installed === false ? jsx(Btn, { small: true, onClick: install, children: 'Install' }) : null,
         ],
       }),
       entry.description ? jsx('p', { className: 'hs-p', children: entry.description }) : null,
@@ -367,7 +382,16 @@ function catalogMatches(e, text) {
 
 function CatalogTab() {
   const cat = useCatalog();
-  const preset = useValue($catalogComputers);
+  const handed = useValue($catalogComputers);
+  // Take the handed-over computers once, then clear the shared atom so they never outlive this visit.
+  const [preset, setPreset] = useState([]);
+  useEffect(() => {
+    if (handed.length) {
+      setPreset(handed);
+      $catalogComputers.set([]);
+    }
+  }, [handed]);
+  useEffect(() => () => $catalogComputers.set([]), []);
   const [category, setCategory] = useState('');
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState(null);
@@ -446,11 +470,24 @@ function CatalogRunDialog({ seq, entry, computers }) {
     wide: true,
     footer: [closeButton(seq, 'Close')],
     children: e
-      ? jsx(CatalogRunner, { entry: e, computers })
+      ? jsx(CatalogRunner, { entry: e, computers, inDialog: true })
       : cat.res && !cat.res.ok
         ? jsx(ErrorBox, { error: cat.res.error })
         : cat.res
           ? jsx('div', { className: 'hs-muted', children: `Catalog entry ${entry} was not found.` })
           : jsx(Spinner, { label: 'Loading catalog…' }),
+  });
+}
+
+function CatalogResultDialog({ seq, entry, data }) {
+  const failed = catalogAsList(data && data.errors).length;
+  return jsx(Modal, {
+    seq,
+    title: failed ? `${entry.title}: finished with ${failed} failed` : `${entry.title}: results`,
+    tier: entry.tier,
+    opName: `cat.${entry.id}`,
+    wide: true,
+    footer: [closeButton(seq, 'Close')],
+    children: jsx(CatalogResult, { entry, data }),
   });
 }
