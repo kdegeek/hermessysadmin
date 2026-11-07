@@ -34,4 +34,4 @@ jobs:
       - name: Desktop syntax check
         run: node --check desktop/plugin.js
       - name: Desktop unit tests
-        run: node --test desktop/tests/
+        run: node --test desktop/tests/*.test.mjs
