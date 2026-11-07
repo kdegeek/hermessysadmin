@@ -1,7 +1,7 @@
 // ============================================================================
 // §12a TAB: FLEET (inventory table, filters, multi-select) AND THE DEVICE DRAWER
 // ============================================================================
-const FLEET_LOW_DISK_PCT = 10;
+const FLEET_LOW_DISK_DEFAULT = 10;
 const FLEET_PATCH_OLD_DAYS = 35;
 const FLEET_CHIPS = [
   ['low_disk', 'Low disk'],
@@ -15,7 +15,7 @@ const FLEET_PREDICATES = {
   all: () => true,
   online: (c) => !!c.online,
   offline: (c) => !c.online,
-  low_disk: (c) => !!c.online && typeof c.c_free_pct === 'number' && c.c_free_pct < FLEET_LOW_DISK_PCT,
+  low_disk: (c, lowPct) => !!c.online && typeof c.c_free_pct === 'number' && c.c_free_pct < lowPct,
   reboot: (c) => !!c.pending_reboot,
   patch_old: (c) => !!c.online && typeof c.patch_age_days === 'number' && c.patch_age_days > FLEET_PATCH_OLD_DAYS,
   defender_off: (c) => c.defender_rt === false,
@@ -36,7 +36,9 @@ function closeDevice() {
 
 // The single entry point for "run a catalog entry on these computers". Task 15 swaps the body for its dialog.
 function openCatalogRun({ computers, entry }) {
-  return goTab('catalog', { catalog: { computers: list(computers), entry } });
+  const opened = goTab('catalog', { catalog: { computers: list(computers), entry } });
+  if (!opened) host.notify({ kind: 'info', message: 'The catalog opens in the Catalog tab, which is not available in this version yet.' });
+  return opened;
 }
 
 function fleetMatches(c, text) {
@@ -58,9 +60,9 @@ function FlagBadge({ ok, on, off }) {
   return jsx(Badge, { tone: ok ? 'green' : 'red', children: ok ? on : off });
 }
 
-function DiskCell({ c }) {
+function DiskCell({ c, lowPct }) {
   if (typeof c.c_free_pct !== 'number') return jsx('span', { className: 'hs-muted', children: '—' });
-  const low = c.c_free_pct < FLEET_LOW_DISK_PCT;
+  const low = c.c_free_pct < lowPct;
   return jsxs('span', {
     className: 'hs-nowrap',
     title: typeof c.c_free_gb === 'number' ? `${c.c_free_gb} GB free of ${c.c_size_gb} GB` : undefined,
@@ -71,11 +73,18 @@ function DiskCell({ c }) {
   });
 }
 
-function FleetRow({ c, selected, open }) {
+function FleetRow({ c, selected, open, lowPct }) {
   const stale = typeof c.patch_age_days === 'number' && c.patch_age_days > FLEET_PATCH_OLD_DAYS;
   return jsxs('tr', {
     className: `click${open ? ' sel' : ''}`,
+    tabIndex: 0,
     onClick: () => openDevice(c.name),
+    onKeyDown: (e) => {
+      if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault();
+        openDevice(c.name);
+      }
+    },
     children: [
       jsx('td', {
         onClick: (e) => e.stopPropagation(),
@@ -86,7 +95,7 @@ function FleetRow({ c, selected, open }) {
       jsx('td', { children: jsxs('span', { className: 'hs-nowrap', children: [jsx(Dot, { tone: c.online ? 'good' : 'muted' }), ' ', c.online ? 'online' : 'offline'] }) }),
       jsx('td', { children: c.user || '—' }),
       jsx('td', { className: 'hs-muted hs-nowrap', children: typeof c.uptime_days === 'number' ? `${c.uptime_days} d` : '—' }),
-      jsx('td', { children: jsx(DiskCell, { c }) }),
+      jsx('td', { children: jsx(DiskCell, { c, lowPct }) }),
       jsx('td', { className: stale ? 'hs-text-yellow hs-nowrap' : 'hs-muted hs-nowrap', children: typeof c.patch_age_days === 'number' ? `${c.patch_age_days} d` : '—' }),
       jsx('td', { children: c.pending_reboot ? jsx(Badge, { tone: 'yellow', title: list(c.reboot_reasons).join(', '), children: 'pending' }) : jsx('span', { className: 'hs-muted', children: '—' }) }),
       jsx('td', { children: jsx(FlagBadge, { ok: c.defender_rt, on: 'on', off: 'off' }) }),
@@ -101,6 +110,9 @@ function FleetTab() {
   const selection = useValue($fleetSelection);
   const open = useValue($device);
   const fleet = useFleet();
+  const monitoring = useMonitoring();
+  const monSettings = monitoring.res && monitoring.res.ok ? (monitoring.res.data || {}).settings || {} : {};
+  const lowPct = typeof monSettings.alert_disk_free_pct === 'number' ? monSettings.alert_disk_free_pct : FLEET_LOW_DISK_DEFAULT;
   const [busy, setBusy] = useState(false);
   const refresh = async () => {
     setBusy(true);
@@ -114,8 +126,17 @@ function FleetTab() {
   const osOptions = Array.from(new Set(items.map((c) => c.os).filter(Boolean))).sort();
   const text = (f.query || '').trim().toLowerCase();
   const test = FLEET_PREDICATES[f.filter] || FLEET_PREDICATES.all;
-  const rows = items.filter((c) => test(c) && (!f.os || c.os === f.os) && fleetMatches(c, text));
+  const rows = items.filter((c) => test(c, lowPct) && (!f.os || c.os === f.os) && fleetMatches(c, text));
   const selected = new Set(selection);
+  const knownKey = items.map((c) => c.name).join('|');
+  useEffect(() => {
+    if (!data) return;
+    const known = new Set(items.map((c) => c.name));
+    const cur = $fleetSelection.get();
+    if (cur.some((n) => !known.has(n))) $fleetSelection.set(cur.filter((n) => known.has(n)));
+  }, [knownKey, !!data]);
+  const visibleSelected = rows.filter((c) => selected.has(c.name)).map((c) => c.name);
+  const hiddenCount = selection.length - visibleSelected.length;
   const allVisible = rows.length > 0 && rows.every((c) => selected.has(c.name));
   const toggleAll = (on) => {
     const visible = new Set(rows.map((c) => c.name));
@@ -150,8 +171,8 @@ function FleetTab() {
         ? jsxs('div', {
             className: 'hs-toolbar hs-selbar',
             children: [
-              jsx('b', { children: `${selection.length} selected` }),
-              jsx(Btn, { small: true, kind: 'primary', onClick: () => openCatalogRun({ computers: selection }), children: 'Run catalog entry…' }),
+              jsx('b', { children: hiddenCount > 0 ? `${selection.length} selected (${hiddenCount} hidden)` : `${selection.length} selected` }),
+              jsx(Btn, { small: true, kind: 'primary', disabled: !visibleSelected.length, onClick: () => openCatalogRun({ computers: visibleSelected }), children: `Run catalog entry… (${visibleSelected.length})` }),
               jsx(Btn, { small: true, kind: 'ghost', onClick: () => $fleetSelection.set([]), children: 'Clear' }),
             ],
           })
@@ -169,7 +190,7 @@ function FleetTab() {
                     'Computer', 'OS', 'Status', 'User', 'Uptime', 'C: free', 'Patch age', 'Reboot', 'Defender', 'BitLocker', 'RDP',
                   ],
                   children: rows.length
-                    ? rows.map((c) => jsx(FleetRow, { c, selected: selected.has(c.name), open: open === c.name }, c.name))
+                    ? rows.map((c) => jsx(FleetRow, { c, selected: selected.has(c.name), open: open === c.name, lowPct }, c.name))
                     : jsx(EmptyRow, { cols: 12, text: 'No computers match these filters' }),
                 }),
               }),
@@ -265,17 +286,29 @@ function ShadowDialog({ seq, computer, session }) {
 // A small form for a catalog write that needs typed arguments. fields: [{key, label, placeholder, number, value}].
 function ParamDialog({ seq, title, entry, computers, fields, confirmLabel, body, doneMessage }) {
   const [vals, setVals] = useState(() => Object.fromEntries(fields.map((fl) => [fl.key, fl.value === undefined ? '' : String(fl.value)])));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
   const missing = fields.some((fl) => fl.required !== false && !String(vals[fl.key] || '').trim());
-  const submit = () => {
-    if (missing) return;
+  const submit = async () => {
+    if (missing || busy) return;
     const args = { computers };
     fields.forEach((fl) => {
       const v = String(vals[fl.key] || '').trim();
       if (v === '') return;
       args[fl.key] = fl.number ? Number(v) : v;
     });
+    const o = op(`cat.${entry}`, args);
+    setBusy(true);
+    setError(null);
+    // Check the decision first so a rejected request leaves the typed text in place.
+    const d = await api.decision(o);
+    if (!d.ok) {
+      setBusy(false);
+      setError(d.error);
+      return;
+    }
     closeDialog(seq);
-    runWrite(op(`cat.${entry}`, args), { title, body, confirmLabel: confirmLabel || 'Continue', doneMessage });
+    runWrite(o, { title, body, confirmLabel: confirmLabel || 'Continue', doneMessage });
   };
   return jsx(Modal, {
     seq,
@@ -283,24 +316,27 @@ function ParamDialog({ seq, title, entry, computers, fields, confirmLabel, body,
     description: computers.map(shortHost).join(', '),
     footer: [
       jsx(Btn, { onClick: () => closeDialog(seq), children: 'Cancel' }, 'cancel'),
-      jsx(Btn, { kind: 'primary', onClick: submit, disabled: missing, children: confirmLabel || 'Continue' }, 'ok'),
+      jsx(Btn, { kind: 'primary', onClick: submit, disabled: missing || busy, children: confirmLabel || 'Continue' }, 'ok'),
     ],
     children: jsx('div', {
       className: 'hs-stack',
-      children: fields.map((fl, i) =>
+      children: [error ? jsx(ErrorBox, { error }, 'err') : null].concat(fields.map((fl, i) =>
         jsx(Field, {
           label: fl.label,
           children: jsx(TextInput, { value: vals[fl.key], onChange: (v) => setVals({ ...vals, [fl.key]: v }), placeholder: fl.placeholder, autoFocus: i === 0, onEnter: submit, type: fl.number ? 'number' : 'text' }),
         }, fl.key),
-      ),
+      )),
     }),
   });
 }
 
 function runFix(name, fix, label) {
-  return runWrite(op(`cat.${fix}`, { computers: [name] }), {
+  // Shadow policy needs an explicit level; 1 is full control with the user's consent.
+  const shadow = fix === 'remote.set_shadow_policy';
+  const args = shadow ? { computers: [name], Level: 1 } : { computers: [name] };
+  return runWrite(op(`cat.${fix}`, args), {
     title: `Fix: ${label}`,
-    body: `Apply "${label}" on ${shortHost(name)}?`,
+    body: shadow ? `Set the shadow policy on ${shortHost(name)} to level 1: full control, with the user's consent?` : `Apply "${label}" on ${shortHost(name)}?`,
     confirmLabel: 'Apply fix',
     doneMessage: `${label}: fixed on ${shortHost(name)}`,
   });
@@ -561,8 +597,7 @@ function DeviceRun({ name }) {
 function DeviceHistory({ name }) {
   const query = { limit: 200 };
   const q = useApi(KEY.audit(query), () => api.audit(query), { staleTime: 15000 });
-  const needle = shortHost(name).toLowerCase();
-  const rows = q.res && q.res.ok ? list(q.res.data.items).filter((a) => String(a.target || '').toLowerCase().includes(needle)) : [];
+  const rows = q.res && q.res.ok ? list(q.res.data.items).filter((a) => String(a.target || '').split(',').some((t) => t.trim() && sameHost(t.trim(), name))) : [];
   return jsx('div', {
     className: 'hs-sec',
     children: jsx(Pending, {
