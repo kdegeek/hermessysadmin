@@ -135,6 +135,15 @@ def main(argv):
         print(f"transport=winrm run_as=- (jump host {settings.host} as {settings.username})")
     audit = AuditLog(sqlite3.connect(":memory:", check_same_thread=False))  # never touch the real audit log
     svc = Service(settings, Runner(transport), audit)
+    if "--only" in argv:
+        # Debug one read op and print its whole envelope: --only <op> [--args '<json>'].
+        name = argv[argv.index("--only") + 1]
+        if name not in OPS or OPS[name].tier != "R":
+            print(f"--only takes a read op; {name} is not one")
+            return 2
+        args = json.loads(argv[argv.index("--args") + 1]) if "--args" in argv else {}
+        print(json.dumps(svc.call(name, args, actor="command"), indent=1, default=str)[:20000])
+        return 0
     results = []
 
     def run(name, args=None, preview=False):
