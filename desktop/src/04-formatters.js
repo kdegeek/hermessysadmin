@@ -34,6 +34,18 @@ function plural(n, word) {
   return `${n} ${word}${n === 1 ? '' : 's'}`;
 }
 
+// Session idle time: minutes from quser as "2 d 5 h" / "3 h 10 m" / "12 m"; falls back to the raw text.
+function idleText(minutes, raw) {
+  if (typeof minutes !== 'number' || !Number.isFinite(minutes) || minutes < 0) return raw || '—';
+  if (minutes < 1) return 'active';
+  const d = Math.floor(minutes / 1440);
+  const h = Math.floor((minutes % 1440) / 60);
+  const m = Math.floor(minutes % 60);
+  if (d) return `${d} d ${h} h`;
+  if (h) return `${h} h ${m} m`;
+  return `${m} m`;
+}
+
 function ago(v) {
   const d = toDate(v);
   if (!d) return '—';

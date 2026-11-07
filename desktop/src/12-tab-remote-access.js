@@ -91,7 +91,7 @@ function SessionsView() {
               jsx(Chip, { on: onlyDisc, onClick: () => setOnlyDisc(!onlyDisc), children: 'Disconnected' }),
               jsx(Chip, { on: onlyIdle, onClick: () => setOnlyIdle(!onlyIdle), children: 'Idle >1 d' }),
               jsx('span', { className: 'hs-grow' }),
-              jsx('span', { className: 'hs-muted hs-small', children: `${num(sum.sessions)} sessions · ${num(sum.active)} active · ${num(sum.disconnected)} disconnected · ${num(sum.reachable)}/${num(sum.hosts)} servers reachable` }),
+              jsx('span', { className: 'hs-muted hs-small', children: `${plural(Number(sum.sessions) || 0, 'session')} · ${num(sum.active)} active · ${num(sum.disconnected)} disconnected · ${num(sum.reachable)}/${num(sum.hosts)} servers reachable` }),
             ],
           }),
           jsx(UnreachableCallout, { errors: d.errors, what: 'sessions' }),
@@ -113,7 +113,7 @@ function SessionsView() {
                               : null,
                           ],
                         }),
-                        jsx('td', { className: 'hs-muted', children: s.idle || '—' }),
+                        jsx('td', { className: 'hs-muted', title: s.idle || undefined, children: idleText(s.idle_minutes, s.idle) }),
                         jsx('td', { className: 'hs-muted', children: fmtDate(s.logon) }),
                         jsx('td', {
                           className: 'hs-nowrap',

@@ -415,6 +415,18 @@ function plural(n, word) {
   return `${n} ${word}${n === 1 ? '' : 's'}`;
 }
 
+// Session idle time: minutes from quser as "2 d 5 h" / "3 h 10 m" / "12 m"; falls back to the raw text.
+function idleText(minutes, raw) {
+  if (typeof minutes !== 'number' || !Number.isFinite(minutes) || minutes < 0) return raw || '—';
+  if (minutes < 1) return 'active';
+  const d = Math.floor(minutes / 1440);
+  const h = Math.floor((minutes % 1440) / 60);
+  const m = Math.floor(minutes % 60);
+  if (d) return `${d} d ${h} h`;
+  if (h) return `${h} h ${m} m`;
+  return `${m} m`;
+}
+
 function ago(v) {
   const d = toDate(v);
   if (!d) return '—';
@@ -3853,7 +3865,7 @@ function SessionsView() {
               jsx(Chip, { on: onlyDisc, onClick: () => setOnlyDisc(!onlyDisc), children: 'Disconnected' }),
               jsx(Chip, { on: onlyIdle, onClick: () => setOnlyIdle(!onlyIdle), children: 'Idle >1 d' }),
               jsx('span', { className: 'hs-grow' }),
-              jsx('span', { className: 'hs-muted hs-small', children: `${num(sum.sessions)} sessions · ${num(sum.active)} active · ${num(sum.disconnected)} disconnected · ${num(sum.reachable)}/${num(sum.hosts)} servers reachable` }),
+              jsx('span', { className: 'hs-muted hs-small', children: `${plural(Number(sum.sessions) || 0, 'session')} · ${num(sum.active)} active · ${num(sum.disconnected)} disconnected · ${num(sum.reachable)}/${num(sum.hosts)} servers reachable` }),
             ],
           }),
           jsx(UnreachableCallout, { errors: d.errors, what: 'sessions' }),
@@ -3875,7 +3887,7 @@ function SessionsView() {
                               : null,
                           ],
                         }),
-                        jsx('td', { className: 'hs-muted', children: s.idle || '—' }),
+                        jsx('td', { className: 'hs-muted', title: s.idle || undefined, children: idleText(s.idle_minutes, s.idle) }),
                         jsx('td', { className: 'hs-muted', children: fmtDate(s.logon) }),
                         jsx('td', {
                           className: 'hs-nowrap',
