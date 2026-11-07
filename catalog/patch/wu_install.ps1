@@ -2,12 +2,12 @@
 id: patch.wu_install
 title: Install security and critical updates
 category: Patching
-description: Starts a one-shot SYSTEM scheduled task on each computer that downloads and installs security and/or critical updates with the Windows Update Agent. The preview lists the updates found. Progress is logged to C:\Windows\Temp\HermesSysadmin-WUInstall.log on each computer.
+description: Starts a one-shot SYSTEM scheduled task on each computer that downloads and installs security and/or critical updates with the Windows Update Agent. The preview lists the updates found. Progress is logged to C:\ProgramData\HermesSysadmin\WUInstall.log on each computer. A run is skipped on computers where an install is already running.
 module: inbox:ScheduledTasks
 target: endpoint
 tier: H
 preview: plan
-columns: [host, task_registered, updates_queued]
+columns: [host, task_registered, started, log, reason]
 tags: [install updates, patch, windows update, security updates, critical updates, patching, scheduled task]
 source: In-box Windows Update Agent COM API via a SYSTEM scheduled task
 params:
@@ -26,9 +26,12 @@ Invoke-Op {
 
     $bodyTemplate = @'
 $ErrorActionPreference = 'Stop'
-$log = 'C:\Windows\Temp\HermesSysadmin-WUInstall.log'
+$dir = Join-Path $env:ProgramData 'HermesSysadmin'
+$log = Join-Path $dir 'WUInstall.log'
 function Write-Log($m) { Add-Content -LiteralPath $log -Value ('{0} {1}' -f (Get-Date).ToString('o'), $m) }
 try {
+    if (-not (Test-Path -LiteralPath $dir)) { [void](New-Item -ItemType Directory -Path $dir -Force) }
+    if ((Test-Path -LiteralPath $log) -and (Get-Item -LiteralPath $log).Length -gt 1MB) { Remove-Item -LiteralPath $log -Force }
     Write-Log 'start'
     $session = New-Object -ComObject Microsoft.Update.Session
     $found = $session.CreateUpdateSearcher().Search('IsInstalled=0 and IsHidden=0')
@@ -36,6 +39,7 @@ try {
     foreach ($u in $found.Updates) {
         $ids = @($u.Categories | ForEach-Object { $_.CategoryID })
         if (@($ids | Where-Object { @(__GUIDS__) -contains $_ }).Count -gt 0) {
+            if ($u.InstallationBehavior.CanRequestUserInput) { Write-Log ('skipped (needs user input) ' + $u.Title); continue }
             if (-not $u.EulaAccepted) { $u.AcceptEula() }
             [void]$want.Add($u)
             Write-Log ('queued ' + $u.Title)
@@ -46,16 +50,21 @@ try {
         $dl = $session.CreateUpdateDownloader()
         $dl.Updates = $want
         [void]$dl.Download()
-        $inst = $session.CreateUpdateInstaller()
-        $inst.Updates = $want
-        $res = $inst.Install()
-        Write-Log ('result ' + $res.ResultCode + ' reboot ' + $res.RebootRequired)
-        __REBOOT__
+        $ready = New-Object -ComObject Microsoft.Update.UpdateColl
+        foreach ($u in $want) { if ($u.IsDownloaded) { [void]$ready.Add($u) } else { Write-Log ('not downloaded ' + $u.Title) } }
+        if ($ready.Count -gt 0) {
+            $inst = $session.CreateUpdateInstaller()
+            $inst.Updates = $ready
+            $res = $inst.Install()
+            Write-Log ('result ' + $res.ResultCode + ' reboot ' + $res.RebootRequired)
+            __REBOOT__
+        }
     }
     Write-Log 'done'
 } catch {
     Write-Log ('error ' + $_.Exception.Message)
 }
+try { Unregister-ScheduledTask -TaskName 'HermesSysadmin-WUInstall' -Confirm:$false } catch { Write-Log ('cleanup failed ' + $_.Exception.Message) }
 '@
     $rebootYes = 'if ($res.RebootRequired) { Write-Log ''restart in 300 seconds''; & shutdown.exe /r /t 300 }'
     $rebootNo = 'Write-Log ''no automatic restart requested'''
@@ -89,42 +98,30 @@ try {
             $rows | Select-Object -First 200
         }
         $cur = @{}
+        foreach ($h in $targets) { $cur[$h] = 0 }
         foreach ($r in $read.items) { $h = $r['host']; $cur[$h] = 1 + $(if ($cur.ContainsKey($h)) { $cur[$h] } else { 0 }) }
         return @{ summary = "Install $Category updates on $($targets.Count) computer(s); AutoReboot=$AutoReboot"
-                  changes = @($read.items | ForEach-Object { "$($_['host']): $($_['kb']) $($_['title'])" }) + @($read.errors | ForEach-Object { "$($_.host): could not list updates ($($_.message))" })
+                  changes = @($read.items | ForEach-Object { "$($_['host']): $($_['kb']) $($_['title'])" }) + @($read.errors | ForEach-Object { "$($_.host): could not list updates ($(("$($_.message)").Substring(0, [math]::Min(300, "$($_.message)".Length))))" })
                   current = $cur }
     }
 
-    Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($b64, $guidList) -Script {
-        param($encoded, $guids)
+    Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($b64) -Script {
+        param($encoded)
         $ErrorActionPreference = 'Stop'
         $name = 'HermesSysadmin-WUInstall'
-        if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) {
-            Stop-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+        $log = Join-Path $env:ProgramData 'HermesSysadmin\WUInstall.log'
+        $existing = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+        if ($existing) {
+            if ("$($existing.State)" -eq 'Running') {
+                return [pscustomobject]@{ task_registered = $false; started = $false; log = $log; reason = 'an install is already running' }
+            }
             Unregister-ScheduledTask -TaskName $name -Confirm:$false
         }
         $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -NonInteractive -EncodedCommand $encoded"
         $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -RunLevel Highest
-        $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 4) -StartWhenAvailable
+        $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 4) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
         Register-ScheduledTask -TaskName $name -Action $action -Principal $principal -Settings $settings -Description 'One-shot update install started by hermes-sysadmin' | Out-Null
         Start-ScheduledTask -TaskName $name
-        # Best-effort count of what the task will pick up; unknown (null) when the search is denied or slow.
-        $queued = $null
-        try {
-            $want = @($guids -split ',')
-            $searcher = (New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher()
-            $job = $searcher.BeginSearch('IsInstalled=0 and IsHidden=0', $null, $null)
-            [void]$job.AsyncWaitHandle.WaitOne(20000)
-            if ($job.IsCompleted) {
-                $res = $searcher.EndSearch($job)
-                $n = 0
-                foreach ($u in $res.Updates) {
-                    $ids = @($u.Categories | ForEach-Object { $_.CategoryID })
-                    if (@($ids | Where-Object { $want -contains $_ }).Count -gt 0) { $n++ }
-                }
-                $queued = $n
-            }
-        } catch { $queued = $null }
-        [pscustomobject]@{ task_registered = $true; updates_queued = $queued }
+        [pscustomobject]@{ task_registered = $true; started = $true; log = $log; reason = $null }
     }
 }

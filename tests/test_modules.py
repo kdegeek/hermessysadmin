@@ -12,7 +12,6 @@ def lock():
 
 def test_lock_pins_exact_versions_with_sha512():
     mods = {m["name"]: m for m in lock()["modules"]}
-    assert mods["PSWindowsUpdate"]["version"] == "2.2.1.5"
     assert mods["GPOZaurr"]["version"] == "1.1.13" and mods["ADEssentials"]["version"] == "1.0.7"
     for m in mods.values():
         assert m["hash_algorithm"] == "SHA512" and len(m["package_hash"]) == 88  # base64 of 64 bytes
@@ -21,12 +20,12 @@ def test_lock_pins_exact_versions_with_sha512():
 
 def test_lock_dependency_closure_and_signers():
     mods = {m["name"]: m for m in lock()["modules"]}
-    assert set(mods) == {"PSWindowsUpdate", "ADEssentials", "PSEventViewer", "PSWriteHTML", "PSSharedGoods", "GPOZaurr", "NTFSSecurity"}
+    assert set(mods) == {"ADEssentials", "PSEventViewer", "PSWriteHTML", "PSSharedGoods", "GPOZaurr", "NTFSSecurity"}
     assert set(mods["ADEssentials"]["requires"]) == {"PSEventViewer", "PSWriteHTML"}
     assert set(mods["GPOZaurr"]["requires"]) == {"ADEssentials", "PSEventViewer", "PSWriteHTML"}
     for name in ("ADEssentials", "PSEventViewer", "PSWriteHTML", "PSSharedGoods", "GPOZaurr"):
         assert mods[name]["signer"] == "Evotec Services sp. z o.o."
-    assert mods["PSWindowsUpdate"]["signer"] is None and mods["NTFSSecurity"]["signer"] is None
+    assert mods["NTFSSecurity"]["signer"] is None
 
 
 def test_install_is_high_risk_with_preview_and_enum():

@@ -3,7 +3,7 @@ id: patch.pending_updates
 title: Pending Windows updates
 category: Patching
 description: Updates that are not installed and not hidden, from the Windows Update Agent. Search only; nothing is downloaded or installed. Some builds deny the search over remoting and report that per computer.
-module: inbox:CimCmdlets
+module: inbox:WindowsUpdateAgent
 target: endpoint
 tier: R
 columns: [host, title, kb, severity, size_mb, reboot]

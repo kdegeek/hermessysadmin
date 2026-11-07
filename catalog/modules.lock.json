@@ -1,16 +1,6 @@
 {
   "modules": [
     {
-      "name": "PSWindowsUpdate",
-      "version": "2.2.1.5",
-      "package_hash": "Ehs4lwKp2ytPKos0WbSAiHY0EFiIlcqfgSwIho9Kysz4g60kpHTvXJgL5m9T0KgFwi9J3HLi6Qz/XTSmTNs8nQ==",
-      "hash_algorithm": "SHA512",
-      "license": "https://github.com/mgajda83/PSWindowsUpdate/blob/main/LICENSE",
-      "project_url": "https://github.com/mgajda83/PSWindowsUpdate",
-      "signer": null,
-      "requires": []
-    },
-    {
       "name": "ADEssentials",
       "version": "1.0.7",
       "package_hash": "UEzqO0Qp/wZpz/QgbTkaOgzq2PiI47bzXUQX+FgrGtfyvWwjmU6amtHCOAfcROdHCbSRMezFhie1oG0U8A+ugA==",

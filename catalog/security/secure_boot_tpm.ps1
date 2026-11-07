@@ -17,8 +17,8 @@ Invoke-Op {
         $ErrorActionPreference = 'Stop'
         $sb = 'unsupported'
         try { $sb = $(if (Confirm-SecureBootUEFI) { 'enabled' } else { 'disabled' }) } catch { $sb = 'unsupported' }
-        $present = $false; $ready = $false; $ver = $null
-        try { $t = Get-Tpm; $present = [bool]$t.TpmPresent; $ready = [bool]$t.TpmReady } catch { $present = $false }
+        $present = $null; $ready = $null; $ver = $null
+        try { $t = Get-Tpm; $present = [bool]$t.TpmPresent; $ready = [bool]$t.TpmReady } catch { $present = $null; $ready = $null }
         try {
             $w = Get-CimInstance -Namespace 'root\cimv2\Security\MicrosoftTpm' -ClassName Win32_Tpm
             if ($w -and $w.SpecVersion) { $ver = "$($w.SpecVersion)".Split(',')[0].Trim() }

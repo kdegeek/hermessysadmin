@@ -1,40 +1,48 @@
 <# hermes-catalog
 id: patch.wu_history
-title: Update history (PSWindowsUpdate)
+title: Windows Update history
 category: Patching
-description: Recent Windows Update history per computer (date, KB, title and result) using the PSWindowsUpdate module on the jump host.
-module: gallery:PSWindowsUpdate@2.2.1.5
+description: Recent Windows Update history per computer (date, KB, title, result and whether it was an install or uninstall) from the Windows Update Agent.
+module: inbox:WindowsUpdateAgent
 target: endpoint
 tier: R
-columns: [host, date, kb, title, result]
-tags: [update history, patches, installed updates, pswindowsupdate, kb, failed updates]
-source: PSGallery PSWindowsUpdate 2.2.1.5 (MIT)
+columns: [host, date, kb, title, result, operation]
+tags: [update history, patches, installed updates, kb, failed updates, windows update]
+source: In-box Windows Update Agent COM API (QueryHistory)
 params:
   - {name: Last, type: integer, default: 20, minimum: 1, maximum: 200, description: Number of most recent history entries per computer.}
 #>
 param([string[]]$Computers = @(), [string]$Ou, [int]$Last = 20)
 Invoke-Op {
-    Use-HermesModule -Name PSWindowsUpdate -Version 2.2.1.5
     $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Workstation
-    $items = @(); $errors = @()
-    if ($targets.Count -gt 0) {
+    Invoke-HermesCatalogFanout -Computers $targets -ArgumentList @($Last) -Script {
+        param($last)
+        $ErrorActionPreference = 'Stop'
         try {
-            $ev = $null
-            $rows = @(Get-WUHistory -ComputerName $targets -Last $Last -ErrorAction SilentlyContinue -ErrorVariable ev)
-            foreach ($e in @($ev)) { $msg = "$($e.Exception.Message)"; $errors += @{ host = "$($e.TargetObject)"; message = $msg.Substring(0, [math]::Min(300, $msg.Length)) } }
-            foreach ($g in @($rows | Group-Object -Property ComputerName)) {
-                foreach ($r in @($g.Group | Select-Object -First 200)) {
-                    $t = "$($r.Title)"
-                    $d = $r.Date
-                    if ($d -is [datetime]) { $d = $d.ToUniversalTime().ToString('o') }
-                    $res = $(if ($r.PSObject.Properties['Result']) { "$($r.Result)" } else { "$($r.Operationname)" })
-                    $items += @{ host = "$($r.ComputerName)"; date = "$d"; kb = "$($r.KB)"; title = $t.Substring(0, [math]::Min(300, $t.Length)); result = $res }
-                }
-            }
+            $searcher = (New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher()
+            $total = [int]$searcher.GetTotalHistoryCount()
+            $entries = @()
+            if ($total -gt 0) { $entries = @($searcher.QueryHistory(0, [math]::Min($last, $total))) }
         } catch {
-            $msg = "$($_.Exception.Message)"
-            $errors += @{ host = '*'; message = $msg.Substring(0, [math]::Min(300, $msg.Length)) }
+            if ("$($_.Exception.Message)" -match '0x80070005|Access is denied' -or $_.Exception.HResult -eq -2147024891) {
+                throw 'Windows Update history was denied over remoting (0x80070005); this build does not allow the COM searcher from a remote session.'
+            }
+            throw
+        }
+        $results = @{ 1 = 'in_progress'; 2 = 'succeeded'; 3 = 'succeeded_with_errors'; 4 = 'failed'; 5 = 'aborted' }
+        $ops = @{ 1 = 'install'; 2 = 'uninstall' }
+        foreach ($h in $entries) {
+            $t = "$($h.Title)"
+            $kb = $null
+            if ($t -match '(KB\d{6,8})') { $kb = $Matches[1] }
+            $rc = [int]$h.ResultCode; $op = [int]$h.Operation
+            [pscustomobject]@{
+                date = $(if ($h.Date) { ([datetime]$h.Date).ToUniversalTime().ToString('o') } else { $null })
+                kb = $kb
+                title = $t.Substring(0, [math]::Min(300, $t.Length))
+                result = $(if ($results.ContainsKey($rc)) { $results[$rc] } else { "$rc" })
+                operation = $(if ($ops.ContainsKey($op)) { $ops[$op] } else { "$op" })
+            }
         }
     }
-    @{ items = $items; errors = $errors; summary = @{ hosts = $targets.Count; rows = $items.Count; failed = $errors.Count } }
 }

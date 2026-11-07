@@ -20,7 +20,7 @@ Invoke-Op {
         if ($s.QuickScanEndTime) { $scan = ([datetime]$s.QuickScanEndTime).ToUniversalTime().ToString('o') }
         [pscustomobject]@{
             realtime = [bool]$s.RealTimeProtectionEnabled; antivirus = [bool]$s.AntivirusEnabled
-            tamper_protected = [bool]$s.IsTamperProtected; sig_age_days = $s.AntivirusSignatureAge
+            tamper_protected = $(if ($null -ne $s.IsTamperProtected) { [bool]$s.IsTamperProtected } else { $null }); sig_age_days = $s.AntivirusSignatureAge
             sig_version = "$($s.AntivirusSignatureVersion)"; last_quick_scan = $scan
         }
     }

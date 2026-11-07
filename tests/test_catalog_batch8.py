@@ -11,9 +11,7 @@ BATCH_8 = {"security.defender_status", "security.bitlocker_status", "security.fi
            "security.local_admins", "security.laps_status", "security.smb1", "security.tls_protocols",
            "security.rdp_nla", "security.guest_account", "security.secure_boot_tpm", "security.applocker_wdac",
            "patch.hotfix_history", "patch.pending_updates", "patch.wu_config", "patch.trigger_scan",
-           "patch.wu_pending", "patch.wu_history", "patch.wu_reboot_status", "patch.wu_settings",
-           "patch.wu_install"}
-GALLERY = ("patch.wu_pending", "patch.wu_history", "patch.wu_reboot_status", "patch.wu_settings")
+           "patch.wu_history", "patch.wu_install"}
 PWSH = shutil.which("pwsh") or ("/opt/homebrew/bin/pwsh" if shutil.os.path.exists("/opt/homebrew/bin/pwsh") else None)
 
 
@@ -34,7 +32,8 @@ def test_batch_8_present():
     got = ids()
     assert BATCH_8 <= set(got)
     assert got["patch.wu_install"].tier == "H" and got["patch.wu_install"].meta["module"] == "inbox:ScheduledTasks"
-    assert got["patch.wu_pending"].meta["module"] == "gallery:PSWindowsUpdate@2.2.1.5"
+    assert got["patch.wu_history"].meta["module"] == "inbox:WindowsUpdateAgent"
+    assert got["patch.pending_updates"].meta["module"] == "inbox:WindowsUpdateAgent"
     assert {i for i in BATCH_8 if got[i].tier != "R"} == {"patch.trigger_scan", "patch.wu_install"}
     assert got["patch.trigger_scan"].tier == "W"
 
@@ -52,21 +51,25 @@ def test_bitlocker_reads_no_protector_methods():
     assert "RecoveryPassword" not in text and "KeyProtector" not in text
 
 
-@pytest.mark.parametrize("entry_id", GALLERY)
-def test_gallery_entries_load_module_first_and_use_dc_remoting(entry_id):
-    code = body(entry_id)
-    inner = code.split("Invoke-Op {", 1)[1].lstrip()
-    assert inner.startswith("Use-HermesModule -Name PSWindowsUpdate -Version 2.2.1.5")
-    assert "-ComputerName $targets" in code
-    assert "Invoke-HermesCatalogFanout" not in code
-    assert "-Kind Workstation" in code
+def test_no_entry_uses_pswindowsupdate():
+    for f in catalog.CATALOG_DIR.glob("*/*.ps1"):
+        assert "PSWindowsUpdate" not in f.read_text(), f
+    assert not (catalog.CATALOG_DIR / "patch" / "wu_pending.ps1").exists()
+
+
+def test_wu_history_maps_result_and_operation_codes():
+    code = body("patch.wu_history")
+    for needle in ("GetTotalHistoryCount()", "QueryHistory(0,", "succeeded_with_errors", "in_progress", "aborted",
+                   "'install'", "'uninstall'", "KB\\d"):
+        assert needle in code, needle
 
 
 def test_wu_install_uses_constant_encoded_task_body():
     code = body("patch.wu_install")
     for needle in ("Register-ScheduledTask", "New-ScheduledTaskAction -Execute 'powershell.exe'",
                    "-NoProfile -NonInteractive -EncodedCommand", "New-ScheduledTaskPrincipal -UserId 'SYSTEM' -RunLevel Highest",
-                   "Start-ScheduledTask", "HermesSysadmin-WUInstall", "C:\\Windows\\Temp\\HermesSysadmin-WUInstall.log",
+                   "Start-ScheduledTask", "HermesSysadmin-WUInstall", "$env:ProgramData", "WUInstall.log", "-AllowStartIfOnBatteries -DontStopIfGoingOnBatteries",
+                   "IsDownloaded", "CanRequestUserInput", "Unregister-ScheduledTask -TaskName 'HermesSysadmin-WUInstall' -Confirm:$false", "an install is already running",
                    "0FA1201D-4330-4FA8-8AE9-B877473B6441", "E6CF1350-C01B-414D-A61F-263D14D133B4",
                    "[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($body))"):
         assert needle in code, needle
@@ -101,3 +104,15 @@ def test_wu_install_task_body_parses_for_each_variant(category, reboot, tmp_path
         "if ($b -match '__') { 'placeholder left'; exit 1 }\n'ok'\n")
     out = subprocess.run([PWSH, "-NoProfile", "-File", str(script)], capture_output=True, text=True)
     assert out.stdout.strip() == "ok", out.stdout + out.stderr
+
+
+def test_laps_checks_csp_then_gpo_then_local_and_reports_source():
+    code = body("security.laps_status")
+    csp, gpo, local = (code.index(p) for p in ("Microsoft\\Policies\\LAPS", "CurrentVersion\\Policies\\LAPS", "CurrentVersion\\LAPS\\Config"))
+    assert csp < gpo < local
+    assert "source =" in code and "'disabled'" in code
+
+
+def test_rdp_nla_policy_override_and_source():
+    code = body("security.rdp_nla")
+    assert "Policies\\Microsoft\\Windows NT\\Terminal Services" in code and "'policy'" in code and "'local'" in code
