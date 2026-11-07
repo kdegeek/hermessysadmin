@@ -30,9 +30,9 @@ from sysadmin import catalog, ops  # noqa: E402,F401
 from sysadmin.audit import AuditLog  # noqa: E402
 from sysadmin.config import load_settings  # noqa: E402
 from sysadmin.registry import OPS  # noqa: E402
-from sysadmin.runner import Runner, load_prelude  # noqa: E402
+from sysadmin.runner import Runner  # noqa: E402
+from sysadmin.runtime import make_transport  # noqa: E402
 from sysadmin.service import Service  # noqa: E402
-from sysadmin.transport import PsrpTransport  # noqa: E402
 
 
 def shape(data):
@@ -100,10 +100,17 @@ def main(argv):
     out_path = argv[argv.index("--out") + 1] if "--out" in argv else None
     base = load_settings()
     if not base.configured:
-        print("Plugin is not configured (host/username/password missing in this process).")
+        print(f"Plugin is not configured for transport={base.transport} run_as={base.run_as} "
+              "(winrm needs host/username/password; local+account needs username/password).")
         return 2
     settings = replace(base, mode="read-only")
-    transport = PsrpTransport(settings, load_prelude())
+    # Same transport selection as the plugin runtime (local PowerShell or WinRM jump host).
+    transport = make_transport(settings)
+    if settings.transport == "local":
+        who = settings.username if settings.run_as == "account" else "the Hermes user"
+        print(f"transport=local run_as={settings.run_as} ({who})")
+    else:
+        print(f"transport=winrm run_as=- (jump host {settings.host} as {settings.username})")
     audit = AuditLog(sqlite3.connect(":memory:", check_same_thread=False))  # never touch the real audit log
     svc = Service(settings, Runner(transport), audit)
     results = []
@@ -138,9 +145,12 @@ def main(argv):
                         "error": {"type": reason, "message": "not run"}})
         print(f"SKIP    0.0s R {name} {json.dumps(args)[:60]} -> {reason}")
 
-    run("ad_connection_test")
+    conn = run("ad_connection_test") or {}
+    if conn:
+        print(f"     local identity {conn.get('local_identity') or conn.get('identity')}; network identity "
+              f"{conn.get('network_identity') or conn.get('network_identity_error')}")
     dcs = run("ad_dc_list") or {}
-    dc = next((d.get("name") for d in dcs.get("items", []) if d.get("name")), settings.host)
+    dc = next((d.get("name") for d in dcs.get("items", []) if d.get("name")), settings.host or None) or ""
     run("ad_dc_health")
     run("ad_domain_overview")
     users = run("ad_user_list", {"limit": 25}) or {}
@@ -148,7 +158,8 @@ def main(argv):
                  {"password": "never_expires"}):
         run("ad_user_list", {**filt, "limit": 10})
     run("ad_user_list", {"privileged": True, "limit": 25})
-    me = settings.username.split("\\")[-1].split("@")[0]
+    who = settings.username or conn.get("network_identity") or conn.get("identity") or ""
+    me = who.split("\\")[-1].split("@")[0]
     run("ad_search", {"query": me, "limit": 5})
     sample = next((u.get("sam") or u.get("samAccountName") or u.get("name") for u in users.get("items", [])), me)
     run("ad_user_get", {"identity": me})

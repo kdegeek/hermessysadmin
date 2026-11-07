@@ -5,6 +5,9 @@
     .venv/bin/python scripts/smoke.py ad_connection_test
     .venv/bin/python scripts/smoke.py ad_search '{"query": "bob"}'
     .venv/bin/python scripts/smoke.py ad_user_unlock '{"identity": "zz-hermes-test-1"}' --approve
+
+Local transport (on a domain-joined Windows machine): set SYSADMIN_TRANSPORT=local and
+SYSADMIN_RUN_AS=hermes_user (no password) or account (SYSADMIN_USER + SYSADMIN_WINRM_PASSWORD).
 """
 
 from __future__ import annotations
@@ -19,21 +22,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sysadmin import ops  # noqa: E402,F401
 from sysadmin.audit import open_audit  # noqa: E402
 from sysadmin.config import settings_from  # noqa: E402
-from sysadmin.runner import Runner, load_prelude  # noqa: E402
+from sysadmin.runner import Runner  # noqa: E402
+from sysadmin.runtime import make_transport  # noqa: E402
 from sysadmin.service import Service  # noqa: E402
-from sysadmin.transport import PsrpTransport  # noqa: E402
 
 
 def env_settings():
     raw = {
-        "host": os.environ["SYSADMIN_HOST"],
-        "username": os.environ["SYSADMIN_USER"],
+        "transport": os.environ.get("SYSADMIN_TRANSPORT", "winrm"),
+        "run_as": os.environ.get("SYSADMIN_RUN_AS", "account"),
+        "host": os.environ.get("SYSADMIN_HOST", ""),
+        "username": os.environ.get("SYSADMIN_USER", ""),
         "use_https": os.environ.get("SYSADMIN_HTTPS", "true"),
         "verify_tls": os.environ.get("SYSADMIN_VERIFY_TLS", "true"),
         "port": os.environ.get("SYSADMIN_PORT"),
         "mode": "strict",
     }
-    return settings_from(raw, os.environ["SYSADMIN_WINRM_PASSWORD"])
+    return settings_from(raw, os.environ.get("SYSADMIN_WINRM_PASSWORD", ""))
 
 
 def main(argv: list[str]) -> int:
@@ -45,7 +50,7 @@ def main(argv: list[str]) -> int:
     name = positional[0]
     args = json.loads(positional[1]) if len(positional) > 1 else {}
     settings = env_settings()
-    service = Service(settings, Runner(PsrpTransport(settings, load_prelude())), open_audit())
+    service = Service(settings, Runner(make_transport(settings)), open_audit())
     if "--preview" in flags:
         result = service.preview(name, args)
     else:

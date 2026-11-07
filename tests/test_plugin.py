@@ -51,9 +51,15 @@ def test_manifest_core_fields():
     assert m["python_dependencies"] == ["pypsrp>=0.8.1,<0.9"]
     assert m["config_schema"]["password"] == {
         "type": "secret", "env": "SYSADMIN_WINRM_PASSWORD", "label": "Password",
-        "description": "Password for the WinRM account. Stored in Hermes secrets, never in config.yaml.",
-        "required": True,
+        "description": "Password for the account. Stored in Hermes secrets, never in config.yaml.",
     }
+    schema = m["config_schema"]
+    assert list(schema)[:2] == ["transport", "run_as"]
+    assert schema["transport"]["choices"] == ["auto", "local", "winrm"] and schema["transport"]["default"] == "auto"
+    assert schema["run_as"]["choices"] == ["account", "hermes_user"] and schema["run_as"]["default"] == "account"
+    assert schema["host"]["label"] == "Jump host (WinRM transport only)"
+    # Which of host/username/password is needed depends on the transport, so none is schema-required.
+    assert not any(schema[k].get("required") for k in ("host", "username", "password"))
     assert m["config_schema"]["mode"]["choices"] == ["strict", "permissive", "read-only"]
 
 

@@ -3,7 +3,7 @@ label: "Sysadmin · Active Directory"
 version: 0.2.0
 manifest_version: 2
 description: >-
-  Manage an on-prem Active Directory domain over WinRM: users, groups and lockouts, Group Policy,
+  Manage an on-prem Active Directory domain with local PowerShell or over WinRM: users, groups and lockouts, Group Policy,
   RDP sessions and access, and Windows Server Backup. Typed tools with tiered approvals, protected
   objects, a local audit log, workflow skills, /ad commands and a Hermes Desktop dashboard.
 author: Nate Crawford
@@ -89,11 +89,27 @@ provides_hooks:
   - pre_tool_call
   - post_tool_call
 config_schema:
+  transport:
+    type: str
+    choices: [auto, local, winrm]
+    default: auto
+    label: Transport
+    description: >-
+      How Hermes runs PowerShell. local runs it on this machine (Windows, domain-joined, with RSAT); winrm runs
+      it on the jump host below. auto picks local on a domain-joined Windows machine, otherwise winrm.
+  run_as:
+    type: str
+    choices: [account, hermes_user]
+    default: account
+    label: "Run as: the account below, or the Hermes user (local transport)"
+    description: >-
+      account starts the local PowerShell like runas /netonly: it stays the Hermes user on this machine, and every
+      network logon (LDAP, SMB, WinRM to computers) uses the username and password below. hermes_user uses
+      whatever account Hermes runs as and needs no password.
   host:
     type: str
-    label: Jump host (domain controller)
-    description: FQDN of the domain controller Hermes connects to over WinRM, e.g. dc01.corp.example.local.
-    required: true
+    label: Jump host (WinRM transport only)
+    description: FQDN of the domain controller Hermes connects to over WinRM, e.g. dc01.corp.example.local. Not used by the local transport.
   port:
     type: int
     label: WinRM port
@@ -110,14 +126,12 @@ config_schema:
   username:
     type: str
     label: Username
-    description: DOMAIN\user or user@domain. Prefer a delegated admin account over a Domain Admin.
-    required: true
+    description: DOMAIN\user or user@domain. Prefer a delegated admin account over a Domain Admin. Needed for WinRM, and for the local transport when running as an account.
   password:
     type: secret
     env: SYSADMIN_WINRM_PASSWORD
     label: Password
-    description: Password for the WinRM account. Stored in Hermes secrets, never in config.yaml.
-    required: true
+    description: Password for the account. Stored in Hermes secrets, never in config.yaml.
   verify_tls:
     type: bool
     default: true
@@ -153,7 +167,7 @@ config_schema:
     type: bool
     default: false
     label: Enable raw PowerShell tool
-    description: Registers ad_powershell, which runs arbitrary PowerShell on the jump host after approval every time.
+    description: Registers ad_powershell, which runs arbitrary PowerShell (on the jump host, or locally with the local transport) after approval every time.
   monitor_interval:
     type: str
     default: "30m"

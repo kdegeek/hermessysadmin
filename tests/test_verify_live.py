@@ -80,6 +80,8 @@ class _FakeService:
 
 
 class _FakeTransport:
+    made: list = []
+
     def __init__(self, *a):
         pass
 
@@ -90,10 +92,9 @@ class _FakeTransport:
 def test_main_counts_ok_skip_err_and_exits_nonzero_only_on_err(monkeypatch, tmp_path, capsys):
     settings = Settings(host="dc01.corp.example.local", username="CORP\\svc", password="pw")
     monkeypatch.setattr(vl, "load_settings", lambda: settings)
-    monkeypatch.setattr(vl, "PsrpTransport", _FakeTransport)
+    monkeypatch.setattr(vl, "make_transport", lambda s: _FakeTransport.made.append(s) or _FakeTransport())
     monkeypatch.setattr(vl, "Service", _FakeService)
     monkeypatch.setattr(vl, "Runner", lambda t: t)
-    monkeypatch.setattr(vl, "load_prelude", lambda: "")
     monkeypatch.setattr(vl, "_load_hermes_env", lambda: None)
     out = tmp_path / "r.json"
     assert vl.main(["--out", str(out)]) == 1  # cat.dns.zones is an ERR
@@ -105,3 +106,24 @@ def test_main_counts_ok_skip_err_and_exits_nonzero_only_on_err(monkeypatch, tmp_
     assert {"cat.remote.set_nla", "cat.maint.gpupdate", "cat.remote.restart_computer", "monitoring_enable"} <= set(_FakeService.previews)
     assert all(OPS[r["op"]].tier == "R" for r in rows if r["mode"] == "read")
     assert " SKIP / 1 ERR of " in capsys.readouterr().out
+
+
+def test_main_uses_runtime_transport_selection_and_prints_it(monkeypatch, capsys):
+    settings = Settings(transport="local", run_as="account", username="CORP\\svc", password="pw-secret-1")
+    _FakeTransport.made.clear()
+    monkeypatch.setattr(vl, "load_settings", lambda: settings)
+    monkeypatch.setattr(vl, "make_transport", lambda s: _FakeTransport.made.append(s) or _FakeTransport())
+    monkeypatch.setattr(vl, "Service", _FakeService)
+    monkeypatch.setattr(vl, "Runner", lambda t: t)
+    monkeypatch.setattr(vl, "_load_hermes_env", lambda: None)
+    vl.main([])
+    out = capsys.readouterr().out
+    assert _FakeTransport.made and _FakeTransport.made[0].mode == "read-only"
+    assert _FakeTransport.made[0].transport == "local"
+    assert "transport=local run_as=account" in out and "CORP\\svc" in out
+    assert "pw-secret-1" not in out
+
+
+def test_script_selects_transport_through_runtime():
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "from sysadmin.runtime import make_transport" in text and "PsrpTransport" not in text
