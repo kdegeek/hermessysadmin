@@ -173,3 +173,46 @@ def test_invalid_param_headers_raise(tmp_path, cleanup, param):
     write(tmp_path, "t_area/sample.ps1", ENTRY.replace(old, param))
     with pytest.raises(catalog.CatalogError):
         catalog.load(tmp_path, strict=True)
+
+
+def _with_when(when):
+    return ENTRY.replace("params:\n", f"escalate_when: {when}\nparams:\n")
+
+
+def test_escalate_when_raises_tier_for_matching_param_values(tmp_path, cleanup):
+    write(tmp_path, "t_area/sample.ps1", _with_when("{Threshold: [2, 4]}"))
+    (op,) = catalog.load(tmp_path, strict=True)
+
+    class Facts:
+        def domain_controllers(self):
+            return ["DC01"]
+
+    def tier(args):
+        return decide(op, {"computers": ["PC1"], **args}, Settings(host="dc01", username="u", password="p"), Facts()).tier
+
+    assert tier({}) == "W" and tier({"Threshold": 1}) == "W" and tier({"Threshold": 3}) == "W"
+    assert tier({"Threshold": 2}) == "H" and tier({"Threshold": 4}) == "H"
+    assert decide(op, {"computers": ["10.0.0.1"], "Threshold": 1}, Settings(host="dc01", username="u", password="p"), Facts()).tier == "H"
+
+
+@pytest.mark.parametrize("when", ["{Nope: [1]}", "{Threshold: 2}", "{Threshold: []}", "[Threshold]"])
+def test_escalate_when_is_validated(tmp_path, cleanup, when):
+    write(tmp_path, "t_area/sample.ps1", _with_when(when))
+    with pytest.raises(catalog.CatalogError):
+        catalog.load(tmp_path, strict=True)
+
+
+def test_shipped_shadow_policy_defaults_to_consent_and_escalates_no_consent_levels():
+    from sysadmin.catalog import parse_entry, CATALOG_DIR
+    meta = parse_entry(CATALOG_DIR / "remote" / "set_shadow_policy.ps1")
+    (level,) = [p for p in meta["params"] if p["name"] == "Level"]
+    assert level["default"] == 1 and "[int]$Level = 1" in (CATALOG_DIR / "remote" / "set_shadow_policy.ps1").read_text()
+    op = OPS["cat.remote.set_shadow_policy"]
+
+    class Facts:
+        def domain_controllers(self):
+            return ["DC01"]
+
+    s = Settings(host="dc01", username="u", password="p")
+    tiers = {lv: decide(op, {"computers": ["PC1"], "Level": lv}, s, Facts()).tier for lv in range(5)}
+    assert tiers == {0: "W", 1: "W", 2: "H", 3: "W", 4: "H"}

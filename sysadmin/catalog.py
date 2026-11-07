@@ -139,6 +139,12 @@ def parse_entry(path: Path) -> dict[str, Any]:
         raise CatalogError(f"{where}: endpoint entries must declare $Computers and $Ou")
     if meta["preview"] == "plan" and "preview" not in declared:
         raise CatalogError(f"{where}: plan entries must declare [switch]$Preview")
+    when = meta.setdefault("escalate_when", {})
+    names = {str(p["name"]) for p in meta["params"]}
+    if (not isinstance(when, dict) or not all(k in names and isinstance(v, list) and v for k, v in when.items())):
+        raise CatalogError(f"{where}: escalate_when must map declared param names to non-empty lists of values")
+    if when and meta["tier"] != "W":
+        raise CatalogError(f"{where}: escalate_when only applies to tier W entries")
     meta["_rel"] = where
     return meta
 
@@ -175,11 +181,18 @@ def _to_op(meta: dict[str, Any]) -> Op:
             Param("ou", "string", "DN of an OU whose enabled computers to include.", ps="Ou"),
         ]
     is_fleet_write = meta["target"] == "endpoint" and meta["tier"] == "W"
+    when = meta.get("escalate_when") or {}
+    escalate = _fleet_escalate if is_fleet_write else None
+    if when:
+        def escalate(args: Mapping[str, Any], settings: Any, facts: Any) -> bool:
+            if any(args.get(k) in vals and not isinstance(args.get(k), bool) for k, vals in when.items()):
+                return True
+            return is_fleet_write and _fleet_escalate(args, settings, facts)
     return Op(
         name=f"cat.{meta['id']}", toolset="catalog", tier=meta["tier"], script=f"catalog:{meta['_rel']}",
         description=str(meta["description"]).strip(), params=tuple(params),
         preview=meta["preview"] == "plan", destructive=bool(meta["destructive"]),
-        escalate=_fleet_escalate if is_fleet_write else None, catalog=True,
+        escalate=escalate, catalog=True,
         target=(lambda a: ", ".join(a.get("computers") or []) or a.get("ou") or "all workstations")
         if meta["target"] == "endpoint" else None,
         meta={k: meta[k] for k in ("id", "title", "category", "module", "target", "columns", "tags", "source", "preview")},

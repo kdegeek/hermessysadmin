@@ -2,7 +2,7 @@
 id: remote.set_shadow_policy
 title: Set Remote Desktop shadow policy
 category: Remote access
-description: Sets the Remote Desktop Services shadow policy. 0 means shadowing is not allowed. 1 is full control with consent. 2 is full control without consent. 3 is view only with consent. 4 is view only without consent.
+description: Sets the Remote Desktop Services shadow policy (default 1, with consent). Levels 2 and 4 skip the user's consent prompt and need high-risk approval. 0 means shadowing is not allowed. 1 is full control with consent. 2 is full control without consent. 3 is view only with consent. 4 is view only without consent.
 module: inbox:Microsoft.PowerShell.Management
 target: endpoint
 tier: W
@@ -10,10 +10,11 @@ preview: plan
 columns: [host, before, after]
 tags: [rdp, shadow, remote desktop, policy]
 source: In-box registry (Terminal Services policy Shadow)
+escalate_when: {Level: [2, 4]}
 params:
-  - {name: Level, type: integer, default: 2, minimum: 0, maximum: 4, description: Shadow level 0 none 1 full with consent 2 full without consent 3 view with consent 4 view without consent.}
+  - {name: Level, type: integer, default: 1, minimum: 0, maximum: 4, description: Shadow level 0 none 1 full with consent 2 full without consent 3 view with consent 4 view without consent.}
 #>
-param([string[]]$Computers = @(), [string]$Ou, [int]$Level = 2, [switch]$Preview)
+param([string[]]$Computers = @(), [string]$Ou, [int]$Level = 1, [switch]$Preview)
 Invoke-Op {
     $targets = Get-HermesTargets -Computers $Computers -Ou $Ou -Kind Workstation
     $read = Invoke-HermesCatalogFanout -Computers $targets -Script {
