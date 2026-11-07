@@ -21,9 +21,9 @@ Invoke-Op {
         $last = $null
         $hoursSince = $null
         if ($ext -and $null -ne $ext.EndTimeHi -and $null -ne $ext.EndTimeLo) {
-            # REG_DWORD values come back as signed Int32; rebuild the unsigned FILETIME halves.
-            $hi = [BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$ext.EndTimeHi), 0)
-            $lo = [BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$ext.EndTimeLo), 0)
+            # REG_DWORD halves come back signed (Int32) or unsigned (beyond Int32): mask both to UInt32.
+            $hi = [uint32]([int64]"$($ext.EndTimeHi)" -band 4294967295)
+            $lo = [uint32]([int64]"$($ext.EndTimeLo)" -band 4294967295)
             $ft = ([int64]$hi * 4294967296) + [int64]$lo
             if ($ft -gt 0) {
                 $t = [DateTime]::FromFileTimeUtc($ft)
