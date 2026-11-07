@@ -13,11 +13,7 @@ source: In-box ActiveDirectory and local SYSVOL file reads
 param()
 Invoke-Op {
     $dom = Get-ADDomain
-    $pol = Join-Path $env:SystemRoot 'SYSVOL\domain\Policies'
-    if (-not (Test-Path -LiteralPath $pol)) {
-        $sv = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters' -ErrorAction Stop).SysVol
-        $pol = Join-Path $sv "$($dom.DNSRoot)\Policies"
-    }
+    $pol = Get-HermesSysvolPath -Child Policies
     $adGpos = @(Get-ADObject -SearchBase "CN=Policies,CN=System,$($dom.DistinguishedName)" -SearchScope OneLevel -LDAPFilter '(objectClass=groupPolicyContainer)' -Properties displayName)
     $folders = @(Get-ChildItem -LiteralPath $pol -Directory -ErrorAction Stop | Where-Object { $_.Name -match '^\{[0-9A-Fa-f-]{36}\}$' })
     $folderNames = @{}

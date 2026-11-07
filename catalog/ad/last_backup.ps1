@@ -2,7 +2,7 @@
 id: ad.last_backup
 title: Last AD backup
 category: AD hygiene
-description: When each naming context on this domain controller was last backed up, from the dSASignature replication metadata, and how many days ago.
+description: When each naming context was last backed up on one domain controller (the jump host DC over WinRM, otherwise the PDC emulator), from the dSASignature replication metadata, and how many days ago.
 module: inbox:ActiveDirectory
 target: dc
 tier: R
@@ -12,7 +12,7 @@ source: In-box ActiveDirectory (Get-ADReplicationAttributeMetadata)
 #>
 param()
 Invoke-Op {
-    $me = $env:COMPUTERNAME
+    $me = Get-HermesDc
     $errors = @()
     $rows = @()
     foreach ($nc in @((Get-ADRootDSE).namingContexts)) {
@@ -25,5 +25,5 @@ Invoke-Op {
             $rows += @(@{ naming_context = "$nc"; last_backup = (Iso $when); days_since = $days })
         } catch { $errors += @{ host = $nc; message = "$($_.Exception.Message)" } }
     }
-    @{ items = @($rows | Select-Object -First 500); errors = $errors; summary = @{ total = $rows.Count; truncated = ($rows.Count -gt 500) } }
+    @{ items = @($rows | Select-Object -First 500); errors = $errors; summary = @{ total = $rows.Count; truncated = ($rows.Count -gt 500); dc = $me } }
 }

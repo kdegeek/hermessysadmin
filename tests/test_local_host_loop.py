@@ -118,6 +118,7 @@ $out = @{
     cred_is_null = ($null -eq $Global:HermesCred)
     credential_defaults = @($keys | Where-Object { $_ -like '*:Credential' }).Count
     gp_pin_is_lazy = ($Global:PSDefaultParameterValues['*-GP*:Server'] -is [scriptblock])
+    ad_pin_is_lazy = ($Global:PSDefaultParameterValues['*-AD*:Server'] -is [scriptblock])
     is_dc = $Global:HermesIsDc
     user_var = [bool](Get-Variable -Name User -Scope Global -ErrorAction SilentlyContinue)
 }
@@ -130,6 +131,17 @@ $Global:HermesIsDc = $true
 $out.dc_target_count = (Get-HermesDcTarget).Count
 $out.inline = Invoke-HermesOnDc -ArgumentList @('a', 'b') -Script { param($x, $y) "$x+$y" }
 $out.dc_value = Get-HermesDc
+# Discovery with the lazy AD pin in place: a fake AD module whose Discover set has no -Server.
+$Global:HermesDc = $null
+function Global:Get-ADDomainController {
+    [CmdletBinding(DefaultParameterSetName = 'Identity')]
+    param([Parameter(ParameterSetName = 'Identity')][string]$Server, [Parameter(ParameterSetName = 'Discover')][switch]$Discover,
+          [Parameter(ParameterSetName = 'Discover')][string]$Service)
+    if ($Discover) { [pscustomobject]@{ HostName = @("pdc.corp.example") } } else { [pscustomobject]@{ HostName = @("server=$Server") } }
+}
+$out.discovered = Get-HermesDc
+$out.pinned = "$(@((Get-ADDomainController).HostName)[0])"
+$out.disabled_restored = -not $Global:PSDefaultParameterValues.ContainsKey('Disabled')
 ConvertTo-Json -Compress -InputObject $out
 """
 
@@ -148,3 +160,6 @@ def test_real_prelude_in_local_mode_sets_no_credential_and_dc_helpers_work():
     assert data["remote_sysvol"] == "\\\\dc9.corp.example\\SYSVOL\\corp.example\\Policies"
     assert data["dc_target_count"] == 0 and data["inline"] == "a+b"
     assert data["dc_value"] == "dc9.corp.example"
+    assert data["ad_pin_is_lazy"] is True
+    assert data["discovered"] == "pdc.corp.example" and data["pinned"] == "server=pdc.corp.example"
+    assert data["disabled_restored"] is True

@@ -2,7 +2,7 @@
 id: ad.replication_summary
 title: Replication summary
 category: AD hygiene
-description: Replication partners and failures for every domain controller. Partner metadata and failures come from the local DC; every other DC then reports its own inbound replication state (repadmin /showrepl run locally on that DC), so no DC-to-DC remoting is needed from the jump host.
+description: Replication partners and failures for every domain controller. Partner metadata and failures come from one DC (the jump host DC over WinRM, otherwise the PDC emulator); every other DC then reports its own inbound replication state (repadmin /showrepl run locally on that DC), so no DC-to-DC remoting is needed from the jump host.
 module: inbox:ActiveDirectory
 target: dc
 tier: R
@@ -12,7 +12,7 @@ source: In-box ActiveDirectory (Get-ADReplicationPartnerMetadata, Get-ADReplicat
 #>
 param()
 Invoke-Op {
-    $me = $env:COMPUTERNAME
+    $me = Get-HermesDc
     $errors = @()
     $rows = @()
     try {
@@ -28,8 +28,9 @@ Invoke-Op {
                failures = [int]$_.FailureCount; error = "$($_.LastError) $($_.FailureType)".Trim() } })
     } catch { $errors += @{ host = $me; message = "replication failures: $($_.Exception.Message)" } }
     $allDcs = @(Get-ADDomainController -Filter * | ForEach-Object { $_.HostName } | Where-Object { $_ })
-    # The local DC is already covered by the partner metadata and failure rows above; fan out to the others.
-    $dcs = @($allDcs | Where-Object { ($_ -split '\.')[0] -ne $me })
+    # That DC is already covered by the partner metadata and failure rows above; fan out to the others.
+    $meShort = ($me -split '\.')[0]
+    $dcs = @($allDcs | Where-Object { ($_ -split '\.')[0] -ne $meShort })
     $fan = Invoke-HermesCatalogFanout -Computers $dcs -Script {
         $ErrorActionPreference = 'Stop'
         $out = & { $ErrorActionPreference = 'Continue'; repadmin.exe /showrepl $env:COMPUTERNAME /csv 2>$null }

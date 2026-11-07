@@ -12,6 +12,7 @@ source: In-box GroupPolicy (Get-GPOReport XML LinksTo)
 #>
 param()
 Invoke-Op {
+    $dcName = Get-HermesDc
     $errs = @()
     $rows = @()
     foreach ($g in @(Get-GPO -All | Sort-Object DisplayName)) {
@@ -20,7 +21,7 @@ Invoke-Op {
             foreach ($l in @($x.GPO.LinksTo | Where-Object { $_ })) {
                 $rows += @{ name = $g.DisplayName; link_path = "$($l.SOMPath)"; enabled = ("$($l.Enabled)" -eq 'true'); enforced = ("$($l.NoOverride)" -eq 'true') }
             }
-        } catch { $errs += @{ host = $env:COMPUTERNAME; message = "$($g.DisplayName): $($_.Exception.Message)" } }
+        } catch { $errs += @{ host = $dcName; message = "$($g.DisplayName): $($_.Exception.Message)" } }
     }
     @{ items = @($rows | Select-Object -First 500); errors = $errs; summary = @{ total = $rows.Count; truncated = ($rows.Count -gt 500) } }
 }

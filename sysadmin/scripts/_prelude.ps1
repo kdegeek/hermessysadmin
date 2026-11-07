@@ -37,10 +37,14 @@ if ($Global:HermesIsDc) {
 }
 # GroupPolicy cmdlets have no -Credential. Pin them to one DC in both transports: THIS domain controller when
 # the session runs on one (AD and SYSVOL stay local, no second hop), else Get-HermesDc (resolved on first use).
+# Off a DC, AD cmdlets are pinned to the same DC too, so a write and the next read (and GPO links written by
+# GP cmdlets) see the same replica, as they do on the jump host. An explicit -Server always wins, and a
+# default is skipped for cmdlets or parameter sets without -Server.
 if ($Global:HermesIsDc) {
     $Global:PSDefaultParameterValues['*-GP*:Server'] = $Global:HermesLocalDc
 } else {
     $Global:PSDefaultParameterValues['*-GP*:Server'] = { Get-HermesDc }
+    $Global:PSDefaultParameterValues['*-AD*:Server'] = { Get-HermesDc }
 }
 
 function Global:Get-HermesDc {
@@ -48,12 +52,19 @@ function Global:Get-HermesDc {
     # emulator found by the DC locator (GPMC's default target too), then any DC with ADWS. Cached per session.
     if ($Global:HermesDc) { return $Global:HermesDc }
     $dc = $null
-    foreach ($svc in @('PrimaryDC', 'ADWS')) {
-        try { $dc = "$(@((Get-ADDomainController -Discover -Service $svc -ErrorAction Stop).HostName)[0])" } catch { $dc = $null }
-        if ($dc) { break }
-    }
-    if (-not $dc) {
-        try { $dc = "$([System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain().PdcRoleOwner.Name)" } catch { $dc = $null }
+    # Discovery must not trigger the lazy *-AD*:Server default (which calls this function).
+    $wasDisabled = $Global:PSDefaultParameterValues['Disabled']
+    $Global:PSDefaultParameterValues['Disabled'] = $true
+    try {
+        foreach ($svc in @('PrimaryDC', 'ADWS')) {
+            try { $dc = "$(@((Get-ADDomainController -Discover -Service $svc -ErrorAction Stop).HostName)[0])" } catch { $dc = $null }
+            if ($dc) { break }
+        }
+        if (-not $dc) {
+            try { $dc = "$([System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain().PdcRoleOwner.Name)" } catch { $dc = $null }
+        }
+    } finally {
+        if ($null -eq $wasDisabled) { $Global:PSDefaultParameterValues.Remove('Disabled') } else { $Global:PSDefaultParameterValues['Disabled'] = $wasDisabled }
     }
     if (-not $dc) { throw 'Cannot find a domain controller for this domain (the DC locator returned nothing).' }
     $Global:HermesDc = $dc

@@ -12,6 +12,7 @@ source: In-box GroupPolicy (Get-GPPermission)
 #>
 param()
 Invoke-Op {
+    $dcName = Get-HermesDc
     $domSid = (Get-ADDomain).DomainSID.Value
     $readable = @('GpoRead', 'GpoApply', 'GpoEdit', 'GpoEditDeleteModifySecurity')
     $errs = @()
@@ -34,7 +35,7 @@ Invoke-Op {
                 }
                 if ($acl.Count -eq 0) { $rows += @{ name = $g.DisplayName; trustee = ''; permission = ''; flag = 'No permissions at all' } }
             }
-        } catch { $errs += @{ host = $env:COMPUTERNAME; message = "$($g.DisplayName): $($_.Exception.Message)" } }
+        } catch { $errs += @{ host = $dcName; message = "$($g.DisplayName): $($_.Exception.Message)" } }
     }
     @{ items = @($rows | Select-Object -First 500); errors = $errs; summary = @{ total = $rows.Count; flagged_gpos = $flagged; gpos_checked = $checked; truncated = ($rows.Count -gt 500) } }
 }

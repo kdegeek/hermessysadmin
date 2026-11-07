@@ -13,9 +13,18 @@ Invoke-Op {
             current = @{ links = $linked; status = "$($gpo.GpoStatus)"; modified = (Iso $gpo.ModificationTime) }
         }
     }
-    $root = Join-Path $env:ProgramData 'HermesSysadmin\GpoBackups'
-    New-Item -ItemType Directory -Path $root -Force | Out-Null
-    $b = Backup-GPO -Guid $gpo.Id -Path $root -Comment 'hermes-sysadmin: automatic backup before delete'
+    $dc = Get-HermesDc
+    # The safety backup goes to the backup folder on the DC, like gpo_backup.
+    $b = Invoke-HermesOnDc -ArgumentList @($gpo.Id.ToString(), $dc) -Script {
+        param($Gid, $Dc)
+        $ErrorActionPreference = 'Stop'
+        Import-Module GroupPolicy
+        $root = Join-Path $env:ProgramData 'HermesSysadmin\GpoBackups'
+        New-Item -ItemType Directory -Path $root -Force | Out-Null
+        $r = Backup-GPO -Guid $Gid -Path $root -Comment 'hermes-sysadmin: automatic backup before delete' -Server $Dc
+        [pscustomobject]@{ id = $r.Id.ToString() }
+    }
+    Assert-Hermes ([bool]"$($b.id)") 'The automatic backup before delete did not complete; nothing was deleted.'
     Remove-GPO -Guid $gpo.Id -Confirm:$false
-    @{ deleted = $gpo.DisplayName; backup_id = $b.Id.ToString(); links_removed = $linked }
+    @{ deleted = $gpo.DisplayName; backup_id = "$($b.id)"; links_removed = $linked }
 }

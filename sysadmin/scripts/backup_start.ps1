@@ -24,7 +24,12 @@ Invoke-Op {
                 # Reuse the scheduled target object: a disk/volume target has no path to rebuild it from.
                 $bt = @(Get-WBBackupTarget -Policy $scheduled)[0]
                 $T = $(if ($bt.Path) { "$($bt.Path)" } else { "$($bt.Label)" })
-            } elseif ($T -like '\\*') { $bt = New-WBBackupTarget -NetworkPath $T -Credential $C }
+            } elseif ($T -like '\\*') {
+                # $C is the WinRM service credential; $null on the local transport (the target's computer account is used).
+                $wb = @{ NetworkPath = $T }
+                if ($C) { $wb.Credential = $C }
+                $bt = New-WBBackupTarget @wb
+            }
             else { $bt = New-WBBackupTarget -VolumePath $T }
             Add-WBBackupTarget -Policy $policy -Target $bt | Out-Null
         }

@@ -31,7 +31,13 @@ Invoke-Op {
         if ($BMR) { Add-WBBareMetalRecovery -Policy $p }
         foreach ($vol in $V) { Add-WBVolume -Policy $p -Volume (Get-WBVolume -VolumePath $vol) }
         Set-WBSchedule -Policy $p -Schedule @($Sch | ForEach-Object { [datetime]::ParseExact($_, 'H:mm', [cultureinfo]::InvariantCulture) }) | Out-Null
-        if ($T -like '\\*') { $bt = New-WBBackupTarget -NetworkPath $T -Credential $C } else { $bt = New-WBBackupTarget -VolumePath $T }
+        if ($T -like '\\*') {
+            # $C is the WinRM service credential; $null on the local transport, so the schedule then authenticates
+            # to the share as the server's computer account.
+            $wb = @{ NetworkPath = $T }
+            if ($C) { $wb.Credential = $C }
+            $bt = New-WBBackupTarget @wb
+        } else { $bt = New-WBBackupTarget -VolumePath $T }
         Add-WBBackupTarget -Policy $p -Target $bt | Out-Null
         Set-WBPolicy -Policy $p -Force
         [pscustomobject]@{ current = $current }
@@ -48,7 +54,9 @@ Invoke-Op {
                 "System state: $($before.system_state) -> $SystemState; bare metal: $($before.bare_metal) -> $BareMetal",
                 "Volumes: $(@($before.volumes) -join ', ') -> $(@($Volumes) -join ', ')",
                 "Set-WBPolicy -Force (replaces the existing policy)"
-            )
+            ) + @(if ($Target -like '\\*' -and -not $Global:HermesCred) {
+                "UNC target with no stored credential: the scheduled backup writes to $Target as the computer account of $ComputerName, which needs write access to the share"
+            })
             current = $before
         }
     }

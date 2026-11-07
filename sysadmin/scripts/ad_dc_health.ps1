@@ -1,6 +1,7 @@
 param()
 Invoke-Op {
     $dcs = @(Get-ADDomainController -Filter * | Sort-Object Name)
+    $pdc = "$((Get-ADDomain).PDCEmulator)"
     $refUtc = [datetime]::UtcNow
     $remote = Get-HermesFanout -Computers @($dcs | ForEach-Object { $_.HostName }) -Script {
         $svc = @{}
@@ -19,6 +20,10 @@ Invoke-Op {
     }
     $byHost = @{}
     foreach ($r in $remote.results) { $byHost["$($r.host)".ToLower()] = $r }
+    # Time skew is measured against the PDC emulator (the domain time source), not against whichever
+    # machine runs this session (the Hermes machine on the local transport).
+    $pdcResult = $byHost[$pdc.ToLower()]
+    if ($pdcResult -and $pdcResult.utc_now) { $refUtc = ([datetime]$pdcResult.utc_now).ToUniversalTime() }
     $items = @(foreach ($dc in $dcs) {
         $replError = $null
         $failures = @()

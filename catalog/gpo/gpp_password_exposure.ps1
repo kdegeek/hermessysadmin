@@ -12,11 +12,8 @@ source: In-box local SYSVOL scan (Select-String match count only)
 #>
 param()
 Invoke-Op {
-    $pol = Join-Path $env:SystemRoot 'SYSVOL\domain\Policies'
-    if (-not (Test-Path -LiteralPath $pol)) {
-        $sv = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters' -ErrorAction Stop).SysVol
-        $pol = Join-Path $sv "$((Get-ADDomain).DNSRoot)\Policies"
-    }
+    $dcName = Get-HermesDc
+    $pol = Get-HermesSysvolPath -Child Policies
     $names = @{}
     foreach ($g in @(Get-GPO -All)) { $names["{$($g.Id.ToString().ToUpperInvariant())}"] = $g.DisplayName }
     $errs = @()
@@ -35,7 +32,7 @@ Invoke-Op {
                 $nm = $names[$guid]
                 $rows += @{ gpo_guid = $guid; gpo_name = $nm; file = $rel; matches = $count }
             }
-        } catch { $errs += @{ host = $env:COMPUTERNAME; message = "$($f.Name): $($_.Exception.Message)" } }
+        } catch { $errs += @{ host = $dcName; message = "$($f.Name): $($_.Exception.Message)" } }
     }
     @{ items = @($rows | Select-Object -First 500); errors = $errs; summary = @{ total = $rows.Count; files_scanned = $scanned; truncated = ($rows.Count -gt 500) } }
 }

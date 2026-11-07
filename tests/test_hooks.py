@@ -117,6 +117,14 @@ def test_ad_powershell_credential_reference_is_warned(monkeypatch, make_service)
     assert "service credential" not in ok["message"]
 
 
+
+def test_ad_powershell_credential_warning_is_winrm_only(monkeypatch, make_service):
+    local = Settings(transport="local", run_as="hermes_user", enable_powershell_escape=True)
+    service = make_service(settings=local)
+    monkeypatch.setattr(runtime, "get_service", lambda: service)
+    d = hooks.pre_tool_call(tool_name="ad_powershell", args={"script": "$x = $Global:hermescred", "reason": "r"})
+    assert "service credential" not in d["message"]
+
 def test_escalated_read_op_is_gated_and_audited(svc, audit):
     import json
 

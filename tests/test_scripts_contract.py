@@ -115,3 +115,72 @@ def test_web_download_is_confined_to_the_module_installer():
     assert _forbidden("Invoke-WebRequest -Uri x", "catalog_module_install", core=False)
     assert _forbidden("irm x", "catalog_module_install", core=True)
     assert not _forbidden("Invoke-WebRequest -Uri x", "catalog_module_install", core=True)
+
+
+# --- DC locality (Task 17) ---------------------------------------------------------------------
+# Over WinRM the session runs ON a DC; over the local transport it runs on the Hermes machine. Code outside
+# a fan-out / Invoke-HermesOnDc scriptblock must not read DC-local state directly.
+DC_LOCAL = re.compile(
+    r"\$env:COMPUTERNAME|SYSVOL\\domain|\\SYSVOL\b|NTDS\\|HermesSysadmin\\GpoBackups"
+    r"|\bGet-WinEvent\b|\bGet-EventLog\b|\bwbadmin\b|\brepadmin\b|\bdcdiag\b|\bw32tm\b|\bdfsrdiag\b"
+    r"|\bGet-Service\b|\bGet-CimInstance\b|\bGet-WmiObject\b|\bGet-SmbShare\b|\bGet-WB\w+|\$Global:HermesLocalDc",
+    re.IGNORECASE,
+)
+# Waivers, each with its reason.
+DC_LOCAL_ALLOWED = {
+    "ad_connection_test": "describes the machine PowerShell runs on, on purpose",
+    "backup_cancel": "wbadmin runs inside the fan-out; the name only appears in the error message",
+}
+_REMOTE_BLOCK = re.compile(
+    r"\b(Get-HermesFanout|Invoke-HermesOne|Invoke-HermesCatalogFanout|Invoke-HermesOnDc)\b[^\n]*?-Script\s*\{"
+)
+
+
+def _outside_remote_blocks(code: str) -> str:
+    """The code with every fan-out / Invoke-HermesOnDc scriptblock body removed (balanced braces)."""
+    out, pos = [], 0
+    for m in _REMOTE_BLOCK.finditer(code):
+        if m.start() < pos:
+            continue
+        out.append(code[pos:m.end()])
+        depth, i = 1, m.end()
+        while i < len(code) and depth:
+            depth += {"{": 1, "}": -1}.get(code[i], 0)
+            i += 1
+        pos = i - 1
+    out.append(code[pos:])
+    return "".join(out)
+
+
+def test_remote_block_stripper():
+    code = "a; Invoke-HermesOnDc -ArgumentList @(1) -Script { Get-WinEvent; if ($x) { w32tm } }; Get-Service"
+    stripped = _outside_remote_blocks(code)
+    assert "Get-WinEvent" not in stripped and "w32tm" not in stripped and "Get-Service" in stripped
+
+
+DC_SCRIPTS = [p for p in sorted(SCRIPTS_DIR.glob("*.ps1")) if p.stem != "_prelude"] + [
+    p for p in CATALOG_FILES if re.search(r"^target:\s*dc\s*$", p.read_text(encoding="utf-8"), re.M)
+]
+
+
+@pytest.mark.parametrize("path", DC_SCRIPTS, ids=lambda p: f"{p.parent.name}/{p.name}")
+def test_no_dc_local_reads_outside_the_dc_helpers(path):
+    if path.stem in DC_LOCAL_ALLOWED and path.parent == SCRIPTS_DIR:
+        return
+    outside = _outside_remote_blocks(_code(path.read_text(encoding="utf-8")))
+    hits = sorted({m.group(0) for m in DC_LOCAL.finditer(outside)})
+    assert not hits, f"DC-local state read on the session host: {hits}; use Invoke-HermesOnDc, Get-HermesDc, Get-HermesSysvolPath or a fan-out"
+
+
+@pytest.mark.parametrize("path", DC_SCRIPTS, ids=lambda p: f"{p.parent.name}/{p.name}")
+def test_dns_server_cmdlets_target_the_dc(path):
+    outside = _outside_remote_blocks(_code(path.read_text(encoding="utf-8")))
+    for line in outside.splitlines():
+        if re.search(r"\b(Get|Set|Add|Remove)-DnsServer\w+\s", line) and "Get-Command" not in line:
+            assert re.search(r"@dns\b", line, re.I), f"DnsServer cmdlet without the @dns (Get-HermesDcTarget) splat: {line.strip()}"
+
+
+def test_backup_scripts_tolerate_a_null_service_credential():
+    for name in ("backup_start", "backup_set_policy"):
+        text = (SCRIPTS_DIR / f"{name}.ps1").read_text(encoding="utf-8")
+        assert "-Credential $C" not in text, f"{name}: build the New-WBBackupTarget splat; HermesCred is $null in local mode"

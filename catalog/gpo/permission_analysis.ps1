@@ -12,6 +12,7 @@ source: In-box GroupPolicy (Get-GPPermission)
 #>
 param()
 Invoke-Op {
+    $dcName = Get-HermesDc
     $domSid = (Get-ADDomain).DomainSID.Value
     $admin = @('S-1-5-18', 'S-1-5-9', "$domSid-512", "$domSid-519", 'S-1-5-32-544')
     $errs = @()
@@ -27,7 +28,7 @@ Invoke-Op {
                 $who = if ($a.Trustee.Name) { "$($a.Trustee.Name)" } else { $sid }
                 $rows += @{ name = $g.DisplayName; permission_type = $type; principal = $who; permission = "$($a.Permission)" }
             }
-        } catch { $errs += @{ host = $env:COMPUTERNAME; message = "$($g.DisplayName): $($_.Exception.Message)" } }
+        } catch { $errs += @{ host = $dcName; message = "$($g.DisplayName): $($_.Exception.Message)" } }
     }
     $order = @{ Unknown = 0; Other = 1; 'Authenticated Users' = 2; Administrative = 3 }
     $rows = @($rows | Sort-Object { $order[$_.permission_type] }, { $_.name })

@@ -83,7 +83,9 @@ def _gate(op: Any, raw_args: dict | None, display: str, tool_name: str) -> dict 
         else:
             # No preview: the human must see every argument they approve, untruncated.
             lines.append("Arguments:\n" + format_preview({"details": redact(clean)}, limit=None))
-        if op.name == "ad_powershell" and "hermescred" in str(clean.get("script", "")).lower():
+        # Only the WinRM transport holds a service credential; on the local transport HermesCred is $null.
+        if (op.name == "ad_powershell" and service.settings.transport == "winrm"
+                and "hermescred" in str(clean.get("script", "")).lower()):
             lines.append("⚠ This script references the service credential ($Global:HermesCred).")
         rule_key = (
             f"hermes-sysadmin:{op.name}"

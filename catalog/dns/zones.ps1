@@ -2,7 +2,7 @@
 id: dns.zones
 title: DNS zones
 category: DNS & DHCP
-description: DNS zones on this domain controller with zone type, whether they are AD-integrated, and scavenging (aging) settings. Needs the DnsServer module on the jump host.
+description: DNS zones on the domain controller (the jump host DC over WinRM, otherwise the PDC emulator) with zone type, whether they are AD-integrated, and scavenging (aging) settings. Needs the DnsServer module on the jump host.
 module: inbox:DnsServer
 target: dc
 tier: R
@@ -12,20 +12,22 @@ source: In-box DnsServer (Get-DnsServerZone, Get-DnsServerZoneAging)
 #>
 param()
 Invoke-Op {
+    $dcName = Get-HermesDc
     if (-not (Get-Command Get-DnsServerZone -ErrorAction SilentlyContinue)) { throw 'NotInstalled: DnsServer module not present on the jump host' }
     $errs = @()
     $rows = @()
-    foreach ($z in @(Get-DnsServerZone | Sort-Object ZoneName)) {
+    $dns = Get-HermesDcTarget
+    foreach ($z in @(Get-DnsServerZone @dns | Sort-Object ZoneName)) {
         $aging = $null
         $refresh = $null
         $noRefresh = $null
         if ("$($z.ZoneType)" -eq 'Primary' -and -not $z.IsAutoCreated) {
             try {
-                $a = Get-DnsServerZoneAging -Name $z.ZoneName -ErrorAction Stop
+                $a = Get-DnsServerZoneAging -Name $z.ZoneName -ErrorAction Stop @dns
                 $aging = [bool]$a.AgingEnabled
                 $refresh = [int]$a.RefreshInterval.TotalHours
                 $noRefresh = [int]$a.NoRefreshInterval.TotalHours
-            } catch { $errs += @{ host = $env:COMPUTERNAME; message = "$($z.ZoneName): $($_.Exception.Message)" } }
+            } catch { $errs += @{ host = $dcName; message = "$($z.ZoneName): $($_.Exception.Message)" } }
         }
         $rows += @{ zone = "$($z.ZoneName)"; type = "$($z.ZoneType)"; ds_integrated = [bool]$z.IsDsIntegrated; aging = $aging; refresh = $refresh; no_refresh = $noRefresh }
     }
