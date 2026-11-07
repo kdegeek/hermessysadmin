@@ -83,14 +83,14 @@ function CatalogParamField({ p, value, onChange }) {
     input = jsx('div', { children: jsx(Toggle, { on: value, onChange }) });
   } else if (Array.isArray(p.enum) && p.enum.length) {
     input = jsx('select', {
-      className: 'hs-input',
+      className: 'hs-input desktop-input-chrome',
       value: value === undefined ? '' : value,
       onChange: (e) => onChange(e.target.value),
       children: [p.required ? null : jsx('option', { value: '', children: '(default)' }, ''), ...p.enum.map((o) => jsx('option', { value: String(o), children: String(o) }, String(o)))],
     });
   } else if (p.type === 'integer') {
     input = jsx('input', {
-      className: 'hs-input',
+      className: 'hs-input desktop-input-chrome',
       type: 'number',
       step: 1,
       min: typeof p.minimum === 'number' ? p.minimum : undefined,

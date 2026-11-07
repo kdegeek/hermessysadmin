@@ -75,7 +75,7 @@ function Field({ label, children }) {
 
 function TextInput({ value, onChange, placeholder, mono, type, autoFocus, onEnter, list: listId }) {
   return jsx('input', {
-    className: `hs-input${mono ? ' hs-mono' : ''}`,
+    className: `hs-input desktop-input-chrome${mono ? ' hs-mono' : ''}`,
     type: type || 'text',
     value: value === null || value === undefined ? '' : value,
     placeholder,
@@ -90,7 +90,7 @@ function TextInput({ value, onChange, placeholder, mono, type, autoFocus, onEnte
 
 function TextArea({ value, onChange, placeholder, mono }) {
   return jsx('textarea', {
-    className: `hs-input${mono ? ' hs-mono' : ''}`,
+    className: `hs-input desktop-input-chrome${mono ? ' hs-mono' : ''}`,
     value: value || '',
     placeholder,
     spellCheck: false,
@@ -170,7 +170,7 @@ function SearchBox({ value, onChange, placeholder, focusSignal }) {
   }, [focusSignal]);
   return jsx('input', {
     ref,
-    className: 'hs-search',
+    className: 'hs-search desktop-input-chrome',
     value,
     placeholder,
     spellCheck: false,

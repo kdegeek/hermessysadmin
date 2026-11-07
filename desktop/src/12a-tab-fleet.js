@@ -153,7 +153,7 @@ function FleetTab() {
           jsx(Seg, { value: f.filter, onChange: (v) => setFleetFilter({ filter: v }), options: [['all', 'All'], ['online', 'Online'], ['offline', 'Offline']] }),
           jsx(SearchBox, { value: f.query || '', onChange: (v) => setFleetFilter({ query: v }), placeholder: 'Search name, user, OU…', focusSignal: useValue($focusSearch) }),
           jsxs('select', {
-            className: 'hs-input hs-select',
+            className: 'hs-input hs-select desktop-input-chrome',
             'aria-label': 'Operating system',
             value: f.os || '',
             onChange: (e) => setFleetFilter({ os: e.target.value }),

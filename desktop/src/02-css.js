@@ -56,7 +56,7 @@ const CSS = `
 .hs-p{margin:0 0 8px}
 .hs-stack{display:grid;gap:10px}
 .hs-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
-.hs-search{flex:0 1 300px;border:1px solid var(--ui-stroke-secondary);background:var(--ui-bg-input);border-radius:var(--radius-md,6px);padding:5px 10px;color:var(--ui-text-primary);font:inherit}
+.hs-search{flex:0 1 300px;border-width:1px;border-style:solid;border-radius:var(--radius-md,6px);padding:5px 10px;color:var(--ui-text-primary);font:inherit}
 .hs-chip{border:1px solid var(--ui-stroke-secondary);background:none;border-radius:var(--radius-xl,12px);padding:2px 10px;font-size:12px;cursor:pointer;color:var(--ui-text-secondary);font-family:inherit}
 .hs-chip.on{background:var(--ui-row-active-background);border-color:color-mix(in srgb,var(--ui-accent) 40%,transparent);color:var(--ui-text-primary)}
 .hs-seg{display:inline-flex;border:1px solid var(--ui-stroke-secondary);border-radius:var(--radius-md,6px);overflow:hidden;align-self:flex-start}
@@ -84,7 +84,7 @@ const CSS = `
 .hs-modal-body{display:grid;gap:10px;font-size:13px;color:var(--ui-text-primary);max-height:60vh;overflow:auto}
 .hs-whatif{background:var(--ui-bg-chrome);border:1px solid var(--ui-stroke-tertiary);border-radius:var(--radius-md,6px);padding:8px 10px;font-family:var(--font-mono,ui-monospace,monospace);font-size:11.5px;white-space:pre-wrap;margin:0;color:var(--ui-text-secondary);overflow-wrap:anywhere}
 .hs-secret{font-size:15px;color:var(--ui-text-primary);text-align:center;letter-spacing:.06em;user-select:all}
-.hs-input{width:100%;border:1px solid var(--ui-stroke-secondary);background:var(--ui-bg-input);border-radius:var(--radius-md,6px);padding:6px 10px;color:var(--ui-text-primary);font:inherit}
+.hs-input{width:100%;border-width:1px;border-style:solid;border-radius:var(--radius-md,6px);padding:6px 10px;color:var(--ui-text-primary);font:inherit}
 textarea.hs-input{min-height:64px;resize:vertical}
 .hs-field{font-size:12px;color:var(--ui-text-tertiary);display:grid;gap:4px}
 .hs-check{font-size:12.5px;color:var(--ui-text-secondary);display:flex;gap:6px;align-items:center;cursor:pointer}
