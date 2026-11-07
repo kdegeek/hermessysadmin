@@ -1,63 +1,6 @@
 {
   "modules": [
     {
-      "name": "ADEssentials",
-      "version": "1.0.7",
-      "package_hash": "UEzqO0Qp/wZpz/QgbTkaOgzq2PiI47bzXUQX+FgrGtfyvWwjmU6amtHCOAfcROdHCbSRMezFhie1oG0U8A+ugA==",
-      "hash_algorithm": "SHA512",
-      "license": "",
-      "project_url": "https://github.com/EvotecIT/ADEssentials",
-      "signer": "Evotec Services sp. z o.o.",
-      "requires": [
-        "PSEventViewer",
-        "PSWriteHTML"
-      ]
-    },
-    {
-      "name": "PSEventViewer",
-      "version": "4.1.0",
-      "package_hash": "+e8dCSE9vhO3IqDqmul5tbpcas7wM3Lf46MHHj9/FaXgN8O+S8NSsbpQaouKO2o9gvirTwsrpFVTcZjv7mhbmg==",
-      "hash_algorithm": "SHA512",
-      "license": "",
-      "project_url": "https://github.com/EvotecIT/EventViewerX",
-      "signer": "Evotec Services sp. z o.o.",
-      "requires": []
-    },
-    {
-      "name": "PSWriteHTML",
-      "version": "1.45.0",
-      "package_hash": "ol7bWRN2lK/cshJtZu0DXSOnSo1n2AhCrLWPo0QX8xM23Yo3111VCChdVL46wtrcHHQgkDVyyySl2NPJifPFJA==",
-      "hash_algorithm": "SHA512",
-      "license": "",
-      "project_url": "https://github.com/EvotecIT/PSWriteHTML",
-      "signer": "Evotec Services sp. z o.o.",
-      "requires": []
-    },
-    {
-      "name": "PSSharedGoods",
-      "version": "0.0.313",
-      "package_hash": "oGEixxqInEsnqUof0jYf2uxrPtUSBjNcOj7hcZaPXXe14Atcg9gI92F3j/qRVAkPxY2D3LZKIcEo5oJuNpE4TQ==",
-      "hash_algorithm": "SHA512",
-      "license": "",
-      "project_url": "https://github.com/EvotecIT/PSSharedGoods",
-      "signer": "Evotec Services sp. z o.o.",
-      "requires": []
-    },
-    {
-      "name": "GPOZaurr",
-      "version": "1.1.13",
-      "package_hash": "qKftFrJpxLxt+HodKI5AEdZSya9UiQSOivcJ3I0auTSDrHUCs9c8F0iQp3E4jqMIhJQrwiPyHfJdqrde0JfPog==",
-      "hash_algorithm": "SHA512",
-      "license": "",
-      "project_url": "https://github.com/EvotecIT/GPOZaurr",
-      "signer": "Evotec Services sp. z o.o.",
-      "requires": [
-        "ADEssentials",
-        "PSEventViewer",
-        "PSWriteHTML"
-      ]
-    },
-    {
       "name": "NTFSSecurity",
       "version": "4.2.6",
       "package_hash": "XrE9nKnMkBmK2m1FmuySzYjdH+etAmzEdkNvNPft1tGm2aAO25vuaShLI5PpvWEs/oP6q4tvV/bIoZettwPoDw==",
