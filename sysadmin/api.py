@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Mapping
 
 from . import __version__, ops  # noqa: F401  (registers every op)
@@ -10,9 +12,47 @@ from . import catalog as _catalog
 from .ops.catalog_ops import entry_detail
 from .errors import ApprovalRequired, InvalidArguments, error_result
 from .registry import OPS, Op, coerce_args, schema_for, target_of
+from .snapshots import Snapshots
 
 log = logging.getLogger(__name__)
 ACTOR = "dashboard"
+
+# Dashboard reads are served from snapshots (see snapshots.py): a view answers instantly from the
+# last result and refreshes in the background once it is older than this many seconds. Opening a
+# device drawer therefore shows what was last collected and refreshes it if it is over a minute old.
+MAX_AGE = {"health": 60, "overview": 60, "fleet": 300, "monitoring": 60, "device": 60, "remote_check": 60, "sessions": 20}
+_snap_lock = threading.Lock()
+
+
+def snapshots(service: Any) -> Snapshots:
+    """The snapshot store for this service (one per service; a write marks it stale)."""
+    snap = getattr(service, "_hs_snapshots", None)
+    if snap is None:
+        with _snap_lock:
+            snap = getattr(service, "_hs_snapshots", None)
+            if snap is None:
+                snap = Snapshots()
+                service._hs_snapshots = snap
+                if hasattr(service, "on_invalidate"):
+                    service.on_invalidate(snap.mark_stale)
+    return snap
+
+
+def _read(service: Any, name: str, args: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """A fresh read for a snapshot: skips the service read cache (the snapshot is the cache here)."""
+    return service.call(name, dict(args or {}), actor=ACTOR, fresh=True)
+
+
+def _view(service: Any, key: str, producer: Callable[[], dict[str, Any]], max_age: float, *, refresh: bool = False) -> dict[str, Any]:
+    return snapshots(service).get(key, lambda: _safe(producer), max_age, refresh=refresh)
+
+
+def device_key(computer: str) -> str:
+    return "device:" + str(computer).strip().lower()
+
+
+def remote_check_key(computer: str) -> str:
+    return "remote_check:" + str(computer).strip().lower()
 
 
 def _safe(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
@@ -50,23 +90,26 @@ def confirm_name_of(op: Op, args: Mapping[str, Any]) -> str:
     return op.name
 
 
-def health(service: Any) -> dict[str, Any]:
-    def go() -> dict[str, Any]:
-        s = service.settings
-        data: dict[str, Any] = {
-            "configured": s.configured, "host": s.host, "mode": s.mode, "version": __version__,
-            "transport": s.transport, "run_as": s.run_as if s.transport == "local" else None,
-            "run_as_user": s.username if s.transport == "local" and s.run_as == "account" else None,
-            "escape_enabled": s.enable_powershell_escape, "stale_days": s.backup_stale_days,
-            "status": "unconfigured", "error": None,
-        }
-        if s.configured:
-            r = service.call("ad_dc_health", {}, actor=ACTOR)
-            data["status"] = r["data"]["status"] if r["ok"] else "bad"
-            data["error"] = None if r["ok"] else r["error"]
-        return {"ok": True, "data": data}
+def _health_now(service: Any) -> dict[str, Any]:
+    s = service.settings
+    data: dict[str, Any] = {
+        "configured": s.configured, "host": s.host, "mode": s.mode, "version": __version__,
+        "transport": s.transport, "run_as": s.run_as if s.transport == "local" else None,
+        "run_as_user": s.username if s.transport == "local" and s.run_as == "account" else None,
+        "escape_enabled": s.enable_powershell_escape, "stale_days": s.backup_stale_days,
+        "status": "unconfigured", "error": None,
+    }
+    if s.configured:
+        r = _read(service, "ad_dc_health")
+        data["status"] = r["data"]["status"] if r["ok"] else "bad"
+        data["error"] = None if r["ok"] else r["error"]
+    return {"ok": True, "data": data}
 
-    return _safe(go)
+
+def health(service: Any) -> dict[str, Any]:
+    if not service.settings.configured:
+        return _safe(lambda: _health_now(service))  # nothing remote to wait for; the setup card updates at once
+    return _view(service, "health", lambda: _health_now(service), MAX_AGE["health"])
 
 
 def test_connection(service: Any) -> dict[str, Any]:
@@ -159,15 +202,22 @@ def run_op(service: Any, name: str, body: Mapping[str, Any] | None) -> dict[str,
     return _safe(go)
 
 
+OVERVIEW_SECTIONS = {
+    "domain": "ad_domain_overview", "dc_health": "ad_dc_health", "sessions": "rdp_sessions",
+    "gpo_health": "gpo_health", "backups": "backup_status",
+}
+
+
 def overview(service: Any) -> dict[str, Any]:
+    return _view(service, "overview", lambda: overview_now(service), MAX_AGE["overview"])
+
+
+def overview_now(service: Any) -> dict[str, Any]:
+    """Collect the overview: its five reads run side by side (each on its own PowerShell worker)."""
     def go() -> dict[str, Any]:
-        sections = {
-            "domain": service.call("ad_domain_overview", {}, actor=ACTOR),
-            "dc_health": service.call("ad_dc_health", {}, actor=ACTOR),
-            "sessions": service.call("rdp_sessions", {}, actor=ACTOR),
-            "gpo_health": service.call("gpo_health", {}, actor=ACTOR),
-            "backups": service.call("backup_status", {}, actor=ACTOR),
-        }
+        with ThreadPoolExecutor(max_workers=len(OVERVIEW_SECTIONS), thread_name_prefix="hermes-sysadmin-overview") as pool:
+            futures = {key: pool.submit(_read, service, name) for key, name in OVERVIEW_SECTIONS.items()}
+            sections = {key: f.result() for key, f in futures.items()}
 
         def data(key: str) -> dict[str, Any]:
             r = sections[key]
@@ -211,11 +261,12 @@ def audit(service: Any, limit: int = 100, actor: str | None = None, decision: st
 
 
 def fleet(service: Any, refresh: bool = False) -> dict[str, Any]:
-    return _safe(lambda: service.call("fleet_inventory", {"refresh": refresh}, actor=ACTOR))
+    """The inventory snapshot; refresh=True (the Refresh button) re-probes in the background."""
+    return _view(service, "fleet", lambda: _read(service, "fleet_inventory"), MAX_AGE["fleet"], refresh=refresh)
 
 
 def fleet_device(service: Any, computer: str) -> dict[str, Any]:
-    return _safe(lambda: service.call("fleet_device", {"computer": computer}, actor=ACTOR))
+    return _view(service, device_key(computer), lambda: _read(service, "fleet_device", {"computer": computer}), MAX_AGE["device"])
 
 
 def fleet_history(service: Any, days: int = 30) -> dict[str, Any]:
@@ -223,11 +274,13 @@ def fleet_history(service: Any, days: int = 30) -> dict[str, Any]:
 
 
 def remote_check(service: Any, computer: str) -> dict[str, Any]:
-    return _safe(lambda: service.call("remote_access_check", {"computer": computer}, actor=ACTOR))
+    return _view(service, remote_check_key(computer), lambda: _read(service, "remote_access_check", {"computer": computer}), MAX_AGE["remote_check"])
 
 
 def remote_sessions(service: Any, computers: list[str] | None = None) -> dict[str, Any]:
-    return _safe(lambda: service.call("remote_sessions", {"computers": computers or []}, actor=ACTOR))
+    names = list(computers or [])
+    key = "sessions:" + ",".join(sorted(n.strip().lower() for n in names))
+    return _view(service, key, lambda: _read(service, "remote_sessions", {"computers": names}), MAX_AGE["sessions"])
 
 
 def remote_shadow(service: Any, computer: str, session_id: int, control: bool = True, consent: bool = True) -> dict[str, Any]:
@@ -240,7 +293,34 @@ def remote_assist(service: Any, computer: str) -> dict[str, Any]:
 
 
 def monitoring(service: Any) -> dict[str, Any]:
-    return _safe(lambda: service.call("monitoring_status", {}, actor=ACTOR))
+    return _view(service, "monitoring", lambda: _read(service, "monitoring_status"), MAX_AGE["monitoring"])
+
+
+# ---- background collection (collector.py) -------------------------------------------------
+
+def warm(service: Any, what: str) -> dict[str, Any]:
+    """Collect one dashboard view now (the background collector). what: health|overview|fleet|monitoring."""
+    producers = {
+        "health": lambda: _health_now(service),
+        "overview": lambda: overview_now(service),
+        "fleet": lambda: _read(service, "fleet_inventory"),
+        "monitoring": lambda: _read(service, "monitoring_status"),
+    }
+    return snapshots(service).collect(what, lambda: _safe(producers[what]))
+
+
+def warm_device(service: Any, computer: str) -> None:
+    """Collect one computer's drawer (device detail and remote access checks)."""
+    snap = snapshots(service)
+    snap.collect(device_key(computer), lambda: _safe(lambda: _read(service, "fleet_device", {"computer": computer})))
+    snap.collect(remote_check_key(computer), lambda: _safe(lambda: _read(service, "remote_access_check", {"computer": computer})))
+
+
+def online_computers(service: Any) -> list[str]:
+    """Online computers in the last fleet snapshot (the device sweep's work list)."""
+    res = snapshots(service).peek("fleet") or {}
+    items = ((res.get("data") or {}).get("items") or []) if res.get("ok") else []
+    return [str(i["name"]) for i in items if i.get("online") and i.get("name")]
 
 
 def monitoring_enable(service: Any, body: Mapping[str, Any] | None) -> dict[str, Any]:

@@ -686,6 +686,9 @@ class LocalTransport:
                 if terminated or (errors and not out):
                     # The password may have changed in AD since it was checked: re-validate on the next start.
                     self._credentials_ok = False
+                    reset = getattr(self._credential_check, "invalidate", None)
+                    if reset is not None:
+                        reset()  # a check shared by a pool re-validates on any member's next start
                     raise self._probe_error(errors)
         except BaseException:
             child.kill()

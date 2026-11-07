@@ -35,11 +35,21 @@ function useApi(key, fetcher, opts) {
     staleTime: o.staleTime === undefined ? 10000 : o.staleTime,
     refetchOnWindowFocus: false,
   });
+  // Snapshot views (see sysadmin/snapshots.py) answer at once with the last result and say when a
+  // background refresh is running; poll until it lands so the page updates by itself.
+  const cache = q.data && q.data.cache ? q.data.cache : null;
+  const refreshing = !!(cache && cache.refreshing);
+  const collected = cache && toDate(cache.collected_at) ? toDate(cache.collected_at).getTime() : 0;
+  useEffect(() => {
+    if (!enabled || !refreshing) return undefined;
+    return CTX.setTimeout(() => q.refetch(), SNAPSHOT_POLL_MS);
+  }, [enabled, refreshing, q.dataUpdatedAt]);
   return {
     res: q.data || null,
     loading: enabled && !q.data && q.isFetching,
     fetching: q.isFetching,
-    updatedAt: q.dataUpdatedAt || 0,
+    refreshing,
+    updatedAt: collected || q.dataUpdatedAt || 0,
     refetch: q.refetch,
   };
 }

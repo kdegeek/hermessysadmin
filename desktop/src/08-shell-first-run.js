@@ -85,9 +85,10 @@ function SetupCard({ health }) {
   });
 }
 
-function UpdatedAgo({ at }) {
+function UpdatedAgo({ at, refreshing }) {
   useTick(10000);
-  return jsx('span', { className: 'hs-muted hs-small', children: at ? `updated ${ago(at)}` : 'loading…' });
+  const text = at ? `updated ${ago(at)}` : 'loading…';
+  return jsx('span', { className: 'hs-muted hs-small', children: refreshing && at ? `${text} · refreshing…` : text });
 }
 
 function Header({ health, overview }) {
@@ -108,7 +109,7 @@ function Header({ health, overview }) {
       jsx('span', { className: 'hs-grow' }),
       jsx(Badge, { tone: 'accent', children: `mode: ${health.mode}` }),
       health.escape_enabled ? jsx(Badge, { tone: 'red', children: 'PowerShell escape hatch on' }) : null,
-      jsx(UpdatedAgo, { at: overview.updatedAt }),
+      jsx(UpdatedAgo, { at: overview.updatedAt, refreshing: overview.refreshing }),
       jsx(Btn, { small: true, onClick: refresh, disabled: busy, children: busy ? 'Refreshing…' : '↻ Refresh' }),
     ],
   });

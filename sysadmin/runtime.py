@@ -12,14 +12,17 @@ from . import ops as _ops  # noqa: F401  (registers operations)
 from .audit import AuditLog, open_audit
 from .config import Settings, load_settings
 from .runner import Runner, load_prelude
-from .local_transport import LocalTransport
+from .local_transport import LocalTransport, check_credentials
 from .service import Service
 from .transport import PsrpTransport, Transport, UnconfiguredTransport
+from .transport_pool import SharedCredentialCheck, TransportPool
 
 log = logging.getLogger(__name__)
 _lock = threading.Lock()
 _state: dict[str, Any] = {"settings": None, "service": None}
 _audit: AuditLog | None = None
+#: Local PowerShell processes per service: a slow fleet probe or background refresh never blocks a click.
+LOCAL_WORKERS = 4
 
 
 def notify(event: str, payload: dict) -> None:
@@ -43,7 +46,9 @@ def make_transport(settings: Settings) -> Transport:
     if not settings.configured:
         return UnconfiguredTransport()
     if settings.transport == "local":
-        return LocalTransport(settings, load_prelude())
+        prelude = load_prelude()
+        check = SharedCredentialCheck(check_credentials)
+        return TransportPool(lambda: LocalTransport(settings, prelude, credential_check=check), LOCAL_WORKERS)
     return PsrpTransport(settings, load_prelude())
 
 

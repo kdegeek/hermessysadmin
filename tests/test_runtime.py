@@ -35,11 +35,16 @@ def test_build_service_picks_transport_from_resolved_settings():
     from sysadmin.transport import PsrpTransport, UnconfiguredTransport
 
     pick = runtime.make_transport
-    assert isinstance(pick(Settings(transport="local", run_as="hermes_user")), LocalTransport)
-    assert isinstance(pick(Settings(transport="local", run_as="account", username="C\\u", password="p")), LocalTransport)
+    from sysadmin.transport_pool import TransportPool
+    for s in (Settings(transport="local", run_as="hermes_user"), Settings(transport="local", run_as="account", username="C\\u", password="p")):
+        pool = pick(s)
+        assert isinstance(pool, TransportPool)
+        member = pool._factory()
+        assert isinstance(member, LocalTransport)
+        assert member._credential_check is pool._factory()._credential_check  # one shared check for the pool
     assert isinstance(pick(Settings(transport="local", run_as="account")), UnconfiguredTransport)
     assert isinstance(pick(Settings(host="dc01", username="u", password="p")), PsrpTransport)
     assert isinstance(pick(Settings()), UnconfiguredTransport)
     svc = runtime.build_service(Settings(transport="local", run_as="hermes_user"))
-    assert isinstance(svc.runner._transport, LocalTransport)
+    assert isinstance(svc.runner._transport, TransportPool)
     svc.runner.close()

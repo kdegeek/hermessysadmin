@@ -34,6 +34,8 @@ const CHANGED_EVENT = 'plugin.hermes-sysadmin.changed';
 // Agent plugins with a config_schema get an automatic Settings page at this route.
 const SETTINGS_HREF = '/settings?tab=plugins&agent=hermes-sysadmin';
 const OP_TIMEOUT_MS = 120000;
+// While a snapshot refreshes in the background the page re-reads it this often.
+const SNAPSHOT_POLL_MS = 1500;
 const POLL = { health: 60000, overview: 60000, list: 60000, sessions: 30000, backups: 60000, job: 5000, audit: 30000, fleet: 300000 };
 
 // The PluginContext handed to register(); every component runs after register().
@@ -603,11 +605,21 @@ function useApi(key, fetcher, opts) {
     staleTime: o.staleTime === undefined ? 10000 : o.staleTime,
     refetchOnWindowFocus: false,
   });
+  // Snapshot views (see sysadmin/snapshots.py) answer at once with the last result and say when a
+  // background refresh is running; poll until it lands so the page updates by itself.
+  const cache = q.data && q.data.cache ? q.data.cache : null;
+  const refreshing = !!(cache && cache.refreshing);
+  const collected = cache && toDate(cache.collected_at) ? toDate(cache.collected_at).getTime() : 0;
+  useEffect(() => {
+    if (!enabled || !refreshing) return undefined;
+    return CTX.setTimeout(() => q.refetch(), SNAPSHOT_POLL_MS);
+  }, [enabled, refreshing, q.dataUpdatedAt]);
   return {
     res: q.data || null,
     loading: enabled && !q.data && q.isFetching,
     fetching: q.isFetching,
-    updatedAt: q.dataUpdatedAt || 0,
+    refreshing,
+    updatedAt: collected || q.dataUpdatedAt || 0,
     refetch: q.refetch,
   };
 }
@@ -1608,9 +1620,10 @@ function SetupCard({ health }) {
   });
 }
 
-function UpdatedAgo({ at }) {
+function UpdatedAgo({ at, refreshing }) {
   useTick(10000);
-  return jsx('span', { className: 'hs-muted hs-small', children: at ? `updated ${ago(at)}` : 'loading…' });
+  const text = at ? `updated ${ago(at)}` : 'loading…';
+  return jsx('span', { className: 'hs-muted hs-small', children: refreshing && at ? `${text} · refreshing…` : text });
 }
 
 function Header({ health, overview }) {
@@ -1631,7 +1644,7 @@ function Header({ health, overview }) {
       jsx('span', { className: 'hs-grow' }),
       jsx(Badge, { tone: 'accent', children: `mode: ${health.mode}` }),
       health.escape_enabled ? jsx(Badge, { tone: 'red', children: 'PowerShell escape hatch on' }) : null,
-      jsx(UpdatedAgo, { at: overview.updatedAt }),
+      jsx(UpdatedAgo, { at: overview.updatedAt, refreshing: overview.refreshing }),
       jsx(Btn, { small: true, onClick: refresh, disabled: busy, children: busy ? 'Refreshing…' : '↻ Refresh' }),
     ],
   });
@@ -4251,6 +4264,7 @@ function FleetTab() {
   const [busy, setBusy] = useState(false);
   const refresh = async () => {
     setBusy(true);
+    // Answers at once with the current inventory and re-probes in the background (useApi polls).
     const res = await api.fleet(true);
     setBusy(false);
     if (res.ok) queryClient.setQueryData(KEY.fleet, res);
@@ -4292,8 +4306,8 @@ function FleetTab() {
             children: [jsx('option', { value: '', children: 'All operating systems' }, ''), ...osOptions.map((o) => jsx('option', { value: o, children: o }, o))],
           }),
           jsx('span', { className: 'hs-grow' }),
-          data && data.taken_at ? jsx(UpdatedAgo, { at: toDate(data.taken_at) ? toDate(data.taken_at).getTime() : 0 }) : null,
-          jsx(Btn, { onClick: refresh, disabled: busy, children: busy ? 'Collecting…' : 'Refresh inventory' }),
+          data && data.taken_at ? jsx(UpdatedAgo, { at: toDate(data.taken_at) ? toDate(data.taken_at).getTime() : 0, refreshing: fleet.refreshing }) : null,
+          jsx(Btn, { onClick: refresh, disabled: busy || fleet.refreshing, children: busy || fleet.refreshing ? 'Collecting…' : 'Refresh inventory' }),
         ],
       }),
       jsx('div', {
@@ -4515,7 +4529,34 @@ function MiniTable({ head, rows, empty }) {
   return jsx(Table, { head, children: rows.length ? rows : jsx(EmptyRow, { cols: head.length, text: empty }) });
 }
 
-function DeviceSummary({ name, detail }) {
+// Summary rows; the fleet inventory row has the same field names, so it fills them before the full read lands.
+function deviceRows(d) {
+  return [
+    ['Operating system', `${d.os || '—'}${d.build ? ` (${d.build})` : ''}`],
+    ['OU', jsx('span', { className: 'hs-mono hs-tiny', children: d.ou || '—' })],
+    ['Signed in', d.user || '—'],
+    ['Last boot', d.last_boot ? `${fmtDate(d.last_boot)} (${d.uptime_days} d up)` : '—'],
+    ['Memory', typeof d.ram_gb === 'number' ? `${d.ram_gb} GB` : '—'],
+    ['C: drive', typeof d.c_free_gb === 'number' ? `${d.c_free_gb} of ${d.c_size_gb} GB free (${d.c_free_pct}%)` : '—'],
+    ['Last patch', d.last_hotfix ? `${fmtDay(d.last_hotfix)} (${d.patch_age_days} d ago)` : '—'],
+    ['Pending reboot', d.pending_reboot ? `Yes: ${list(d.reboot_reasons).join(', ') || 'unknown reason'}` : 'No'],
+    ['Defender', d.defender_rt === null || d.defender_rt === undefined ? '—' : `${d.defender_rt ? 'on' : 'off'}${typeof d.defender_sig_age_days === 'number' ? `, signatures ${d.defender_sig_age_days} d old` : ''}`],
+    ['BitLocker', d.bitlocker || '—'],
+    ['Remote Desktop', d.rdp === null || d.rdp === undefined ? '—' : d.rdp ? `on, NLA ${d.nla ? 'required' : 'not required'}` : 'off'],
+    ['Installed software', typeof d.software_count === 'number' ? num(d.software_count) : '—'],
+    ['Local administrators', list(d.admins).length ? list(d.admins).join(', ') : '—'],
+  ];
+}
+
+function DeviceSummary({ name, detail, row }) {
+  if (!detail.res && row && row.online) {
+    return jsxs('div', {
+      children: [
+        jsx('div', { className: 'hs-sec', children: jsx(KV, { rows: deviceRows(row) }) }),
+        jsx('div', { className: 'hs-sec', children: jsx(Spinner, { label: `Reading processes, services and recent errors on ${shortHost(name)}…` }) }),
+      ],
+    });
+  }
   return jsx(Pending, {
     q: detail,
     label: `Reading ${shortHost(name)}…`,
@@ -4525,21 +4566,7 @@ function DeviceSummary({ name, detail }) {
           jsx('div', {
             className: 'hs-sec',
             children: jsx(KV, {
-              rows: [
-                ['Operating system', `${d.os || '—'}${d.build ? ` (${d.build})` : ''}`],
-                ['OU', jsx('span', { className: 'hs-mono hs-tiny', children: d.ou || '—' })],
-                ['Signed in', d.user || '—'],
-                ['Last boot', d.last_boot ? `${fmtDate(d.last_boot)} (${d.uptime_days} d up)` : '—'],
-                ['Memory', typeof d.ram_gb === 'number' ? `${d.ram_gb} GB` : '—'],
-                ['C: drive', typeof d.c_free_gb === 'number' ? `${d.c_free_gb} of ${d.c_size_gb} GB free (${d.c_free_pct}%)` : '—'],
-                ['Last patch', d.last_hotfix ? `${fmtDay(d.last_hotfix)} (${d.patch_age_days} d ago)` : '—'],
-                ['Pending reboot', d.pending_reboot ? `Yes: ${list(d.reboot_reasons).join(', ') || 'unknown reason'}` : 'No'],
-                ['Defender', d.defender_rt === null || d.defender_rt === undefined ? '—' : `${d.defender_rt ? 'on' : 'off'}${typeof d.defender_sig_age_days === 'number' ? `, signatures ${d.defender_sig_age_days} d old` : ''}`],
-                ['BitLocker', d.bitlocker || '—'],
-                ['Remote Desktop', d.rdp === null || d.rdp === undefined ? '—' : d.rdp ? `on, NLA ${d.nla ? 'required' : 'not required'}` : 'off'],
-                ['Installed software', typeof d.software_count === 'number' ? num(d.software_count) : '—'],
-                ['Local administrators', list(d.admins).length ? list(d.admins).join(', ') : '—'],
-              ],
+              rows: deviceRows(d),
             }),
           }),
           jsxs('div', {
@@ -4777,6 +4804,7 @@ function DeviceDrawer({ name }) {
             children: [
               jsx('b', { children: name }),
               jsxs('div', { className: 'hs-muted', children: [jsx(Dot, { tone: row && row.online ? 'good' : 'muted' }), ' ', row ? (row.online ? 'online' : row.error ? `offline: ${row.error}` : 'offline') : 'status unknown', row && row.dns ? ` · ${row.dns}` : ''] }),
+              detail.res && detail.res.ok ? jsx(UpdatedAgo, { at: detail.updatedAt, refreshing: detail.refreshing }) : null,
             ],
           }),
           jsx(AskButton, { prompt: `Use the endpoint-triage skill on ${name}: check health, disk, pending reboot, patches, Defender and recent errors with the hermes-sysadmin read tools and catalog, then tell me what is wrong and what you would do. ${READ_ONLY_ASK}`, label: 'Ask Hermes to triage' }),
@@ -4787,7 +4815,7 @@ function DeviceDrawer({ name }) {
         className: 'hs-sec',
         children: jsx(Seg, { value: tab, onChange: setTab, options: [['summary', 'Summary'], ['remote', 'Remote'], ['run', 'Run'], ['history', 'History']] }),
       }),
-      tab === 'summary' ? jsx(DeviceSummary, { name, detail }) : null,
+      tab === 'summary' ? jsx(DeviceSummary, { name, detail, row }) : null,
       tab === 'remote' ? jsx(DeviceRemote, { name }) : null,
       tab === 'run' ? jsx(DeviceRun, { name }) : null,
       tab === 'history' ? jsx(DeviceHistory, { name }) : null,

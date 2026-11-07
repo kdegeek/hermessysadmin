@@ -118,6 +118,7 @@ function FleetTab() {
   const [busy, setBusy] = useState(false);
   const refresh = async () => {
     setBusy(true);
+    // Answers at once with the current inventory and re-probes in the background (useApi polls).
     const res = await api.fleet(true);
     setBusy(false);
     if (res.ok) queryClient.setQueryData(KEY.fleet, res);
@@ -159,8 +160,8 @@ function FleetTab() {
             children: [jsx('option', { value: '', children: 'All operating systems' }, ''), ...osOptions.map((o) => jsx('option', { value: o, children: o }, o))],
           }),
           jsx('span', { className: 'hs-grow' }),
-          data && data.taken_at ? jsx(UpdatedAgo, { at: toDate(data.taken_at) ? toDate(data.taken_at).getTime() : 0 }) : null,
-          jsx(Btn, { onClick: refresh, disabled: busy, children: busy ? 'Collecting…' : 'Refresh inventory' }),
+          data && data.taken_at ? jsx(UpdatedAgo, { at: toDate(data.taken_at) ? toDate(data.taken_at).getTime() : 0, refreshing: fleet.refreshing }) : null,
+          jsx(Btn, { onClick: refresh, disabled: busy || fleet.refreshing, children: busy || fleet.refreshing ? 'Collecting…' : 'Refresh inventory' }),
         ],
       }),
       jsx('div', {
@@ -382,7 +383,34 @@ function MiniTable({ head, rows, empty }) {
   return jsx(Table, { head, children: rows.length ? rows : jsx(EmptyRow, { cols: head.length, text: empty }) });
 }
 
-function DeviceSummary({ name, detail }) {
+// Summary rows; the fleet inventory row has the same field names, so it fills them before the full read lands.
+function deviceRows(d) {
+  return [
+    ['Operating system', `${d.os || '—'}${d.build ? ` (${d.build})` : ''}`],
+    ['OU', jsx('span', { className: 'hs-mono hs-tiny', children: d.ou || '—' })],
+    ['Signed in', d.user || '—'],
+    ['Last boot', d.last_boot ? `${fmtDate(d.last_boot)} (${d.uptime_days} d up)` : '—'],
+    ['Memory', typeof d.ram_gb === 'number' ? `${d.ram_gb} GB` : '—'],
+    ['C: drive', typeof d.c_free_gb === 'number' ? `${d.c_free_gb} of ${d.c_size_gb} GB free (${d.c_free_pct}%)` : '—'],
+    ['Last patch', d.last_hotfix ? `${fmtDay(d.last_hotfix)} (${d.patch_age_days} d ago)` : '—'],
+    ['Pending reboot', d.pending_reboot ? `Yes: ${list(d.reboot_reasons).join(', ') || 'unknown reason'}` : 'No'],
+    ['Defender', d.defender_rt === null || d.defender_rt === undefined ? '—' : `${d.defender_rt ? 'on' : 'off'}${typeof d.defender_sig_age_days === 'number' ? `, signatures ${d.defender_sig_age_days} d old` : ''}`],
+    ['BitLocker', d.bitlocker || '—'],
+    ['Remote Desktop', d.rdp === null || d.rdp === undefined ? '—' : d.rdp ? `on, NLA ${d.nla ? 'required' : 'not required'}` : 'off'],
+    ['Installed software', typeof d.software_count === 'number' ? num(d.software_count) : '—'],
+    ['Local administrators', list(d.admins).length ? list(d.admins).join(', ') : '—'],
+  ];
+}
+
+function DeviceSummary({ name, detail, row }) {
+  if (!detail.res && row && row.online) {
+    return jsxs('div', {
+      children: [
+        jsx('div', { className: 'hs-sec', children: jsx(KV, { rows: deviceRows(row) }) }),
+        jsx('div', { className: 'hs-sec', children: jsx(Spinner, { label: `Reading processes, services and recent errors on ${shortHost(name)}…` }) }),
+      ],
+    });
+  }
   return jsx(Pending, {
     q: detail,
     label: `Reading ${shortHost(name)}…`,
@@ -392,21 +420,7 @@ function DeviceSummary({ name, detail }) {
           jsx('div', {
             className: 'hs-sec',
             children: jsx(KV, {
-              rows: [
-                ['Operating system', `${d.os || '—'}${d.build ? ` (${d.build})` : ''}`],
-                ['OU', jsx('span', { className: 'hs-mono hs-tiny', children: d.ou || '—' })],
-                ['Signed in', d.user || '—'],
-                ['Last boot', d.last_boot ? `${fmtDate(d.last_boot)} (${d.uptime_days} d up)` : '—'],
-                ['Memory', typeof d.ram_gb === 'number' ? `${d.ram_gb} GB` : '—'],
-                ['C: drive', typeof d.c_free_gb === 'number' ? `${d.c_free_gb} of ${d.c_size_gb} GB free (${d.c_free_pct}%)` : '—'],
-                ['Last patch', d.last_hotfix ? `${fmtDay(d.last_hotfix)} (${d.patch_age_days} d ago)` : '—'],
-                ['Pending reboot', d.pending_reboot ? `Yes: ${list(d.reboot_reasons).join(', ') || 'unknown reason'}` : 'No'],
-                ['Defender', d.defender_rt === null || d.defender_rt === undefined ? '—' : `${d.defender_rt ? 'on' : 'off'}${typeof d.defender_sig_age_days === 'number' ? `, signatures ${d.defender_sig_age_days} d old` : ''}`],
-                ['BitLocker', d.bitlocker || '—'],
-                ['Remote Desktop', d.rdp === null || d.rdp === undefined ? '—' : d.rdp ? `on, NLA ${d.nla ? 'required' : 'not required'}` : 'off'],
-                ['Installed software', typeof d.software_count === 'number' ? num(d.software_count) : '—'],
-                ['Local administrators', list(d.admins).length ? list(d.admins).join(', ') : '—'],
-              ],
+              rows: deviceRows(d),
             }),
           }),
           jsxs('div', {
@@ -644,6 +658,7 @@ function DeviceDrawer({ name }) {
             children: [
               jsx('b', { children: name }),
               jsxs('div', { className: 'hs-muted', children: [jsx(Dot, { tone: row && row.online ? 'good' : 'muted' }), ' ', row ? (row.online ? 'online' : row.error ? `offline: ${row.error}` : 'offline') : 'status unknown', row && row.dns ? ` · ${row.dns}` : ''] }),
+              detail.res && detail.res.ok ? jsx(UpdatedAgo, { at: detail.updatedAt, refreshing: detail.refreshing }) : null,
             ],
           }),
           jsx(AskButton, { prompt: `Use the endpoint-triage skill on ${name}: check health, disk, pending reboot, patches, Defender and recent errors with the hermes-sysadmin read tools and catalog, then tell me what is wrong and what you would do. ${READ_ONLY_ASK}`, label: 'Ask Hermes to triage' }),
@@ -654,7 +669,7 @@ function DeviceDrawer({ name }) {
         className: 'hs-sec',
         children: jsx(Seg, { value: tab, onChange: setTab, options: [['summary', 'Summary'], ['remote', 'Remote'], ['run', 'Run'], ['history', 'History']] }),
       }),
-      tab === 'summary' ? jsx(DeviceSummary, { name, detail }) : null,
+      tab === 'summary' ? jsx(DeviceSummary, { name, detail, row }) : null,
       tab === 'remote' ? jsx(DeviceRemote, { name }) : null,
       tab === 'run' ? jsx(DeviceRun, { name }) : null,
       tab === 'history' ? jsx(DeviceHistory, { name }) : null,

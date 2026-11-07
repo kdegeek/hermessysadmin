@@ -69,6 +69,7 @@ class Service:
         self._cache: dict[str, tuple[float, Any]] = {}
         self._lock = threading.Lock()
         self._generation = 0
+        self._on_invalidate: list[Callable[[], None]] = []
         self.facts = _Facts(self)
 
     # ---- public API -------------------------------------------------------
@@ -79,8 +80,9 @@ class Service:
 
     def call(
         self, name: str, args: Mapping[str, Any] | None = None, *,
-        actor: str, session: str = "", approved: bool | str = False,
+        actor: str, session: str = "", approved: bool | str = False, fresh: bool = False,
     ) -> dict[str, Any]:
+        """Run one op through policy. fresh=True skips the read cache (and stores the new result)."""
         op: Op | None = None
         clean: dict[str, Any] = {}
         tier = "W"
@@ -102,7 +104,7 @@ class Service:
                     f"{op.name} became high-risk after it was approved; approve it again.", tier=d.tier,
                 )
             try:
-                data = self._execute(op, clean)
+                data = self._execute(op, clean, fresh=fresh)
             except PolicyBlocked as exc:
                 # The script refused after resolving the real object (e.g. an aliased krbtgt).
                 self._audit(op, clean, actor, session, tier, f"blocked: {exc.message}", "-")
@@ -162,6 +164,17 @@ class Service:
             self._cache.clear()
             self._generation += 1
             self.facts.clear()
+            listeners = list(self._on_invalidate)
+        for fn in listeners:
+            try:
+                fn()
+            except Exception:
+                log.debug("hermes-sysadmin: invalidate listener failed", exc_info=True)
+
+    def on_invalidate(self, fn: Callable[[], None]) -> None:
+        """Call fn after every invalidate (a write, a refresh): the dashboard snapshots go stale."""
+        with self._lock:
+            self._on_invalidate.append(fn)
 
     # ---- internals --------------------------------------------------------
 
@@ -171,9 +184,9 @@ class Service:
             raise InvalidArguments(f"Unknown operation '{name}'.")
         return op
 
-    def _execute(self, op: Op, clean: dict[str, Any]) -> Any:
+    def _execute(self, op: Op, clean: dict[str, Any], fresh: bool = False) -> Any:
         if op.tier == "R":
-            return self._run_cached(op, clean)
+            return self._run_cached(op, clean, fresh=fresh)
         return self._run(op, clean)
 
     def _params(self, op: Op, clean: dict[str, Any]) -> dict[str, Any]:
@@ -189,13 +202,13 @@ class Service:
             data = self.runner.run(op.script, self._params(op, clean), retry=op.tier == "R")
         return op.post(data, clean, self.settings) if op.post else data
 
-    def _run_cached(self, op: Op, clean: dict[str, Any]) -> Any:
+    def _run_cached(self, op: Op, clean: dict[str, Any], fresh: bool = False) -> Any:
         if op.cache_ttl <= 0:
             return self._run(op, clean)
         # refresh=true skips the lookup but still stores the result; it is not part of the cache key.
         key = op.name + json.dumps({k: v for k, v in clean.items() if k != "refresh"}, sort_keys=True, default=str)
         now = self._clock()
-        if clean.get("refresh") is not True:
+        if clean.get("refresh") is not True and not fresh:
             with self._lock:
                 hit = self._cache.get(key)
             if hit is not None and now - hit[0] < op.cache_ttl:

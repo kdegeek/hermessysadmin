@@ -33,6 +33,8 @@ const CHANGED_EVENT = 'plugin.hermes-sysadmin.changed';
 // Agent plugins with a config_schema get an automatic Settings page at this route.
 const SETTINGS_HREF = '/settings?tab=plugins&agent=hermes-sysadmin';
 const OP_TIMEOUT_MS = 120000;
+// While a snapshot refreshes in the background the page re-reads it this often.
+const SNAPSHOT_POLL_MS = 1500;
 const POLL = { health: 60000, overview: 60000, list: 60000, sessions: 30000, backups: 60000, job: 5000, audit: 30000, fleet: 300000 };
 
 // The PluginContext handed to register(); every component runs after register().

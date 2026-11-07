@@ -41,11 +41,20 @@ _load_core()
 _api = importlib.import_module(f"{_CORE}.api")
 _runtime = importlib.import_module(f"{_CORE}.runtime")
 _errors = importlib.import_module(f"{_CORE}.errors")
+_collector_mod = importlib.import_module(f"{_CORE}.collector")
 
 router = APIRouter()
+# Keeps the dashboard's snapshots warm in the background; started by the first dashboard request.
+_collector = _collector_mod.Collector(_runtime.get_service, _api)
 
 
 async def _with_service(fn_name: str, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    _collector.touch()
+    try:
+        _collector.ensure_started()
+    except Exception:  # never let the collector break a request
+        pass
+
     def work() -> dict[str, Any]:
         try:  # never surface a 500 to the Desktop page
             return getattr(_api, fn_name)(_runtime.get_service(), *args, **kwargs)
