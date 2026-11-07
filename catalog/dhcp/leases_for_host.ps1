@@ -15,7 +15,7 @@ params:
 param([string]$Name)
 Invoke-Op {
     if ($Name -notmatch '^[A-Za-z0-9.-]{1,64}$') { throw 'Name must be a hostname fragment (letters, digits, dots and hyphens, at most 64 characters)' }
-    if (-not (Get-Command Get-DhcpServerInDC -ErrorAction SilentlyContinue)) { throw 'NotInstalled: DhcpServer module not present on the jump host' }
+    if (-not (Get-Command Get-DhcpServerInDC -ErrorAction SilentlyContinue)) { throw 'NotInstalled: DhcpServer module (RSAT) not present where Hermes runs PowerShell' }
     $servers = @(Get-DhcpServerInDC | ForEach-Object { "$($_.DnsName)" } | Where-Object { $_ })
     $fan = Invoke-HermesCatalogFanout -Computers $servers -ArgumentList @($Name) -Script {
         param($Name)

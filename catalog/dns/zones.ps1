@@ -2,7 +2,7 @@
 id: dns.zones
 title: DNS zones
 category: DNS & DHCP
-description: DNS zones on the domain controller (the jump host DC over WinRM, otherwise the PDC emulator) with zone type, whether they are AD-integrated, and scavenging (aging) settings. Needs the DnsServer module on the jump host.
+description: DNS zones on the domain controller (the DC Hermes runs on, otherwise the PDC emulator) with zone type, whether they are AD-integrated, and scavenging (aging) settings. Needs the DnsServer RSAT module where Hermes runs PowerShell.
 module: inbox:DnsServer
 target: dc
 tier: R
@@ -13,7 +13,7 @@ source: In-box DnsServer (Get-DnsServerZone, Get-DnsServerZoneAging)
 param()
 Invoke-Op {
     $dcName = Get-HermesDc
-    if (-not (Get-Command Get-DnsServerZone -ErrorAction SilentlyContinue)) { throw 'NotInstalled: DnsServer module not present on the jump host' }
+    if (-not (Get-Command Get-DnsServerZone -ErrorAction SilentlyContinue)) { throw 'NotInstalled: DnsServer module (RSAT) not present where Hermes runs PowerShell' }
     $errs = @()
     $rows = @()
     $dns = Get-HermesDcTarget

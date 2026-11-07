@@ -2,7 +2,7 @@
 id: ad.dfs_health
 title: SYSVOL DFS-R health
 category: AD hygiene
-description: Per domain controller SYSVOL replication state (DFS-R), whether the SYSVOL and NETLOGON shares exist and whether the DFSR service is running. Each DC reports on itself, so the jump host needs no remote CIM access.
+description: Per domain controller SYSVOL replication state (DFS-R), whether the SYSVOL and NETLOGON shares exist and whether the DFSR service is running. Each DC reports on itself, so no remote CIM access is needed.
 module: inbox:ActiveDirectory
 target: dc
 tier: R

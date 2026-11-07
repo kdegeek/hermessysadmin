@@ -16,7 +16,7 @@ params:
 param([string]$Zone, [int]$Days = 30)
 Invoke-Op {
     if ($Zone -notmatch '^[A-Za-z0-9.-]{1,253}$') { throw 'Zone must be a DNS zone name (letters, digits, dots and hyphens, at most 253 characters)' }
-    if (-not (Get-Command Get-DnsServerResourceRecord -ErrorAction SilentlyContinue)) { throw 'NotInstalled: DnsServer module not present on the jump host' }
+    if (-not (Get-Command Get-DnsServerResourceRecord -ErrorAction SilentlyContinue)) { throw 'NotInstalled: DnsServer module (RSAT) not present where Hermes runs PowerShell' }
     $cut = (Get-Date).AddDays(-$Days)
     $dns = Get-HermesDcTarget
     $rows = @(Get-DnsServerResourceRecord -ZoneName $Zone -RRType A @dns |

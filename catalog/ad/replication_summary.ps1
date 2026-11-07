@@ -2,7 +2,7 @@
 id: ad.replication_summary
 title: Replication summary
 category: AD hygiene
-description: Replication partners and failures for every domain controller. Partner metadata and failures come from one DC (the jump host DC over WinRM, otherwise the PDC emulator); every other DC then reports its own inbound replication state (repadmin /showrepl run locally on that DC), so no DC-to-DC remoting is needed from the jump host.
+description: Replication partners and failures for every domain controller. Partner metadata and failures come from one DC (the DC Hermes runs on, otherwise the PDC emulator); every other DC then reports its own inbound replication state (repadmin /showrepl run locally on that DC), so no DC-to-DC remoting is needed.
 module: inbox:ActiveDirectory
 target: dc
 tier: R

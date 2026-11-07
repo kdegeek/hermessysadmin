@@ -12,7 +12,7 @@ source: In-box DhcpServer (Get-DhcpServerInDC, Get-DhcpServerv4ScopeStatistics),
 #>
 param()
 Invoke-Op {
-    if (-not (Get-Command Get-DhcpServerInDC -ErrorAction SilentlyContinue)) { throw 'NotInstalled: DhcpServer module not present on the jump host' }
+    if (-not (Get-Command Get-DhcpServerInDC -ErrorAction SilentlyContinue)) { throw 'NotInstalled: DhcpServer module (RSAT) not present where Hermes runs PowerShell' }
     $servers = @(Get-DhcpServerInDC | ForEach-Object { "$($_.DnsName)" } | Where-Object { $_ })
     $fan = Invoke-HermesCatalogFanout -Computers $servers -Script {
         $ErrorActionPreference = 'Stop'

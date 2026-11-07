@@ -2,7 +2,7 @@
 id: ad.last_backup
 title: Last AD backup
 category: AD hygiene
-description: When each naming context was last backed up on one domain controller (the jump host DC over WinRM, otherwise the PDC emulator), from the dSASignature replication metadata, and how many days ago.
+description: When each naming context was last backed up on one domain controller (the DC Hermes runs on, otherwise the PDC emulator), from the dSASignature replication metadata, and how many days ago.
 module: inbox:ActiveDirectory
 target: dc
 tier: R
