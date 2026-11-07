@@ -10,6 +10,11 @@ function plainCount(n, one, many) {
   return `${n} ${n === 1 ? one : many || `${one}s`}`;
 }
 
+// Verb agreement for a count: verb(1, 'needs', 'need') → 'needs'.
+function verb(n, one, many) {
+  return n === 1 ? one : many;
+}
+
 // One finding per problem the overview can see. Each carries where to look in the UI (go) and a
 // prompt that hands the problem to the agent (ask). Severity: danger (act now) or warning (look soon).
 function attentionItems({ kpis, fleet, dcs, alerts, diskPct }) {
@@ -36,7 +41,7 @@ function attentionItems({ kpis, fleet, dcs, alerts, diskPct }) {
   }
   if (n(k.backups_bad)) {
     add('backups', 'danger', `${plainCount(n(k.backups_bad), 'server')} without a recent backup`, `${n(k.backups_ok)} of ${n(k.backups_total)} backups OK`, { tab: 'backups' },
-      `${plainCount(n(k.backups_bad), 'server')} have no recent Windows Server Backup. Use the backup-recovery-guide skill to check backup status and versions and explain the risk. ${READ_ONLY_ASK}`);
+      `${plainCount(n(k.backups_bad), 'server')} ${verb(n(k.backups_bad), 'has', 'have')} no recent Windows Server Backup. Use the backup-recovery-guide skill to check backup status and versions and explain the risk. ${READ_ONLY_ASK}`);
   }
   if (s) {
     const online = n(s.online);
@@ -59,21 +64,21 @@ function attentionItems({ kpis, fleet, dcs, alerts, diskPct }) {
     }
     if (n(s.pending_reboot)) {
       add('reboot', 'warning', `${plainCount(n(s.pending_reboot), 'computer')} waiting to reboot`, 'updates or installs need a restart', { tab: 'fleet', fleet: { filter: 'reboot' } },
-        `${plainCount(n(s.pending_reboot), 'computer')} have a pending reboot. Group them by why (Windows Update, CBS, file rename) and suggest a reboot plan that avoids people's working hours. ${READ_ONLY_ASK}`);
+        `${plainCount(n(s.pending_reboot), 'computer')} ${verb(n(s.pending_reboot), 'has', 'have')} a pending reboot. Group them by why (Windows Update, CBS, file rename) and suggest a reboot plan that avoids people's working hours. ${READ_ONLY_ASK}`);
     }
     const lowDisk = n(s.low_disk_count !== undefined ? s.low_disk_count : null);
     if (lowDisk) {
       add('disk', 'danger', `${plainCount(lowDisk, 'computer')} low on disk`, `under ${diskPct || 10}% free on C:`, { tab: 'fleet', fleet: { filter: 'low_disk' } },
-        `${plainCount(lowDisk, 'computer')} have under ${diskPct || 10}% free on C:. Use the endpoint-triage skill to find what is using the space and preview the catalog's clear_temp entry where it helps. ${READ_ONLY_ASK}`);
+        `${plainCount(lowDisk, 'computer')} ${verb(lowDisk, 'has', 'have')} under ${diskPct || 10}% free on C:. Use the endpoint-triage skill to find what is using the space and preview the catalog's clear_temp entry where it helps. ${READ_ONLY_ASK}`);
     }
   }
   if (n(k.gpos_needing_attention)) {
-    add('gpo', 'warning', `${plainCount(n(k.gpos_needing_attention), 'GPO')} need attention`, `of ${n(k.gpos)} Group Policy objects`, { tab: 'gpo' },
-      `${plainCount(n(k.gpos_needing_attention), 'Group Policy object')} need attention (unlinked, empty or inconsistent). Explain each problem and what you would do about it. ${READ_ONLY_ASK}`);
+    add('gpo', 'warning', `${plainCount(n(k.gpos_needing_attention), 'GPO')} ${verb(n(k.gpos_needing_attention), 'needs', 'need')} attention`, `of ${n(k.gpos)} Group Policy objects`, { tab: 'gpo' },
+      `${plainCount(n(k.gpos_needing_attention), 'Group Policy object')} ${verb(n(k.gpos_needing_attention), 'needs', 'need')} attention (unlinked, empty or inconsistent). Explain each problem and what you would do about it. ${READ_ONLY_ASK}`);
   }
   if (n(k.users_locked)) {
     add('locked', 'warning', `${plainCount(n(k.users_locked), 'user')} locked out`, 'can not sign in right now', { tab: 'users', users: { status: 'locked' } },
-      `${plainCount(n(k.users_locked), 'user')} are locked out. Use the lockout-triage skill to find the lockout source for each before anything is unlocked. ${READ_ONLY_ASK}`);
+      `${plainCount(n(k.users_locked), 'user')} ${verb(n(k.users_locked), 'is', 'are')} locked out. Use the lockout-triage skill to find the lockout source for each before anything is unlocked. ${READ_ONLY_ASK}`);
   }
   if (n(k.computers_stale)) {
     add('stale-computers', 'warning', `${plainCount(n(k.computers_stale), 'stale computer account')}`, 'no recent logon to the domain', { tab: 'fleet', fleet: { filter: 'offline' } },
@@ -81,7 +86,7 @@ function attentionItems({ kpis, fleet, dcs, alerts, diskPct }) {
   }
   if (n(k.users_never_expire) && n(k.users) && n(k.users_never_expire) / n(k.users) >= 0.25) {
     add('never-expire', 'warning', `${plainCount(n(k.users_never_expire), 'account')} with non-expiring passwords`, `${Math.round((100 * n(k.users_never_expire)) / n(k.users))}% of user accounts`, { tab: 'users' },
-      `${plainCount(n(k.users_never_expire), 'user account')} have passwords that never expire. Use the access-review skill to separate service accounts from people and recommend a fix. ${READ_ONLY_ASK}`);
+      `${plainCount(n(k.users_never_expire), 'user account')} ${verb(n(k.users_never_expire), 'has a password that never expires', 'have passwords that never expire')}. Use the access-review skill to separate service accounts from people and recommend a fix. ${READ_ONLY_ASK}`);
   }
   return out.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
 }

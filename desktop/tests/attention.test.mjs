@@ -44,3 +44,10 @@ test('never-expiring passwords only count when they are a large share', () => {
   assert.equal(a.attentionItems({ kpis: { users: 100, users_never_expire: 5 } }).length, 0);
   assert.equal(a.attentionItems({ kpis: { users: 36, users_never_expire: 35 } })[0].id, 'never-expire');
 });
+
+test('titles and prompts agree with a count of one', () => {
+  const items = a.attentionItems({ kpis: { gpos_needing_attention: 1, gpos: 14, users_locked: 1, backups_bad: 1, backups_total: 2 } });
+  assert.equal(items.find((i) => i.id === 'gpo').title, '1 GPO needs attention');
+  assert.match(items.find((i) => i.id === 'locked').ask, /^1 user is locked out\./);
+  assert.match(items.find((i) => i.id === 'backups').ask, /^1 server has no recent/);
+});
