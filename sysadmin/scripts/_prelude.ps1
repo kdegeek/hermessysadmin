@@ -246,6 +246,11 @@ function Global:Invoke-Op {
         return (ConvertTo-Json -InputObject @{ ok = $true; data = $data } -Depth 10 -Compress)
     } catch {
         $e = $_
+        # The DC this session pinned to stopped answering: forget it so the next call rediscovers one (the
+        # *-AD*/*-GP*:Server pins are lazy and follow Get-HermesDc). On a DC the session's own DC is kept.
+        if (-not $Global:HermesIsDc -and "$($e.Exception.Message)" -match 'Unable to contact the server|server is not operational') {
+            $Global:HermesDc = $null
+        }
         $err = @{
             type     = (Get-HermesErrorType $e)
             message  = "$($e.Exception.Message)"

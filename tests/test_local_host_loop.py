@@ -38,7 +38,7 @@ ConvertTo-Json -Compress -Depth 5 -InputObject @{
 @pytest.fixture
 def transport():
     t = LocalTransport(Settings(transport="local", run_as="hermes_user"), PRELUDE,
-                       process_factory=popen_process, powershell=PWSH, timeout=60)
+                       process_factory=popen_process, powershell=PWSH, timeout=60, network_probe=None)
     yield t
     t.close()
 
@@ -98,7 +98,7 @@ def test_invoke_op_style_json_result(transport):
 
 def test_timeout_kills_and_restarts():
     t = LocalTransport(Settings(transport="local", run_as="hermes_user"), PRELUDE,
-                       process_factory=popen_process, powershell=PWSH, timeout=3)
+                       process_factory=popen_process, powershell=PWSH, timeout=3, network_probe=None)
     try:
         with pytest.raises(Timeout):
             t.invoke("param() Start-Sleep -Seconds 30", {})
@@ -148,7 +148,7 @@ ConvertTo-Json -Compress -InputObject $out
 
 def test_real_prelude_in_local_mode_sets_no_credential_and_dc_helpers_work():
     t = LocalTransport(Settings(transport="local", run_as="hermes_user"), load_prelude(),
-                       process_factory=popen_process, powershell=PWSH, timeout=60)
+                       process_factory=popen_process, powershell=PWSH, timeout=60, network_probe=None)
     try:
         data = json.loads(t.invoke(PROBE, {})[0])
     finally:
@@ -163,3 +163,37 @@ def test_real_prelude_in_local_mode_sets_no_credential_and_dc_helpers_work():
     assert data["ad_pin_is_lazy"] is True
     assert data["discovered"] == "pdc.corp.example" and data["pinned"] == "server=pdc.corp.example"
     assert data["disabled_restored"] is True
+
+
+def test_loop_state_is_invisible_to_scripts(transport):
+    probe = ("param() ConvertTo-Json -Compress -InputObject @{ sentinel = \"$__hsSentinel\"; out = [bool]$__hsOut; "
+             "inp = [bool]$__hsIn; tag = \"$__hsTag\"; conv = [bool]$__hsConvert; line = \"$__hsLine\"; "
+             "vars = @(Get-Variable -Name '__hs*' -ErrorAction SilentlyContinue).Count }")
+    data = json.loads(transport.invoke(probe, {})[0])
+    assert data == {"sentinel": "", "out": False, "inp": False, "tag": "", "conv": False, "line": "", "vars": 0}
+
+
+DC_RESET = r"""
+param([string]$Message, [bool]$OnDc)
+$Global:HermesIsDc = $OnDc
+$Global:HermesDc = 'dc1.corp.example'
+$r = Invoke-Op { throw $Message }
+ConvertTo-Json -Compress -InputObject @{ cleared = ($null -eq $Global:HermesDc); result = $r }
+"""
+
+
+@pytest.mark.parametrize("message,on_dc,cleared", [
+    ("Unable to contact the server. This may be because this server does not exist.", False, True),
+    ("The server is not operational.", False, True),
+    ("Cannot find an object with identity 'bob'.", False, False),
+    ("The server is not operational.", True, False),
+])
+def test_invoke_op_forgets_an_unreachable_dc(message, on_dc, cleared):
+    t = LocalTransport(Settings(transport="local", run_as="hermes_user"), load_prelude(),
+                       process_factory=popen_process, powershell=PWSH, timeout=60, network_probe=None)
+    try:
+        data = json.loads(t.invoke(DC_RESET, {"Message": message, "OnDc": on_dc})[0])
+    finally:
+        t.close()
+    assert data["cleared"] is cleared
+    assert json.loads(data["result"])["ok"] is False
