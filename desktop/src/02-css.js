@@ -101,6 +101,14 @@ textarea.hs-input{min-height:64px;resize:vertical}
 .hs-hcard .hs-top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .hs-hcard .hs-top b{flex:1}
 .hs-bar{height:6px;border-radius:3px;background:var(--ui-stroke-tertiary);overflow:hidden;margin:8px 0 4px}
+.hs-drawer.hs-drawer-wide{width:560px}
+.hs-bar.hs-bar-inline{display:inline-block;width:48px;margin:0 6px 1px 0;vertical-align:middle}
+.hs-bar.low i{background:var(--ui-red)}
+.hs-selbar{padding:6px 10px;border:1px solid var(--ui-stroke-secondary);border-radius:6px;background:var(--ui-row-active-background)}
+.hs-select{flex:0 0 auto;width:auto;min-width:160px}
+.hs-clickrow{cursor:pointer;padding:4px 6px;border-radius:6px}
+.hs-clickrow:hover{background:var(--ui-row-hover-background)}
+.hs-table tbody tr.sel{background:var(--ui-row-active-background)}
 .hs-bar i{display:block;height:100%;background:var(--ui-accent);transition:width .4s}
 .hs-empty{max-width:480px;margin:60px auto;text-align:center}
 .hs-empty .hs-big{font-size:34px;margin-bottom:8px}

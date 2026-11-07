@@ -9,6 +9,9 @@ const KEY = {
   overview: [PLUGIN_ID, 'overview'],
   fleet: [PLUGIN_ID, 'fleet'],
   fleetHistory: (days) => [PLUGIN_ID, 'fleet-history', days],
+  fleetDevice: (n) => [PLUGIN_ID, 'fleet-device', n],
+  remoteSessions: (n) => [PLUGIN_ID, 'remote-sessions', n],
+  remoteCheck: (n) => [PLUGIN_ID, 'remote-check', n],
   monitoring: [PLUGIN_ID, 'monitoring'],
   catalog: [PLUGIN_ID, 'catalog'],
   audit: (q) => [PLUGIN_ID, 'audit', q],
@@ -86,6 +89,9 @@ const $tab = atom('overview');
 const $users = atom({ query: '', status: 'any', stale: false, expiring: false, privileged: false, limit: 200 });
 // Fleet tab filter, set by Overview drill-downs: filter in all|online|offline|low_disk|reboot|patch_old|defender_off|bitlocker_off|rdp_no_nla.
 const $fleet = atom({ filter: 'all', os: '', query: '' });
+// Computer shown in the Fleet device drawer, and the host names ticked in the Fleet table.
+const $device = atom(null);
+const $fleetSelection = atom([]);
 const $rdpView = atom('sessions');
 const $focusSearch = atom(0);
 const $drawer = atom(null);
@@ -113,6 +119,7 @@ function goTab(key, patch) {
   if (patch && patch.fleet) $fleet.set({ filter: 'all', os: '', query: '', ...patch.fleet });
   if (patch && patch.rdpView) $rdpView.set(patch.rdpView);
   if (key !== 'users') $drawer.set(null);
+  if (key !== 'fleet') $device.set(null);
   $tab.set(key);
   return true;
 }

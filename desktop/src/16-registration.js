@@ -10,6 +10,8 @@ const PALETTE = [
   { id: 'find-user', label: 'AD: Find user…', keywords: ['active directory', 'user', 'search'], run: () => { openPage('users'); focusUserSearch(); } },
   { id: 'unlock-user', label: 'AD: Unlock user…', keywords: ['active directory', 'locked', 'lockout'], run: () => { openPage('users', { users: { status: 'locked', query: '' } }); focusUserSearch(); } },
   { id: 'sessions', label: 'AD: Sessions', keywords: ['rdp', 'remote desktop', 'logoff'], run: () => openPage('rdp', { rdpView: 'sessions' }) },
+  { id: 'fleet', label: 'AD: Fleet', keywords: ['computers', 'devices', 'inventory', 'workstations'], run: () => openPage('fleet') },
+  { id: 'find-computer', label: 'AD: Find computer…', keywords: ['computer', 'device', 'search', 'fleet'], run: () => { openPage('fleet', { fleet: { filter: 'all', os: '', query: '' } }); focusUserSearch(); } },
   // more palette entries: later tasks insert their entries above this line
 ];
 
@@ -36,6 +38,7 @@ export default {
     ctx.onDispose(() => {
       $dialog.set(null);
       $drawer.set(null);
+      $device.set(null);
     });
   },
 };

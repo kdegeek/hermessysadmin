@@ -4,6 +4,7 @@
 // badge(kpis) feeds the red count on the tab; overlay() renders above the page (the drawer).
 const TABS = [
   { key: 'overview', label: 'Overview', badge: () => 0, render: () => jsx(OverviewTab, {}) },
+  { key: 'fleet', label: 'Fleet', badge: () => 0, render: () => jsx(FleetTab, {}), overlay: () => jsx(DeviceDrawerHost, {}) },
   { key: 'users', label: 'Users', badge: (k) => k.users_locked, render: () => jsx(UsersTab, {}), overlay: () => jsx(UserDrawerHost, {}) },
   { key: 'gpo', label: 'Group Policy', badge: (k) => k.gpos_needing_attention, render: () => jsx(GpoTab, {}) },
   { key: 'rdp', label: 'Remote Access', badge: () => 0, render: () => jsx(RdpTab, {}) },

@@ -77,7 +77,9 @@ def test_op_calls_use_literal_names(code):
     for m in re.finditer(r"(?<![\w.$])op\((\s*)(\S)", code):
         if code[: m.start()].endswith("function "):
             continue
-        assert m.group(2) == "'", code[m.start(): m.start() + 60]
+        head = code[m.start(): m.start() + 60]
+        # Catalog runs use a template literal (op(`cat.${id}`, ...)); every other op name is a plain literal.
+        assert m.group(2) == "'" or re.match(r"op\(\s*`cat\.\$\{", head), head
 
 
 def test_ops_routes_only_built_from_op_name(code):
@@ -111,4 +113,12 @@ def test_node_syntax_check(tmp_path):
     "'monitoring_enable'", "'monitoring_disable'", "function Donut(", "function Sparkline(", "goTab('fleet'",
 ])
 def test_overview_rebuild_markers(code, needle):
+    assert needle in code
+
+
+@pytest.mark.parametrize("needle", [
+    "function FleetTab(", "function DeviceDrawer(", "function openDevice(", "'remote_shadow_command'", "key: 'fleet'",
+    "function openCatalogRun(", "$fleetSelection",
+])
+def test_fleet_tab_markers(code, needle):
     assert needle in code
