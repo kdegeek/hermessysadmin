@@ -12,8 +12,9 @@ from . import ops as _ops  # noqa: F401  (registers operations)
 from .audit import AuditLog, open_audit
 from .config import Settings, load_settings
 from .runner import Runner, load_prelude
+from .local_transport import LocalTransport
 from .service import Service
-from .transport import PsrpTransport, UnconfiguredTransport
+from .transport import PsrpTransport, Transport, UnconfiguredTransport
 
 log = logging.getLogger(__name__)
 _lock = threading.Lock()
@@ -37,9 +38,17 @@ def _audit_log() -> AuditLog:
     return _audit
 
 
+def make_transport(settings: Settings) -> Transport:
+    """LocalTransport (PowerShell on this machine) or PsrpTransport (WinRM jump host), per the resolved settings."""
+    if not settings.configured:
+        return UnconfiguredTransport()
+    if settings.transport == "local":
+        return LocalTransport(settings, load_prelude())
+    return PsrpTransport(settings, load_prelude())
+
+
 def build_service(settings: Settings) -> Service:
-    transport = PsrpTransport(settings, load_prelude()) if settings.configured else UnconfiguredTransport()
-    return Service(settings, Runner(transport), _audit_log(), notify=notify)
+    return Service(settings, Runner(make_transport(settings)), _audit_log(), notify=notify)
 
 
 def get_service() -> Service:

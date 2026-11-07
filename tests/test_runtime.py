@@ -28,3 +28,18 @@ def test_reset_drops_audit_singleton(monkeypatch):
     runtime.reset()
     assert runtime.get_service().audit is not first
     runtime.reset()
+
+
+def test_build_service_picks_transport_from_resolved_settings():
+    from sysadmin.local_transport import LocalTransport
+    from sysadmin.transport import PsrpTransport, UnconfiguredTransport
+
+    pick = runtime.make_transport
+    assert isinstance(pick(Settings(transport="local", run_as="hermes_user")), LocalTransport)
+    assert isinstance(pick(Settings(transport="local", run_as="account", username="C\\u", password="p")), LocalTransport)
+    assert isinstance(pick(Settings(transport="local", run_as="account")), UnconfiguredTransport)
+    assert isinstance(pick(Settings(host="dc01", username="u", password="p")), PsrpTransport)
+    assert isinstance(pick(Settings()), UnconfiguredTransport)
+    svc = runtime.build_service(Settings(transport="local", run_as="hermes_user"))
+    assert isinstance(svc.runner._transport, LocalTransport)
+    svc.runner.close()

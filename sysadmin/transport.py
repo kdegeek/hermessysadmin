@@ -25,7 +25,7 @@ class Transport(Protocol):
 
 class UnconfiguredTransport:
     def invoke(self, script: str, params: Mapping[str, Any]) -> list[Any]:
-        raise NotConfigured("hermes-sysadmin has no WinRM connection configured.")
+        raise NotConfigured("hermes-sysadmin has no connection configured.")
 
     def close(self) -> None:
         return None

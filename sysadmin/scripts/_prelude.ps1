@@ -1,31 +1,95 @@
 # hermes-sysadmin session prelude.
-# Runs ONCE per runspace pool, in global scope, right after the pool opens.
-# Defines the helpers every op script uses. Never echoes $Pass.
+# Runs ONCE per session, in global scope, right after the session opens: the WinRM runspace pool on the jump
+# host, or the local PowerShell child (sysadmin/local_transport.py). Defines the helpers every op script uses.
+# Never echoes $Pass.
 param(
-    [Parameter(Mandatory)][string]$User,
-    [Parameter(Mandatory)][string]$Pass
+    [string]$User,
+    [string]$Pass
 )
 $ErrorActionPreference = 'Stop'
 
-# Explicit credential for second-hop work (Invoke-Command to member servers).
-# NTLM cannot delegate the WinRM logon, so fan-out must pass credentials explicitly.
-$Global:HermesCred = New-Object System.Management.Automation.PSCredential -ArgumentList $User, (ConvertTo-SecureString -String $Pass -AsPlainText -Force)
-$Global:PSDefaultParameterValues['Invoke-Command:Credential'] = $Global:HermesCred
-# AD cmdlets that talk to another DC (-Server / -Target) also need explicit credentials.
-$Global:PSDefaultParameterValues['*-AD*:Credential'] = $Global:HermesCred
-# Do not leave the plaintext password/user lingering in the runspace's global scope.
+# WinRM transport: explicit credential for second-hop work (Invoke-Command to member servers). NTLM cannot
+# delegate the WinRM logon, so fan-out must pass credentials explicitly.
+# Local transport: no credential is passed. The PowerShell process identity (the Hermes user, or the run-as
+# account's network logon) authenticates every hop, so $Global:HermesCred stays $null.
+if ($User -and $Pass) {
+    $Global:HermesCred = New-Object System.Management.Automation.PSCredential -ArgumentList $User, (ConvertTo-SecureString -String $Pass -AsPlainText -Force)
+    $Global:PSDefaultParameterValues['Invoke-Command:Credential'] = $Global:HermesCred
+    # AD cmdlets that talk to another DC (-Server / -Target) also need explicit credentials.
+    $Global:PSDefaultParameterValues['*-AD*:Credential'] = $Global:HermesCred
+}
+# Do not leave the plaintext password/user lingering in the session's global scope.
 Remove-Variable -Name Pass, User -ErrorAction SilentlyContinue
 
 foreach ($m in 'ActiveDirectory', 'GroupPolicy') {
     if (Get-Module -ListAvailable -Name $m) { Import-Module $m -ErrorAction SilentlyContinue }
 }
 
-# GroupPolicy cmdlets have no -Credential. Pin them to THIS domain controller so AD and
-# SYSVOL access stays local (loopback) and never needs a second hop.
-$Global:HermesIsDc = ((Get-CimInstance Win32_ComputerSystem).DomainRole -ge 4)
+# DC locality. Over WinRM the session runs ON a domain controller; over the local transport it runs on the
+# Hermes machine. Anything that reads DC-local state (event logs, SYSVOL paths, services, GPO backup folder,
+# DNS server) goes through Get-HermesDc / Invoke-HermesOnDc / Get-HermesDcTarget / Get-HermesSysvolPath.
+$Global:HermesIsDc = $false
+try { $Global:HermesIsDc = ((Get-CimInstance Win32_ComputerSystem).DomainRole -ge 4) } catch { $Global:HermesIsDc = $false }
+$Global:HermesDc = $null
 if ($Global:HermesIsDc) {
     $Global:HermesLocalDc = [System.Net.Dns]::GetHostEntry($env:COMPUTERNAME).HostName
+    $Global:HermesDc = $Global:HermesLocalDc
+}
+# GroupPolicy cmdlets have no -Credential. Pin them to one DC in both transports: THIS domain controller when
+# the session runs on one (AD and SYSVOL stay local, no second hop), else Get-HermesDc (resolved on first use).
+if ($Global:HermesIsDc) {
     $Global:PSDefaultParameterValues['*-GP*:Server'] = $Global:HermesLocalDc
+} else {
+    $Global:PSDefaultParameterValues['*-GP*:Server'] = { Get-HermesDc }
+}
+
+function Global:Get-HermesDc {
+    # FQDN of the DC that DC-local work targets: this machine when the session runs on a DC; otherwise the PDC
+    # emulator found by the DC locator (GPMC's default target too), then any DC with ADWS. Cached per session.
+    if ($Global:HermesDc) { return $Global:HermesDc }
+    $dc = $null
+    foreach ($svc in @('PrimaryDC', 'ADWS')) {
+        try { $dc = "$(@((Get-ADDomainController -Discover -Service $svc -ErrorAction Stop).HostName)[0])" } catch { $dc = $null }
+        if ($dc) { break }
+    }
+    if (-not $dc) {
+        try { $dc = "$([System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain().PdcRoleOwner.Name)" } catch { $dc = $null }
+    }
+    if (-not $dc) { throw 'Cannot find a domain controller for this domain (the DC locator returned nothing).' }
+    $Global:HermesDc = $dc
+    return $dc
+}
+
+function Global:Invoke-HermesOnDc {
+    # Run DC-local work on the DC: inline when the session runs on a DC (WinRM jump host), else on Get-HermesDc
+    # over WinRM (local transport: a single hop, authenticated as the process identity).
+    # Emit [pscustomobject]/hashtable values: the remote path returns deserialized objects.
+    param(
+        [Parameter(Mandatory)][scriptblock]$Script,
+        [object[]]$ArgumentList = @()
+    )
+    if ($Global:HermesIsDc) { return (& $Script @ArgumentList) }
+    return (Invoke-Command -ComputerName (Get-HermesDc) -ScriptBlock $Script -ArgumentList $ArgumentList -ErrorAction Stop)
+}
+
+function Global:Get-HermesDcTarget {
+    # Splat for RSAT cmdlets that name a server (DnsServer -ComputerName): empty on a DC, else the DC.
+    param([string]$Parameter = 'ComputerName')
+    if ($Global:HermesIsDc) { return @{} }
+    return @{ $Parameter = (Get-HermesDc) }
+}
+
+function Global:Get-HermesSysvolPath {
+    # The domain SYSVOL subfolder (Policies or scripts): the local copy on a DC, else \\<dc>\SYSVOL\<domain>\...
+    param([Parameter(Mandatory)][ValidateSet('Policies', 'scripts')][string]$Child)
+    $dns = (Get-ADDomain).DNSRoot
+    if (-not $Global:HermesIsDc) { return "\\$(Get-HermesDc)\SYSVOL\$dns\$Child" }
+    $p = Join-Path $env:SystemRoot "SYSVOL\domain\$Child"
+    if (-not (Test-Path -LiteralPath $p)) {
+        $sv = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters' -ErrorAction Stop).SysVol
+        $p = Join-Path $sv "$dns\$Child"
+    }
+    return $p
 }
 
 function Global:Get-CnName {

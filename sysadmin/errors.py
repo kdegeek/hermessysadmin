@@ -24,7 +24,8 @@ class SysadminError(Exception):
 class NotConfigured(SysadminError):
     type = "NotConfigured"
     default_hint = (
-        "Open Settings → Plugins → hermes-sysadmin and set the jump host, username and password."
+        "Open Settings → Plugins → hermes-sysadmin. WinRM transport: set the jump host, username and password. "
+        "Local transport: choose 'Run as'; running as an account also needs its username and password."
     )
 
 
