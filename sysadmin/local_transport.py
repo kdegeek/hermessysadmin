@@ -85,7 +85,8 @@ ENV_ALLOWLIST = frozenset(n.upper() for n in (
     "SystemRoot", "windir", "PATH", "PATHEXT", "PSModulePath", "TEMP", "TMP", "USERPROFILE", "USERDOMAIN",
     "USERDNSDOMAIN", "USERNAME", "COMPUTERNAME", "ProgramData", "ProgramFiles", "ProgramFiles(x86)",
     "ProgramW6432", "APPDATA", "LOCALAPPDATA", "HOMEDRIVE", "HOMEPATH", "NUMBER_OF_PROCESSORS",
-    "PROCESSOR_ARCHITECTURE", "OS", "LOGONSERVER",
+    "PROCESSOR_ARCHITECTURE", "OS", "LOGONSERVER", "SystemDrive", "ALLUSERSPROFILE", "PUBLIC", "ComSpec",
+    "PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION",
 ))
 ENV_ALLOWED_PREFIXES = ("COMMONPROGRAMFILES", "COMMONPROGRAMW6432")
 
@@ -683,6 +684,8 @@ class LocalTransport:
             if self._probe:
                 out, errors, terminated = self._exchange(child, {"script": self._probe, "params": {}})
                 if terminated or (errors and not out):
+                    # The password may have changed in AD since it was checked: re-validate on the next start.
+                    self._credentials_ok = False
                     raise self._probe_error(errors)
         except BaseException:
             child.kill()
