@@ -15,7 +15,7 @@ USAGE = "\n".join([
     "- `/ad backups`: Windows Server Backup status per server",
     "- `/ad fleet [offline|reboot|disk|patch|<text>]`: fleet summary and matching computers",
     "- `/ad catalog <query>`: search the catalog of vetted tasks",
-    "- `/ad run <id> key=value … [on HOST,HOST] [ou=DN]`: run a catalog entry (writes ask first)",
+    "- `/ad run <id> key=value … [on HOST,HOST] [ou=DN]`: run a catalog entry (read entries run; write entries return an approval request and are not run from here)",
 ])
 HEALTH = {"ok": "🟢", "warn": "🟡", "bad": "🔴"}
 BACKUP = {"ok": "🟢", "bad": "🔴", "run": "🔵", "none": "⚪"}

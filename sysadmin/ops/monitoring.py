@@ -160,7 +160,8 @@ def _enable_preview(service: Any, args: Mapping[str, Any]) -> Any:
     return {
         "summary": f"Create Hermes cron job {JOB_NAME} every {interval} delivering to {args['deliver']}",
         "changes": [
-            f"write {_hermes_home() / 'scripts' / (STATE_LAUNCHER if args.get('mode') == 'agent' else LAUNCHER)}",
+            f"write {_hermes_home() / 'scripts' / LAUNCHER}",
+            f"write {_hermes_home() / 'scripts' / STATE_LAUNCHER}",
             " ".join(f'"{a}"' if " " in a else a for a in ["hermes", "cron", "create", *_create_args(args, interval)]),
         ],
         "current": current,

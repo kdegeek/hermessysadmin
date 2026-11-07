@@ -256,7 +256,7 @@ The module machinery exists: a lock file (`catalog/modules.lock.json`) pins each
 - **Shell:** no local shell. PowerShell runs remotely on the jump host.
 - **Credentials:** the WinRM password is read only through Hermes secrets (`get_secret`). It is sent to the jump host for authentication and, for fan-out, used there as an explicit credential. It is never logged. `backup_set_policy` with a UNC target (`\\server\share`) stores that same service credential in the target server's Windows Server Backup schedule (`New-WBBackupTarget -Credential`), so use a least-privilege service account. The optional `ad_powershell` escape hatch, when enabled, can read the credential (`$Global:HermesCred`); the approval prompt warns when a script references it.
 - **Files:** a SQLite audit log in the plugin's Hermes data folder. GPO backups are written on the DC under `%ProgramData%\HermesSysadmin\GpoBackups`. The dashboard's Connect button may save a `.rdp` file to a folder you choose.
-- **Background work:** none unless you turn on monitoring, which creates one Hermes cron job (`hermes-sysadmin-watch`) that you can remove with `monitoring_disable`. Backups are server-side Windows Server Backup jobs, and the dashboard polls while open.
+- **Background work:** none unless you turn on monitoring, which creates one Hermes cron job (`hermes-sysadmin-watch`) that you can remove with `monitoring_disable`. In agent mode, if you set Hermes `approvals.cron_mode: approve`, the triage agent could run approved writes unattended; they are still audited, and the default `deny` blocks them. Backups are server-side Windows Server Backup jobs, and the dashboard polls while open.
 
 ## Development
 

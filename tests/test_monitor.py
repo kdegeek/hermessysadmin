@@ -378,7 +378,9 @@ def test_enable_preview_via_service(cron, tmp_path):
     s = Service(Settings(host="dc", username="u", password="p"), FakeRunner(), AuditLog(sqlite3.connect(":memory:", check_same_thread=False)))
     res = s.preview("monitoring_enable", {"deliver": "origin"})
     assert res["ok"] and res["data"]["summary"] == "Create Hermes cron job hermes-sysadmin-watch every 30m delivering to origin"
-    assert len(res["data"]["changes"]) == 2 and "current" in res["data"]
+    changes = res["data"]["changes"]
+    assert len(changes) == 3 and "current" in res["data"]
+    assert changes[0].endswith("hermes_sysadmin_watch.py") and changes[1].endswith("hermes_sysadmin_watch_state.py")
     assert not (tmp_path / "scripts").exists()  # preview writes nothing
     assert all("create" not in c[0] for c in cron.calls)
 
