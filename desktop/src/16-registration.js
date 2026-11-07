@@ -12,6 +12,7 @@ const PALETTE = [
   { id: 'sessions', label: 'AD: Sessions', keywords: ['rdp', 'remote desktop', 'logoff'], run: () => openPage('rdp', { rdpView: 'sessions' }) },
   { id: 'fleet', label: 'AD: Fleet', keywords: ['computers', 'devices', 'inventory', 'workstations'], run: () => openPage('fleet') },
   { id: 'find-computer', label: 'AD: Find computer…', keywords: ['computer', 'device', 'search', 'fleet'], run: () => { openPage('fleet', { fleet: { filter: 'all', os: '', query: '' } }); focusUserSearch(); } },
+  { id: 'catalog', label: 'AD: Run catalog entry…', keywords: ['catalog', 'run', 'script', 'task'], run: () => openPage('catalog') },
   // more palette entries: later tasks insert their entries above this line
 ];
 

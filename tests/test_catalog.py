@@ -141,6 +141,19 @@ def test_maximum_flows_into_schema_and_coercion(tmp_path, cleanup):
         coerce_args(op, {"Level": 5})
 
 
+def test_entry_detail_includes_maximum(tmp_path, cleanup):
+    from sysadmin.ops.catalog_ops import entry_detail
+
+    text = ENTRY.replace(
+        "{name: Threshold, type: integer, default: 10, minimum: 1, description: A threshold.}",
+        "{name: Level, type: integer, minimum: 0, maximum: 4, default: 2, description: x}",
+    ).replace("[int]$Threshold = 10", "[int]$Level = 2")
+    write(tmp_path, "t_area/sample.ps1", text)
+    (op,) = catalog.load(tmp_path, strict=True)
+    level = next(p for p in entry_detail(op)["params"] if p["name"] == "Level")
+    assert (level["minimum"], level["maximum"]) == (0, 4)
+
+
 @pytest.mark.parametrize("param", [
     "{name: Threshold, type: integer, description: x, enum: []}",
     "{name: Threshold, type: integer, description: x, enum: abc}",

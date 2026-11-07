@@ -122,3 +122,10 @@ def test_overview_rebuild_markers(code, needle):
 ])
 def test_fleet_tab_markers(code, needle):
     assert needle in code
+
+
+@pytest.mark.parametrize("needle", [
+    "function CatalogTab(", "function CatalogRunDialog(", "'catalog_module_install'", "key: 'catalog'",
+])
+def test_catalog_tab_markers(code, needle):
+    assert needle in code

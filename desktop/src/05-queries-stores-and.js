@@ -92,6 +92,8 @@ const $fleet = atom({ filter: 'all', os: '', query: '' });
 // Computer shown in the Fleet device drawer, and the host names ticked in the Fleet table.
 const $device = atom(null);
 const $fleetSelection = atom([]);
+// Computers handed to the Catalog tab by openCatalogRun (shown there as the selected-devices target).
+const $catalogComputers = atom([]);
 const $rdpView = atom('sessions');
 const $focusSearch = atom(0);
 const $drawer = atom(null);
@@ -117,6 +119,7 @@ function goTab(key, patch) {
   if (!TABS.some((t) => t.key === key)) return false;
   if (patch && patch.users) $users.set({ ...$users.get(), ...patch.users });
   if (patch && patch.fleet) $fleet.set({ filter: 'all', os: '', query: '', ...patch.fleet });
+  if (patch && patch.catalog) $catalogComputers.set(list(patch.catalog.computers));
   if (patch && patch.rdpView) $rdpView.set(patch.rdpView);
   if (key !== 'users') $drawer.set(null);
   if (key !== 'fleet') $device.set(null);

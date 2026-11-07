@@ -5,6 +5,7 @@
 const TABS = [
   { key: 'overview', label: 'Overview', badge: () => 0, render: () => jsx(OverviewTab, {}) },
   { key: 'fleet', label: 'Fleet', badge: () => 0, render: () => jsx(FleetTab, {}), overlay: () => jsx(DeviceDrawerHost, {}) },
+  { key: 'catalog', label: 'Catalog', badge: () => 0, render: () => jsx(CatalogTab, {}) },
   { key: 'users', label: 'Users', badge: (k) => k.users_locked, render: () => jsx(UsersTab, {}), overlay: () => jsx(UserDrawerHost, {}) },
   { key: 'gpo', label: 'Group Policy', badge: (k) => k.gpos_needing_attention, render: () => jsx(GpoTab, {}) },
   { key: 'rdp', label: 'Remote Access', badge: () => 0, render: () => jsx(RdpTab, {}) },

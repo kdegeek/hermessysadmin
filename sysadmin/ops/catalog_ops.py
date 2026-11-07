@@ -53,7 +53,7 @@ def entry_detail(op: Op) -> dict[str, Any]:
     """catalog_get-shaped dict without the example (shared with the dashboard API)."""
     params = [
         {"name": p.name, "type": p.type, "description": p.description, "required": p.required,
-         "default": p.default, "enum": list(p.enum) if p.enum else None, "minimum": p.minimum}
+         "default": p.default, "enum": list(p.enum) if p.enum else None, "minimum": p.minimum, "maximum": p.maximum}
         for p in op.params
     ]
     return {**(op.meta or {}), "tier": op.tier, "destructive": op.destructive, "description": op.description,

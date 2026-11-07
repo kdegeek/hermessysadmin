@@ -34,11 +34,13 @@ function closeDevice() {
   $device.set(null);
 }
 
-// The single entry point for "run a catalog entry on these computers". Task 15 swaps the body for its dialog.
+// The single entry point for "run a catalog entry on these computers".
 function openCatalogRun({ computers, entry }) {
-  const opened = goTab('catalog', { catalog: { computers: list(computers), entry } });
-  if (!opened) host.notify({ kind: 'info', message: 'The catalog opens in the Catalog tab, which is not available in this version yet.' });
-  return opened;
+  if (entry) {
+    openDialog(CatalogRunDialog, { entry, computers: list(computers) });
+    return true;
+  }
+  return goTab('catalog', { catalog: { computers } });
 }
 
 function fleetMatches(c, text) {
