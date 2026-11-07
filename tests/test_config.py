@@ -63,3 +63,66 @@ def test_load_settings_never_raises(monkeypatch):
 
     monkeypatch.setattr(config, "_plugin_settings", boom)
     assert load_settings() == Settings()
+
+
+# --- Task 17: transport and run_as -------------------------------------------------------
+
+import pytest
+
+
+def _no_join(monkeypatch, nt=False, joined=False):
+    monkeypatch.setattr(config, "_os_name", lambda: "nt" if nt else "posix")
+    monkeypatch.setattr(config, "_domain_joined", lambda: joined)
+
+
+def test_transport_and_run_as_defaults(monkeypatch):
+    _no_join(monkeypatch)
+    s = settings_from({}, "")
+    assert s.transport == "winrm" and s.run_as == "account"
+
+
+@pytest.mark.parametrize("nt,joined,expected", [
+    (True, True, "local"), (True, False, "winrm"), (False, True, "winrm"), (False, False, "winrm"),
+])
+def test_auto_transport_resolves_from_os_and_domain_join(monkeypatch, nt, joined, expected):
+    _no_join(monkeypatch, nt=nt, joined=joined)
+    assert settings_from({"transport": "auto"}, "").transport == expected
+    assert settings_from({}, "").transport == expected
+
+
+def test_explicit_transport_wins_over_auto(monkeypatch):
+    _no_join(monkeypatch, nt=True, joined=True)
+    assert settings_from({"transport": "WinRM"}, "").transport == "winrm"
+    _no_join(monkeypatch)
+    assert settings_from({"transport": "local"}, "").transport == "local"
+
+
+def test_unknown_transport_and_run_as_fall_back(monkeypatch):
+    _no_join(monkeypatch)
+    s = settings_from({"transport": "ssh", "run_as": "root"}, "")
+    assert s.transport == "winrm" and s.run_as == "account"
+    assert settings_from({"run_as": "Hermes_User"}, "").run_as == "hermes_user"
+
+
+def test_domain_join_check_is_false_off_windows(monkeypatch):
+    monkeypatch.setattr(config, "_os_name", lambda: "posix")
+    config._domain_joined.cache_clear()
+    assert config._domain_joined() is False
+    config._domain_joined.cache_clear()
+
+
+@pytest.mark.parametrize("transport,run_as,host,user,pw,expected", [
+    ("winrm", "account", "dc01", "u", "p", True),
+    ("winrm", "hermes_user", "dc01", "u", "p", True),
+    ("winrm", "account", "", "u", "p", False),
+    ("winrm", "account", "dc01", "", "p", False),
+    ("winrm", "account", "dc01", "u", "", False),
+    ("winrm", "hermes_user", "", "", "", False),
+    ("local", "hermes_user", "", "", "", True),
+    ("local", "account", "", "u", "p", True),
+    ("local", "account", "", "u", "", False),
+    ("local", "account", "", "", "p", False),
+])
+def test_configured_matrix(transport, run_as, host, user, pw, expected):
+    s = Settings(transport=transport, run_as=run_as, host=host, username=user, password=pw)
+    assert s.configured is expected

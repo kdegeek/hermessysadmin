@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import functools
 import logging
+import os
 import re
 from dataclasses import dataclass, field
 from typing import Any, Mapping
@@ -14,6 +16,10 @@ log = logging.getLogger(__name__)
 PASSWORD_ENV = "SYSADMIN_WINRM_PASSWORD"
 MODES = ("strict", "permissive", "read-only")
 AUTHS = ("ntlm", "kerberos")
+TRANSPORTS = ("auto", "local", "winrm")
+RUN_AS = ("account", "hermes_user")
+#: NETSETUP_JOIN_STATUS.NetSetupDomainName from NetGetJoinInformation.
+_NETSETUP_DOMAIN_NAME = 3
 
 
 @dataclass(frozen=True)
@@ -37,9 +43,17 @@ class Settings:
     alert_patch_age_days: int = 45
     alert_privileged_changes: bool = True
     alert_lockouts: bool = True
+    #: Resolved transport: "local" (PowerShell on this machine) or "winrm" (jump host). Never "auto".
+    transport: str = "winrm"
+    #: Local transport only: "account" (runas /netonly with username + password) or "hermes_user".
+    run_as: str = "account"
 
     @property
     def configured(self) -> bool:
+        if self.transport == "local":
+            if self.run_as == "hermes_user":
+                return True
+            return bool(self.username and self.password)
         return bool(self.host and self.username and self.password)
 
 
@@ -88,10 +102,44 @@ def _strings(value: Any) -> tuple[str, ...]:
     return tuple(s.strip() for s in items if s and s.strip())
 
 
+def _os_name() -> str:
+    return os.name
+
+
+@functools.lru_cache(maxsize=1)
+def _domain_joined() -> bool:
+    """True when this Windows machine is joined to an AD domain (NetGetJoinInformation)."""
+    if _os_name() != "nt":
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        netapi32 = ctypes.WinDLL("netapi32")
+        name = wintypes.LPWSTR()
+        status = wintypes.DWORD()
+        rc = netapi32.NetGetJoinInformation(None, ctypes.byref(name), ctypes.byref(status))
+        if name:
+            netapi32.NetApiBufferFree(name)
+        return rc == 0 and status.value == _NETSETUP_DOMAIN_NAME
+    except Exception:
+        log.debug("hermes-sysadmin: domain join check failed", exc_info=True)
+        return False
+
+
+def _transport(value: Any) -> str:
+    choice = _choice(value, TRANSPORTS, "auto")
+    if choice != "auto":
+        return choice
+    return "local" if _os_name() == "nt" and _domain_joined() else "winrm"
+
+
 def settings_from(raw: Mapping[str, Any] | None, password: str) -> Settings:
     raw = raw or {}
     use_https = _bool(raw.get("use_https"), True)
     return Settings(
+        transport=_transport(raw.get("transport")),
+        run_as=_choice(raw.get("run_as"), RUN_AS, "account"),
         host=str(raw.get("host") or "").strip(),
         port=_int(raw.get("port"), 5986 if use_https else 5985, 1, 65535),
         use_https=use_https,
