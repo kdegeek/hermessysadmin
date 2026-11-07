@@ -228,6 +228,18 @@ def remote_assist(service: Any, computer: str) -> dict[str, Any]:
     return _safe(lambda: service.call("remote_assist_command", {"computer": computer}, actor=ACTOR))
 
 
+def monitoring(service: Any) -> dict[str, Any]:
+    return _safe(lambda: service.call("monitoring_status", {}, actor=ACTOR))
+
+
+def monitoring_enable(service: Any, body: Mapping[str, Any] | None) -> dict[str, Any]:
+    return run_op(service, "monitoring_enable", body)
+
+
+def monitoring_disable(service: Any, body: Mapping[str, Any] | None) -> dict[str, Any]:
+    return run_op(service, "monitoring_disable", body)
+
+
 def refresh(service: Any) -> dict[str, Any]:
     def go() -> dict[str, Any]:
         service.invalidate()

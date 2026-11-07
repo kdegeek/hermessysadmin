@@ -187,6 +187,21 @@ async def remote_assist(computer: str) -> dict[str, Any]:
     return await _with_service("remote_assist", computer)
 
 
+@router.get("/monitoring")
+async def monitoring() -> dict[str, Any]:
+    return await _with_service("monitoring")
+
+
+@router.post("/monitoring/enable")
+async def monitoring_enable(request: Request) -> dict[str, Any]:
+    return await _with_service("monitoring_enable", await _body(request))
+
+
+@router.post("/monitoring/disable")
+async def monitoring_disable(request: Request) -> dict[str, Any]:
+    return await _with_service("monitoring_disable", await _body(request))
+
+
 @router.post("/refresh")
 async def refresh() -> dict[str, Any]:
     return await _with_service("refresh")

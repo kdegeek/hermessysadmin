@@ -67,6 +67,9 @@ provides_tools:
   - gpo_set_status
   - gpo_unlink
   - gpo_update_hosts
+  - monitoring_disable
+  - monitoring_enable
+  - monitoring_status
   - rdp_connect_file
   - rdp_host_status
   - rdp_session_disconnect
@@ -151,3 +154,33 @@ config_schema:
     default: false
     label: Enable raw PowerShell tool
     description: Registers ad_powershell, which runs arbitrary PowerShell on the jump host after approval every time.
+  monitor_interval:
+    type: str
+    default: "30m"
+    label: Monitoring interval
+    description: How often the scheduled watch runs, as a number plus m or h (for example 30m or 2h).
+  alert_disk_free_pct:
+    type: int
+    default: 10
+    label: "Alert when C: drive free is below (%)"
+    description: "Online computers with less free space on C: than this raise a disk alert (1-90)."
+  alert_offline_days:
+    type: int
+    default: 7
+    label: Alert when offline for (days)
+    description: A computer that was online and has not logged on for this long raises an offline alert (1-365).
+  alert_patch_age_days:
+    type: int
+    default: 45
+    label: Alert when no update for (days)
+    description: Computers with no installed update for longer than this raise a patch alert (1-365).
+  alert_privileged_changes:
+    type: bool
+    default: true
+    label: Alert on privileged group additions
+    description: Report new members of Domain Admins, Enterprise Admins, Schema Admins, Administrators and your extra privileged groups.
+  alert_lockouts:
+    type: bool
+    default: true
+    label: Alert on account lockouts
+    description: Report accounts that are locked out.

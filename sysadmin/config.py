@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
@@ -30,6 +31,12 @@ class Settings:
     protected_objects: tuple[str, ...] = ()
     privileged_groups: tuple[str, ...] = ()
     enable_powershell_escape: bool = False
+    monitor_interval: str = "30m"
+    alert_disk_free_pct: int = 10
+    alert_offline_days: int = 7
+    alert_patch_age_days: int = 45
+    alert_privileged_changes: bool = True
+    alert_lockouts: bool = True
 
     @property
     def configured(self) -> bool:
@@ -63,6 +70,14 @@ def _choice(value: Any, choices: tuple[str, ...], default: str) -> str:
     return text if text in choices else default
 
 
+_INTERVAL = re.compile(r"\d+[mh]")
+
+
+def _interval(value: Any, default: str) -> str:
+    text = str(value or "").strip().lower()
+    return text if _INTERVAL.fullmatch(text) and int(text[:-1]) > 0 else default
+
+
 def _strings(value: Any) -> tuple[str, ...]:
     if isinstance(value, str):
         items = value.replace("\n", ",").split(",")
@@ -90,6 +105,12 @@ def settings_from(raw: Mapping[str, Any] | None, password: str) -> Settings:
         protected_objects=_strings(raw.get("protected_objects")),
         privileged_groups=_strings(raw.get("privileged_groups")),
         enable_powershell_escape=_bool(raw.get("enable_powershell_escape"), False),
+        monitor_interval=_interval(raw.get("monitor_interval"), "30m"),
+        alert_disk_free_pct=_int(raw.get("alert_disk_free_pct"), 10, 1, 90),
+        alert_offline_days=_int(raw.get("alert_offline_days"), 7, 1, 365),
+        alert_patch_age_days=_int(raw.get("alert_patch_age_days"), 45, 1, 365),
+        alert_privileged_changes=_bool(raw.get("alert_privileged_changes"), True),
+        alert_lockouts=_bool(raw.get("alert_lockouts"), True),
     )
 
 

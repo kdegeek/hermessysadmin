@@ -135,6 +135,10 @@ class Service:
                 raise PolicyBlocked(d.reason)
             if not op.preview:
                 return {"ok": True, "data": {"summary": f"{op.name} on {target_of(op, clean) or 'target'}", "details": redact(clean)}}
+            if op.local is not None:
+                if op.local_preview is None:
+                    return {"ok": True, "data": {"summary": f"{op.name} on {target_of(op, clean) or 'target'}", "details": redact(clean)}}
+                return {"ok": True, "data": op.local_preview(self, clean)}
             data = self.runner.run(op.script, {**self._params(op, clean), "Preview": True}, retry=op.tier == "R")
             return {"ok": True, "data": data}
         except SysadminError as exc:

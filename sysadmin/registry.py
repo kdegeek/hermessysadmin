@@ -48,6 +48,7 @@ class Op:
     cache_ttl: float = 0.0
     inject: Callable[[Any], Mapping[str, Any]] | None = None  # extra PS params derived from Settings
     local: Callable[[Any, Mapping[str, Any]], Any] | None = None  # run in Python as local(service, args) instead of a script
+    local_preview: Callable[[Any, Mapping[str, Any]], Any] | None = None  # preview for a local op: local_preview(service, args)
     enabled: Callable[[Any], bool] | None = None  # enabled(settings) False -> decide() blocks the op
     destructive: bool = False  # irreversible (delete/overwrite/arbitrary code): dashboard requires typing the name
     catalog: bool = False  # a cat.<id> entry from catalog/; reachable through catalog_run, not its own agent tool
@@ -64,6 +65,8 @@ def register(op: Op) -> Op:
         raise ValueError(f"duplicate op {op.name}")
     if op.preview and op.tier == "R":
         raise ValueError(f"{op.name}: read ops cannot preview")
+    if op.local_preview is not None and (op.local is None or not op.preview):
+        raise ValueError(f"{op.name}: local_preview needs a local op with preview=True")
     names = [p.name for p in op.params]
     if len(set(names)) != len(names):
         raise ValueError(f"{op.name}: duplicate parameter names")
