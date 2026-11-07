@@ -11,7 +11,7 @@ function TestResult({ res }) {
     children: [
       jsx(Callout, {
         tone: 'accent',
-        icon: '✓',
+        icon: Ico('pass'),
         children: jsxs('div', {
           children: [
             jsxs('div', { children: [d.transport === 'local' ? 'PowerShell on ' : 'Connected to ', jsx('b', { children: d.hostname || '—' }), ` · ${d.os || 'Windows'} · domain ${d.domain || '—'}`] }),
@@ -27,7 +27,7 @@ function TestResult({ res }) {
           ],
         }),
       }),
-      ...list(d.warnings).map((w, i) => jsx(Callout, { tone: 'yellow', icon: '⚠', children: w }, `w${i}`)),
+      ...list(d.warnings).map((w, i) => jsx(Callout, { tone: 'yellow', icon: Ico('warning'), children: w }, `w${i}`)),
     ],
   });
 }
@@ -45,7 +45,7 @@ function SetupCard({ health }) {
   return jsxs('div', {
     className: 'hs-empty',
     children: [
-      jsx('div', { className: 'hs-big', children: '🏢' }),
+      jsx('div', { className: 'hs-big', children: Ico('organization') }),
       jsx('h2', { children: 'Connect to Active Directory' }),
       jsx('p', {
         className: 'hs-muted',
@@ -110,7 +110,7 @@ function Header({ health, overview }) {
       jsx(Badge, { tone: 'accent', children: `mode: ${health.mode}` }),
       health.escape_enabled ? jsx(Badge, { tone: 'red', children: 'PowerShell escape hatch on' }) : null,
       jsx(UpdatedAgo, { at: overview.updatedAt, refreshing: overview.refreshing }),
-      jsx(Btn, { small: true, onClick: refresh, disabled: busy, children: busy ? 'Refreshing…' : '↻ Refresh' }),
+      jsx(Btn, { small: true, onClick: refresh, disabled: busy, children: busy ? 'Refreshing…' : [Ico('refresh', 'i'), 'Refresh'] }),
     ],
   });
 }

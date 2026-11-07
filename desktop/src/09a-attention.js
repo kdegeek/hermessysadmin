@@ -144,7 +144,7 @@ function AskButton({ prompt, label, primary }) {
       e.stopPropagation();
       askHermes(prompt);
     },
-    children: [jsx('span', { className: 'hs-ask-spark', 'aria-hidden': 'true', children: '✦' }, 's'), label || 'Ask Hermes'],
+    children: [Ico('sparkle', 's'), label || 'Ask Hermes'],
   });
 }
 

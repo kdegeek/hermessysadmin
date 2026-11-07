@@ -60,7 +60,10 @@ def test_colours_only_through_ui_tokens(code):
 
 def test_css_variables_are_ui_tokens(code):
     names = re.findall(r"var\(--([\w-]+)", code)
-    assert names and all(name.startswith(("ui-", "hs-series-")) for name in names)  # hs-series-N are chart aliases of --ui-* tokens
+    # hs-series-N are chart aliases of --ui-* tokens; font-mono and radius-* are the host's
+    # structural theme tokens, so corners and code text follow the active theme too.
+    structural = ("ui-", "hs-series-", "font-mono", "radius-sm", "radius-md", "radius-lg", "radius-xl")
+    assert names and all(name.startswith(structural) for name in names)
 
 
 def test_op_helper_is_defined(code):

@@ -1,6 +1,11 @@
 // ============================================================================
 // §6 UI PRIMITIVES
 // ============================================================================
+// A Codicon glyph (the font the host already ships for its own UI and our sidebar entry).
+function Ico(name, key) {
+  return jsx('i', { className: `codicon codicon-${name} hs-ico`, 'aria-hidden': 'true' }, key);
+}
+
 function Badge({ tone, title, children }) {
   return jsx('span', { className: `hs-badge${tone ? ` ${tone}` : ''}`, title, children });
 }
@@ -24,7 +29,7 @@ function ErrorBox({ error }) {
   const e = error || {};
   return jsx(Callout, {
     tone: 'red',
-    icon: '⚠',
+    icon: Ico('warning'),
     children: jsxs('div', {
       children: [
         jsxs('div', { children: [jsx('b', { children: e.type || 'Error' }), `: ${e.message || 'Something went wrong.'}`] }),
@@ -35,7 +40,7 @@ function ErrorBox({ error }) {
 }
 
 function Spinner({ label }) {
-  return jsxs('div', { className: 'hs-loading', children: [jsx(GlyphSpinner, {}), jsx('span', { children: label || 'Loading…' })] });
+  return jsxs('div', { className: 'hs-loading', children: [jsx(GlyphSpinner, {}), jsx('span', { children: label || 'Reading from the domain…' })] });
 }
 
 // Renders children(data) once the query envelope is ok; spinner or error otherwise.

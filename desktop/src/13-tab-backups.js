@@ -103,7 +103,7 @@ function BackupsTab() {
             children: [
               jsx('span', { className: 'hs-muted hs-small', children: `${num(s.ok)} OK · ${num(s.bad)} need attention · ${num(s.running)} running · ${num(s.not_configured)} not configured · stale after ${d.stale_days} days` }),
               jsx('span', { className: 'hs-grow' }),
-              jsx(Btn, { small: true, kind: 'ghost', onClick: () => api.refresh().then(() => invalidateAll()), children: '↻ Recheck' }),
+              jsx(Btn, { small: true, kind: 'ghost', onClick: () => api.refresh().then(() => invalidateAll()), children: [Ico('refresh', 'i'), 'Recheck'] }),
             ],
           }),
           jsxs('div', {

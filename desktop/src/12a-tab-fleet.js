@@ -279,7 +279,7 @@ function ShadowDialog({ seq, computer, session }) {
       children: [
         jsxs('div', { className: 'hs-row', children: [jsx(Toggle, { on: control, onChange: setControl }), jsx('span', { children: control ? 'Take control of the session' : 'View only' })] }),
         jsxs('div', { className: 'hs-row', children: [jsx(Toggle, { on: consent, onChange: setConsent }), jsx('span', { children: consent ? 'Ask the user for consent first' : 'Do not ask for consent (needs approval)' })] }),
-        consent ? null : jsx(Callout, { tone: 'red', icon: '⚠', children: 'The user will not be asked. This is a high-risk action and is written to the audit log.' }),
+        consent ? null : jsx(Callout, { tone: 'red', icon: Ico('warning'), children: 'The user will not be asked. This is a high-risk action and is written to the audit log.' }),
         error ? jsx(ErrorBox, { error }) : null,
       ],
     }),
@@ -585,7 +585,7 @@ function DeviceRun({ name }) {
       jsx('div', { className: 'hs-toolbar', children: jsx(SearchBox, { value: text, onChange: setText, placeholder: 'Search catalog entries…' }) }),
       jsx(Pending, {
         q: catalog,
-        label: 'Loading the catalog…',
+        label: 'Reading the catalog…',
         children: () =>
           entries.length
             ? jsx('div', {
@@ -662,7 +662,7 @@ function DeviceDrawer({ name }) {
             ],
           }),
           jsx(AskButton, { prompt: `Use the endpoint-triage skill on ${name}: check health, disk, pending reboot, patches, Defender and recent errors with the hermes-sysadmin read tools and catalog, then tell me what is wrong and what you would do. ${READ_ONLY_ASK}`, label: 'Ask Hermes to triage' }),
-          jsx('button', { type: 'button', className: 'hs-ghost', title: 'Close', onClick: closeDevice, children: '✕' }),
+          jsx('button', { type: 'button', className: 'hs-ghost', title: 'Close', onClick: closeDevice, children: Ico('close') }),
         ],
       }),
       jsx('div', {

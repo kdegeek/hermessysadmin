@@ -57,12 +57,12 @@ const CSS = `
 .hs-tab{padding:7px 12px;border:0;background:none;color:var(--ui-text-tertiary);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;font:inherit}
 .hs-tab:hover{color:var(--ui-text-primary)}
 .hs-tab.on{color:var(--ui-text-primary);border-bottom-color:var(--ui-accent)}
-.hs-tab .hs-n{font-size:11px;margin-left:4px;padding:0 5px;border-radius:8px;background:var(--ui-bg-card);color:var(--ui-text-tertiary)}
-.hs-ghost{border:0;background:none;color:var(--ui-text-tertiary);cursor:pointer;padding:2px 6px;border-radius:4px;font:inherit}
+.hs-tab .hs-n{font-size:11px;margin-left:4px;padding:0 5px;border-radius:var(--radius-lg,8px);background:var(--ui-bg-card);color:var(--ui-text-tertiary)}
+.hs-ghost{border:0;background:none;color:var(--ui-text-tertiary);cursor:pointer;padding:2px 6px;border-radius:var(--radius-sm,4px);font:inherit}
 .hs-ghost:hover{background:var(--ui-row-hover-background);color:var(--ui-text-primary)}
 .hs-ghost.hs-x{padding:0 2px}
 .hs-danger{color:var(--ui-red)}
-.hs-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:1px 7px;border-radius:10px;background:var(--ui-bg-card);color:var(--ui-text-secondary);border:1px solid var(--ui-stroke-tertiary);white-space:nowrap}
+.hs-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:1px 7px;border-radius:var(--radius-lg,10px);background:var(--ui-bg-card);color:var(--ui-text-secondary);border:1px solid var(--ui-stroke-tertiary);white-space:nowrap}
 .hs-badge.red{color:var(--ui-red);border-color:color-mix(in srgb,var(--ui-red) 30%,transparent);background:color-mix(in srgb,var(--ui-red) 8%,transparent)}
 .hs-badge.yellow{color:var(--ui-yellow);border-color:color-mix(in srgb,var(--ui-yellow) 30%,transparent);background:color-mix(in srgb,var(--ui-yellow) 8%,transparent)}
 .hs-badge.green{color:var(--ui-green);border-color:color-mix(in srgb,var(--ui-green) 30%,transparent);background:color-mix(in srgb,var(--ui-green) 8%,transparent)}
@@ -71,7 +71,7 @@ const CSS = `
 .hs-text-yellow{color:var(--ui-yellow)}
 .hs-text-green{color:var(--ui-green)}
 .hs-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:18px}
-.hs-kpi{background:var(--ui-bg-card);border:1px solid var(--ui-stroke-tertiary);border-radius:8px;padding:10px 12px;cursor:pointer;text-align:left;font:inherit;color:inherit}
+.hs-kpi{background:var(--ui-bg-card);border:1px solid var(--ui-stroke-tertiary);border-radius:var(--radius-lg,8px);padding:10px 12px;cursor:pointer;text-align:left;font:inherit;color:inherit}
 .hs-kpi:hover{border-color:var(--ui-stroke-secondary)}
 .hs-kpi .hs-v{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
 .hs-kpi .hs-l{color:var(--ui-text-tertiary);font-size:12px}
@@ -79,7 +79,7 @@ const CSS = `
 .hs-grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start}
 .hs-grid2.hs-gpo{grid-template-columns:1.3fr 1fr}
 @media (max-width:900px){.hs-grid2,.hs-grid2.hs-gpo{grid-template-columns:1fr}}
-.hs-card{background:var(--ui-bg-card);border:1px solid var(--ui-stroke-tertiary);border-radius:8px;overflow:hidden}
+.hs-card{background:var(--ui-bg-card);border:1px solid var(--ui-stroke-tertiary);border-radius:var(--radius-lg,8px);overflow:hidden}
 .hs-card h3{margin:0;font-size:12.5px;font-weight:600;padding:9px 12px;border-bottom:1px solid var(--ui-stroke-tertiary);display:flex;align-items:center;gap:8px}
 .hs-card h3 .hs-sub{font-weight:400;color:var(--ui-text-tertiary)}
 .hs-card-body{padding:12px;display:grid;gap:12px}
@@ -92,17 +92,17 @@ const CSS = `
 .hs-table tbody tr.sel{background:var(--ui-row-active-background)}
 .hs-table td.hs-empty-row{text-align:center;padding:24px;color:var(--ui-text-tertiary)}
 .hs-nowrap{white-space:nowrap}
-.hs-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.hs-mono{font-family:var(--font-mono,ui-monospace,monospace);font-size:12px}
 .hs-muted{color:var(--ui-text-tertiary)}
 .hs-small{font-size:12px}
 .hs-tiny{font-size:11px}
 .hs-p{margin:0 0 8px}
 .hs-stack{display:grid;gap:10px}
 .hs-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
-.hs-search{flex:0 1 300px;border:1px solid var(--ui-stroke-secondary);background:var(--ui-bg-input);border-radius:6px;padding:5px 10px;color:var(--ui-text-primary);font:inherit}
-.hs-chip{border:1px solid var(--ui-stroke-secondary);background:none;border-radius:12px;padding:2px 10px;font-size:12px;cursor:pointer;color:var(--ui-text-secondary);font-family:inherit}
+.hs-search{flex:0 1 300px;border:1px solid var(--ui-stroke-secondary);background:var(--ui-bg-input);border-radius:var(--radius-md,6px);padding:5px 10px;color:var(--ui-text-primary);font:inherit}
+.hs-chip{border:1px solid var(--ui-stroke-secondary);background:none;border-radius:var(--radius-xl,12px);padding:2px 10px;font-size:12px;cursor:pointer;color:var(--ui-text-secondary);font-family:inherit}
 .hs-chip.on{background:var(--ui-row-active-background);border-color:color-mix(in srgb,var(--ui-accent) 40%,transparent);color:var(--ui-text-primary)}
-.hs-seg{display:inline-flex;border:1px solid var(--ui-stroke-secondary);border-radius:6px;overflow:hidden;align-self:flex-start}
+.hs-seg{display:inline-flex;border:1px solid var(--ui-stroke-secondary);border-radius:var(--radius-md,6px);overflow:hidden;align-self:flex-start}
 .hs-seg button{border:0;background:none;padding:3px 10px;cursor:pointer;color:var(--ui-text-tertiary);font:inherit}
 .hs-seg button.on{background:var(--ui-row-active-background);color:var(--ui-text-primary)}
 .hs-loading{display:flex;align-items:center;gap:8px;color:var(--ui-text-tertiary);padding:16px 4px}
@@ -117,7 +117,7 @@ const CSS = `
 .hs-kv>.hs-kv-row>span:last-child{min-width:0;overflow-wrap:anywhere}
 .hs-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .hs-row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
-.hs-callout{border-radius:6px;padding:8px 10px;font-size:12.5px;display:flex;gap:8px;align-items:flex-start}
+.hs-callout{border-radius:var(--radius-md,6px);padding:8px 10px;font-size:12.5px;display:flex;gap:8px;align-items:flex-start}
 .hs-callout.red{background:color-mix(in srgb,var(--ui-red) 9%,transparent);border:1px solid color-mix(in srgb,var(--ui-red) 25%,transparent)}
 .hs-callout.yellow{background:color-mix(in srgb,var(--ui-yellow) 9%,transparent);border:1px solid color-mix(in srgb,var(--ui-yellow) 25%,transparent)}
 .hs-callout.accent{background:color-mix(in srgb,var(--ui-accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--ui-accent) 25%,transparent)}
@@ -125,31 +125,31 @@ const CSS = `
 .hs-modal.hs-modal-wide{width:680px;max-width:min(680px,calc(100vw - 32px)) !important}
 .hs-modal-sub{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .hs-modal-body{display:grid;gap:10px;font-size:13px;color:var(--ui-text-primary);max-height:60vh;overflow:auto}
-.hs-whatif{background:var(--ui-bg-chrome);border:1px solid var(--ui-stroke-tertiary);border-radius:6px;padding:8px 10px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;white-space:pre-wrap;margin:0;color:var(--ui-text-secondary);overflow-wrap:anywhere}
+.hs-whatif{background:var(--ui-bg-chrome);border:1px solid var(--ui-stroke-tertiary);border-radius:var(--radius-md,6px);padding:8px 10px;font-family:var(--font-mono,ui-monospace,monospace);font-size:11.5px;white-space:pre-wrap;margin:0;color:var(--ui-text-secondary);overflow-wrap:anywhere}
 .hs-secret{font-size:15px;color:var(--ui-text-primary);text-align:center;letter-spacing:.06em;user-select:all}
-.hs-input{width:100%;border:1px solid var(--ui-stroke-secondary);background:var(--ui-bg-input);border-radius:6px;padding:6px 10px;color:var(--ui-text-primary);font:inherit}
+.hs-input{width:100%;border:1px solid var(--ui-stroke-secondary);background:var(--ui-bg-input);border-radius:var(--radius-md,6px);padding:6px 10px;color:var(--ui-text-primary);font:inherit}
 textarea.hs-input{min-height:64px;resize:vertical}
 .hs-field{font-size:12px;color:var(--ui-text-tertiary);display:grid;gap:4px}
 .hs-check{font-size:12.5px;color:var(--ui-text-secondary);display:flex;gap:6px;align-items:center;cursor:pointer}
 .hs-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.hs-tier{font-size:10.5px;font-weight:600;letter-spacing:.04em;padding:1px 6px;border-radius:4px;white-space:nowrap}
+.hs-tier{font-size:10.5px;font-weight:600;letter-spacing:.04em;padding:1px 6px;border-radius:var(--radius-sm,4px);white-space:nowrap}
 .hs-tier-R{background:var(--ui-bg-card);color:var(--ui-text-tertiary)}
 .hs-tier-W{background:color-mix(in srgb,var(--ui-yellow) 14%,transparent);color:var(--ui-yellow)}
 .hs-tier-H{background:color-mix(in srgb,var(--ui-red) 14%,transparent);color:var(--ui-red)}
 .hs-tier-P{background:var(--ui-text-primary);color:var(--ui-bg-editor)}
 .hs-hosts{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
-.hs-hcard{background:var(--ui-bg-card);border:1px solid var(--ui-stroke-tertiary);border-radius:8px;padding:12px}
+.hs-hcard{background:var(--ui-bg-card);border:1px solid var(--ui-stroke-tertiary);border-radius:var(--radius-lg,8px);padding:12px}
 .hs-hcard.bad{border-color:color-mix(in srgb,var(--ui-red) 40%,transparent)}
 .hs-hcard.warn{border-color:color-mix(in srgb,var(--ui-yellow) 40%,transparent)}
 .hs-hcard .hs-top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .hs-hcard .hs-top b{flex:1}
-.hs-bar{height:6px;border-radius:3px;background:var(--ui-stroke-tertiary);overflow:hidden;margin:8px 0 4px}
+.hs-bar{height:6px;border-radius:var(--radius-sm,3px);background:var(--ui-stroke-tertiary);overflow:hidden;margin:8px 0 4px}
 .hs-drawer.hs-drawer-wide{width:560px}
 .hs-bar.hs-bar-inline{display:inline-block;width:48px;margin:0 6px 1px 0;vertical-align:middle}
 .hs-bar.low i{background:var(--ui-red)}
-.hs-selbar{padding:6px 10px;border:1px solid var(--ui-stroke-secondary);border-radius:6px;background:var(--ui-row-active-background)}
+.hs-selbar{padding:6px 10px;border:1px solid var(--ui-stroke-secondary);border-radius:var(--radius-md,6px);background:var(--ui-row-active-background)}
 .hs-select{flex:0 0 auto;width:auto;min-width:160px}
-.hs-clickrow{cursor:pointer;padding:4px 6px;border-radius:6px}
+.hs-clickrow{cursor:pointer;padding:4px 6px;border-radius:var(--radius-md,6px)}
 .hs-clickrow:hover{background:var(--ui-row-hover-background)}
 .hs-table tbody tr.sel{background:var(--ui-row-active-background)}
 .hs-bar i{display:block;height:100%;background:var(--ui-accent);transition:width .4s}
@@ -166,23 +166,23 @@ textarea.hs-input{min-height:64px;resize:vertical}
 .hs-chart-center{fill:var(--ui-text-primary);font-size:16px;font-weight:600}
 .hs-chart-btn{appearance:none;border:0;background:none;color:inherit;font:inherit;text-align:inherit;cursor:pointer;width:100%}
 .hs-chart-histlabels{display:flex;gap:0}
-.hs-chart-histcol{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;padding:2px 0;border-radius:4px}
+.hs-chart-histcol{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;padding:2px 0;border-radius:var(--radius-sm,4px)}
 .hs-chart-histcount{font-variant-numeric:tabular-nums;color:var(--ui-text-primary);font-size:12px}
 .hs-chart-histlabel{color:var(--ui-text-tertiary);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
 .hs-chart .hs-clickable{cursor:pointer}
 .hs-chart [role=button]:focus-visible,.hs-chart-btn:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
 .hs-chart path.hs-clickable:hover,.hs-chart rect.hs-clickable:hover{opacity:.8}
 .hs-chart-legend{list-style:none;margin:0;padding:0;display:grid;gap:3px;font-size:12.5px}
-.hs-chart-legend-row{display:flex;align-items:center;gap:8px;padding:1px 4px;border-radius:4px}
+.hs-chart-legend-row{display:flex;align-items:center;gap:8px;padding:1px 4px;border-radius:var(--radius-sm,4px)}
 .hs-chart-btn.hs-chart-legend-row:hover,.hs-chart-btn.hs-chart-histcol:hover{background:var(--ui-bg-elevated)}
-.hs-chart-swatch{width:10px;height:10px;border-radius:2px;flex:none}
+.hs-chart-swatch{width:10px;height:10px;border-radius:var(--radius-sm,2px);flex:none}
 .hs-chart-legend-label{flex:1;color:var(--ui-text-secondary)}
 .hs-chart-legend-value{color:var(--ui-text-primary);font-variant-numeric:tabular-nums}
 .hs-chart-bars{gap:4px}
-.hs-chart-barrow{display:grid;grid-template-columns:minmax(80px,30%) 1fr auto;align-items:center;gap:8px;padding:2px 4px;border-radius:4px}
+.hs-chart-barrow{display:grid;grid-template-columns:minmax(80px,30%) 1fr auto;align-items:center;gap:8px;padding:2px 4px;border-radius:var(--radius-sm,4px)}
 .hs-chart-barrow.hs-clickable:hover{background:var(--ui-bg-elevated)}
 .hs-chart-barlabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ui-text-secondary)}
-.hs-chart-bartrack{height:8px;border-radius:4px;background:var(--ui-stroke-tertiary);overflow:hidden}
+.hs-chart-bartrack{height:8px;border-radius:var(--radius-sm,4px);background:var(--ui-stroke-tertiary);overflow:hidden}
 .hs-chart-bartrack i{display:block;height:100%}
 .hs-chart-barvalue{font-variant-numeric:tabular-nums;color:var(--ui-text-primary)}
 .hs-chart-spark{flex-direction:row;align-items:center;gap:8px}
@@ -202,7 +202,7 @@ textarea.hs-input{min-height:64px;resize:vertical}
 @keyframes hs-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .hs-card,.hs-hero,.hs-kpis{animation:hs-in .35s ease-out both}
 @media (prefers-reduced-motion:reduce){.hs-card,.hs-hero,.hs-kpis,.hs-score-arc{animation:none!important;transition:none!important}}
-.hs-hero{display:grid;grid-template-columns:minmax(260px,330px) 1fr;gap:18px;padding:16px 18px;border-radius:12px;border:1px solid color-mix(in srgb,var(--ui-accent) 22%,var(--ui-stroke-tertiary));background:radial-gradient(120% 140% at 0% 0%,color-mix(in srgb,var(--ui-accent) 10%,transparent),transparent 60%),var(--ui-bg-card)}
+.hs-hero{display:grid;grid-template-columns:minmax(260px,330px) 1fr;gap:18px;padding:16px 18px;border-radius:var(--radius-xl,12px);border:1px solid color-mix(in srgb,var(--ui-accent) 22%,var(--ui-stroke-tertiary));background:radial-gradient(120% 140% at 0% 0%,color-mix(in srgb,var(--ui-accent) 10%,transparent),transparent 60%),var(--ui-bg-card)}
 @media (max-width:900px){.hs-hero{grid-template-columns:1fr}}
 .hs-hero-side{display:flex;gap:16px;align-items:center}
 .hs-hero-copy{display:grid;gap:6px;justify-items:start}
@@ -218,7 +218,7 @@ textarea.hs-input{min-height:64px;resize:vertical}
 .hs-score-text b{font-size:28px;font-weight:650;font-variant-numeric:tabular-nums}
 .hs-score-text span{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ui-text-tertiary)}
 .hs-attn{list-style:none;margin:0;padding:0;display:grid;gap:4px;align-content:start}
-.hs-attn-row{display:flex;align-items:center;gap:10px;padding:5px 8px;border-radius:8px}
+.hs-attn-row{display:flex;align-items:center;gap:10px;padding:5px 8px;border-radius:var(--radius-lg,8px)}
 .hs-attn-row:hover{background:var(--ui-row-hover-background)}
 .hs-attn-dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--ui-yellow)}
 .hs-attn-row.danger .hs-attn-dot{background:var(--ui-red);box-shadow:0 0 0 3px color-mix(in srgb,var(--ui-red) 18%,transparent)}
@@ -226,14 +226,17 @@ textarea.hs-input{min-height:64px;resize:vertical}
 .hs-attn-main b{font-weight:550;white-space:nowrap}
 .hs-attn-main span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hs-attn-empty{padding:18px 8px}
-.hs-ask{display:inline-flex;align-items:center;gap:5px;flex:none;border:1px solid color-mix(in srgb,var(--ui-accent) 35%,transparent);background:color-mix(in srgb,var(--ui-accent) 7%,transparent);color:var(--ui-accent);border-radius:999px;padding:2px 10px;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap;transition:background .15s,transform .15s}
+.hs-ask{display:inline-flex;align-items:center;gap:5px;flex:none;border:1px solid color-mix(in srgb,var(--ui-accent) 35%,transparent);background:color-mix(in srgb,var(--ui-accent) 7%,transparent);color:var(--ui-accent);border-radius:var(--radius-md,6px);padding:2px 9px;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap;transition:background .15s,transform .15s}
 .hs-ask:hover{background:color-mix(in srgb,var(--ui-accent) 15%,transparent)}
 .hs-ask:active{transform:scale(.97)}
 .hs-ask.primary{background:var(--ui-accent);color:var(--ui-bg-editor);border-color:var(--ui-accent);padding:5px 14px;font-size:12.5px;margin-top:4px}
 .hs-ask.primary:hover{background:color-mix(in srgb,var(--ui-accent) 88%,var(--ui-text-primary))}
-.hs-ask-spark{font-size:11px}
+.hs-ico{font-size:inherit;line-height:1;vertical-align:-0.12em}
+.hs-ask .hs-ico{font-size:12px}
+.hs-big .hs-ico{font-size:34px}
+.hs-cat-empty-icon .hs-ico{font-size:22px}
 .hs-ask:focus-visible,.hs-attn-main:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
-.hs-catsum{display:flex;align-items:center;gap:22px;flex-wrap:wrap;padding:12px 16px;border-radius:10px;border:1px solid var(--ui-stroke-tertiary);background:radial-gradient(120% 160% at 0% 0%,color-mix(in srgb,var(--ui-accent) 9%,transparent),transparent 55%),var(--ui-bg-card);animation:hs-in .35s ease-out both}
+.hs-catsum{display:flex;align-items:center;gap:22px;flex-wrap:wrap;padding:12px 16px;border-radius:var(--radius-lg,10px);border:1px solid var(--ui-stroke-tertiary);background:radial-gradient(120% 160% at 0% 0%,color-mix(in srgb,var(--ui-accent) 9%,transparent),transparent 55%),var(--ui-bg-card);animation:hs-in .35s ease-out both}
 .hs-catstat{display:grid;line-height:1.15}
 .hs-catstat b{font-size:20px;font-weight:650;font-variant-numeric:tabular-nums}
 .hs-catstat span{font-size:11.5px;color:var(--ui-text-tertiary)}
@@ -243,7 +246,7 @@ textarea.hs-input{min-height:64px;resize:vertical}
 .hs-cat-panel{position:sticky;top:0}
 .hs-card-pad{padding:14px}
 .hs-cat-empty{display:grid;justify-items:center;text-align:center;gap:8px;padding:34px 24px}
-.hs-cat-empty-icon{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:20px;color:var(--ui-accent);background:color-mix(in srgb,var(--ui-accent) 12%,transparent)}
+.hs-cat-empty-icon{width:44px;height:44px;border-radius:var(--radius-xl,12px);display:grid;place-items:center;font-size:20px;color:var(--ui-accent);background:color-mix(in srgb,var(--ui-accent) 12%,transparent)}
 `;
 // ============================================================================
 // §3 API CLIENT AND HOST HELPERS
@@ -715,6 +718,11 @@ function openPage(key, patch) {
 // ============================================================================
 // §6 UI PRIMITIVES
 // ============================================================================
+// A Codicon glyph (the font the host already ships for its own UI and our sidebar entry).
+function Ico(name, key) {
+  return jsx('i', { className: `codicon codicon-${name} hs-ico`, 'aria-hidden': 'true' }, key);
+}
+
 function Badge({ tone, title, children }) {
   return jsx('span', { className: `hs-badge${tone ? ` ${tone}` : ''}`, title, children });
 }
@@ -738,7 +746,7 @@ function ErrorBox({ error }) {
   const e = error || {};
   return jsx(Callout, {
     tone: 'red',
-    icon: '⚠',
+    icon: Ico('warning'),
     children: jsxs('div', {
       children: [
         jsxs('div', { children: [jsx('b', { children: e.type || 'Error' }), `: ${e.message || 'Something went wrong.'}`] }),
@@ -749,7 +757,7 @@ function ErrorBox({ error }) {
 }
 
 function Spinner({ label }) {
-  return jsxs('div', { className: 'hs-loading', children: [jsx(GlyphSpinner, {}), jsx('span', { children: label || 'Loading…' })] });
+  return jsxs('div', { className: 'hs-loading', children: [jsx(GlyphSpinner, {}), jsx('span', { children: label || 'Reading from the domain…' })] });
 }
 
 // Renders children(data) once the query envelope is ok; spinner or error otherwise.
@@ -1489,7 +1497,7 @@ function BlockedDialog({ seq, o, dec, opts }) {
       children: [
         jsx(Callout, {
           tone: 'red',
-          icon: '🛡',
+          icon: Ico('shield'),
           children: jsxs('div', { children: [jsx('b', { children: 'Blocked. ' }), dec.reason] }),
         }),
         dec.target ? jsxs('div', { className: 'hs-muted hs-small', children: ['Target: ', jsx('span', { className: 'hs-mono', children: dec.target })] }) : null,
@@ -1546,7 +1554,7 @@ function TestResult({ res }) {
     children: [
       jsx(Callout, {
         tone: 'accent',
-        icon: '✓',
+        icon: Ico('pass'),
         children: jsxs('div', {
           children: [
             jsxs('div', { children: [d.transport === 'local' ? 'PowerShell on ' : 'Connected to ', jsx('b', { children: d.hostname || '—' }), ` · ${d.os || 'Windows'} · domain ${d.domain || '—'}`] }),
@@ -1562,7 +1570,7 @@ function TestResult({ res }) {
           ],
         }),
       }),
-      ...list(d.warnings).map((w, i) => jsx(Callout, { tone: 'yellow', icon: '⚠', children: w }, `w${i}`)),
+      ...list(d.warnings).map((w, i) => jsx(Callout, { tone: 'yellow', icon: Ico('warning'), children: w }, `w${i}`)),
     ],
   });
 }
@@ -1580,7 +1588,7 @@ function SetupCard({ health }) {
   return jsxs('div', {
     className: 'hs-empty',
     children: [
-      jsx('div', { className: 'hs-big', children: '🏢' }),
+      jsx('div', { className: 'hs-big', children: Ico('organization') }),
       jsx('h2', { children: 'Connect to Active Directory' }),
       jsx('p', {
         className: 'hs-muted',
@@ -1645,7 +1653,7 @@ function Header({ health, overview }) {
       jsx(Badge, { tone: 'accent', children: `mode: ${health.mode}` }),
       health.escape_enabled ? jsx(Badge, { tone: 'red', children: 'PowerShell escape hatch on' }) : null,
       jsx(UpdatedAgo, { at: overview.updatedAt, refreshing: overview.refreshing }),
-      jsx(Btn, { small: true, onClick: refresh, disabled: busy, children: busy ? 'Refreshing…' : '↻ Refresh' }),
+      jsx(Btn, { small: true, onClick: refresh, disabled: busy, children: busy ? 'Refreshing…' : [Ico('refresh', 'i'), 'Refresh'] }),
     ],
   });
 }
@@ -1764,7 +1772,7 @@ function SectionErrors({ errors }) {
     children: entries.map(([key, e]) =>
       jsx(Callout, {
         tone: 'yellow',
-        icon: '⚠',
+        icon: Ico('warning'),
         children: jsxs('div', {
           children: [jsx('b', { children: `${SECTION_LABEL[key] || key}: ` }), `${e.type} · ${e.message}`, e.hint ? jsx('div', { className: 'hs-muted hs-small', children: e.hint }) : null],
         }),
@@ -2026,7 +2034,7 @@ function TrendsCard({ history }) {
     sub: 'last 30 days of inventory runs',
     children: jsx(Pending, {
       q: history,
-      label: 'Loading history…',
+      label: 'Reading change history…',
       children: (d) => {
         const rows = list(d.items)
           .map((r) => r.summary || {})
@@ -2115,7 +2123,7 @@ function MonitoringCard({ monitoring, cardRef }) {
         : null,
       children: jsx(Pending, {
         q: monitoring,
-        label: 'Loading monitoring status…',
+        label: 'Checking the monitoring job…',
         children: () =>
           jsxs('div', {
             className: 'hs-stack',
@@ -2129,7 +2137,7 @@ function MonitoringCard({ monitoring, cardRef }) {
                   jsx('span', { className: 'hs-muted hs-small', children: `Last run: ${m.last_run ? ago(m.last_run) : 'never'}` }),
                 ],
               }),
-              m.error ? jsx(Callout, { tone: 'yellow', icon: '⚠', children: m.error }) : null,
+              m.error ? jsx(Callout, { tone: 'yellow', icon: Ico('warning'), children: m.error }) : null,
               jsx(Table, {
                 head: ['Rule', 'Host', 'Message', 'First seen'],
                 children: alerts.length
@@ -2238,7 +2246,7 @@ function OverviewTab() {
   const alertsRef = useRef(null);
   return jsx(Pending, {
     q: ov,
-    label: 'Loading the domain overview…',
+    label: 'Reading the domain…',
     children: (d) =>
       jsxs('div', {
         className: 'hs-stack',
@@ -2402,7 +2410,7 @@ function AskButton({ prompt, label, primary }) {
       e.stopPropagation();
       askHermes(prompt);
     },
-    children: [jsx('span', { className: 'hs-ask-spark', 'aria-hidden': 'true', children: '✦' }, 's'), label || 'Ask Hermes'],
+    children: [Ico('sparkle', 's'), label || 'Ask Hermes'],
   });
 }
 
@@ -2590,13 +2598,13 @@ function UsersTab() {
           jsx(Chip, { on: f.expiring, onClick: () => set({ expiring: !f.expiring }), children: 'Expiring ≤7 d' }),
           jsx(Chip, { on: f.privileged, onClick: () => set({ privileged: !f.privileged }), children: 'Privileged' }),
           jsx('span', { className: 'hs-grow' }),
-          jsx(Btn, { onClick: () => openDialog(RecycleBinDialog, {}), children: '🗑 Recycle Bin' }),
+          jsx(Btn, { onClick: () => openDialog(RecycleBinDialog, {}), children: [Ico('trash', 'i'), 'Recycle Bin'] }),
           jsx(Btn, { kind: 'primary', onClick: () => openDialog(NewUserDialog, {}), children: '+ New user' }),
         ],
       }),
       jsx(Pending, {
         q,
-        label: 'Loading users…',
+        label: 'Reading users…',
         children: (d) => {
           const items = list(d.items);
           const total = typeof d.total === 'number' ? d.total : items.length;
@@ -2645,7 +2653,7 @@ function LockoutCallout({ u, lock, sessions }) {
   else source = 'No lockout events found on the PDC emulator in that time range.';
   return jsx(Callout, {
     tone: 'red',
-    icon: '🔒',
+    icon: Ico('lock'),
     children: jsxs('div', {
       children: [
         jsx('b', { children: 'Locked out' }),
@@ -2724,11 +2732,11 @@ function UserDrawer({ sam }) {
         children: [
           jsx('div', { className: 'hs-avatar', children: initials(name) }),
           jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [jsx('b', { children: name }), jsx('div', { className: 'hs-muted hs-mono', children: (u && u.upn) || sam })] }),
-          jsx('button', { type: 'button', className: 'hs-ghost', title: 'Close', onClick: () => $drawer.set(null), children: '✕' }),
+          jsx('button', { type: 'button', className: 'hs-ghost', title: 'Close', onClick: () => $drawer.set(null), children: Ico('close') }),
         ],
       }),
       !u
-        ? jsx('div', { className: 'hs-sec', children: jsx(Pending, { q, label: 'Loading user…', children: () => null }) })
+        ? jsx('div', { className: 'hs-sec', children: jsx(Pending, { q, label: 'Reading the account…', children: () => null }) })
         : jsxs('div', {
             children: [
               isProtected
@@ -2736,7 +2744,7 @@ function UserDrawer({ sam }) {
                     className: 'hs-sec',
                     children: jsx(Callout, {
                       tone: 'red',
-                      icon: '🛡',
+                      icon: Ico('shield'),
                       children: jsxs('div', { children: [jsx('b', { children: 'Protected object.' }), ' All write actions are blocked by policy for this account.'] }),
                     }),
                   })
@@ -2787,7 +2795,7 @@ function UserDrawer({ sam }) {
                                         confirmLabel: 'Remove',
                                         doneMessage: `${sam} removed from ${g}`,
                                       }),
-                                    children: '✕',
+                                    children: Ico('close'),
                                   }),
                             ],
                           }, g),
@@ -3210,7 +3218,7 @@ function GpoTab() {
           jsx(Chip, { on: unlinked, onClick: () => setUnlinked(!unlinked), children: 'Unlinked' }),
           jsx(Chip, { on: enforced, onClick: () => setEnforced(!enforced), children: 'Enforced' }),
           jsx('span', { className: 'hs-grow' }),
-          jsx(Btn, { onClick: () => openDialog(GpUpdateDialog, {}), children: '⟳ Run gpupdate…' }),
+          jsx(Btn, { onClick: () => openDialog(GpUpdateDialog, {}), children: [Ico('sync', 'i'), 'Run gpupdate…'] }),
           jsx(Btn, { kind: 'primary', onClick: () => openDialog(NewGpoDialog, {}), children: '+ New GPO' }),
         ],
       }),
@@ -3376,7 +3384,7 @@ function GpoDetail({ gpo }) {
         list(g.health).length
           ? jsx('div', {
               className: 'hs-sec',
-              children: jsx(Callout, { tone: 'yellow', icon: '⚠', children: jsx('div', { children: list(g.health).map((h) => jsx('div', { children: h }, h)) }) }),
+              children: jsx(Callout, { tone: 'yellow', icon: Ico('warning'), children: jsx('div', { children: list(g.health).map((h) => jsx('div', { children: h }, h)) }) }),
             })
           : null,
         jsxs('div', {
@@ -3568,7 +3576,7 @@ function GpUpdateResultDialog({ seq, data }) {
             : jsx(EmptyRow, { cols: 3, text: 'No computers were targeted' }),
         }),
         errors.length
-          ? jsx(Callout, { tone: 'red', icon: '⚠', children: jsx('div', { children: errors.map((e, i) => jsx('div', { children: `${shortHost(e.host)}: ${e.message}` }, i)) }) })
+          ? jsx(Callout, { tone: 'red', icon: Ico('warning'), children: jsx('div', { children: errors.map((e, i) => jsx('div', { children: `${shortHost(e.host)}: ${e.message}` }, i)) }) })
           : null,
       ],
     }),
@@ -3850,7 +3858,7 @@ function UnreachableCallout({ errors, what }) {
   if (!errs.length) return null;
   return jsx(Callout, {
     tone: 'yellow',
-    icon: '⚠',
+    icon: Ico('warning'),
     children: jsxs('div', {
       className: 'hs-row',
       children: [
@@ -4032,7 +4040,7 @@ function HostsView() {
                                               onDone: warnDone,
                                               doneMessage: `${m} removed from Remote Desktop Users on ${shortHost(h.host)}`,
                                             }),
-                                          children: '✕',
+                                          children: Ico('close'),
                                         }),
                                       ],
                                     }, m),
@@ -4425,7 +4433,7 @@ function ShadowDialog({ seq, computer, session }) {
       children: [
         jsxs('div', { className: 'hs-row', children: [jsx(Toggle, { on: control, onChange: setControl }), jsx('span', { children: control ? 'Take control of the session' : 'View only' })] }),
         jsxs('div', { className: 'hs-row', children: [jsx(Toggle, { on: consent, onChange: setConsent }), jsx('span', { children: consent ? 'Ask the user for consent first' : 'Do not ask for consent (needs approval)' })] }),
-        consent ? null : jsx(Callout, { tone: 'red', icon: '⚠', children: 'The user will not be asked. This is a high-risk action and is written to the audit log.' }),
+        consent ? null : jsx(Callout, { tone: 'red', icon: Ico('warning'), children: 'The user will not be asked. This is a high-risk action and is written to the audit log.' }),
         error ? jsx(ErrorBox, { error }) : null,
       ],
     }),
@@ -4731,7 +4739,7 @@ function DeviceRun({ name }) {
       jsx('div', { className: 'hs-toolbar', children: jsx(SearchBox, { value: text, onChange: setText, placeholder: 'Search catalog entries…' }) }),
       jsx(Pending, {
         q: catalog,
-        label: 'Loading the catalog…',
+        label: 'Reading the catalog…',
         children: () =>
           entries.length
             ? jsx('div', {
@@ -4808,7 +4816,7 @@ function DeviceDrawer({ name }) {
             ],
           }),
           jsx(AskButton, { prompt: `Use the endpoint-triage skill on ${name}: check health, disk, pending reboot, patches, Defender and recent errors with the hermes-sysadmin read tools and catalog, then tell me what is wrong and what you would do. ${READ_ONLY_ASK}`, label: 'Ask Hermes to triage' }),
-          jsx('button', { type: 'button', className: 'hs-ghost', title: 'Close', onClick: closeDevice, children: '✕' }),
+          jsx('button', { type: 'button', className: 'hs-ghost', title: 'Close', onClick: closeDevice, children: Ico('close') }),
         ],
       }),
       jsx('div', {
@@ -4976,7 +4984,7 @@ function CatalogResult({ entry, data }) {
   const errorStrip = errors.length
     ? jsx(Callout, {
         tone: 'red',
-        icon: '⚠',
+        icon: Ico('warning'),
         children: jsx('div', {
           children: errors.map((e, i) => jsx('div', { className: 'hs-small', children: e && typeof e === 'object' ? `${e.host || '?'}: ${e.message || JSON.stringify(e)}` : String(e) }, i)),
         }),
@@ -5062,7 +5070,7 @@ function CatalogTargetPicker({ mode, onMode, selected, onSelected, typed, onType
       mode === 'computers' ? jsx(TextInput, { value: typed, onChange: onTyped, placeholder: 'PC-01, PC-02', mono: true }) : null,
       mode === 'ou' ? jsx(TextInput, { value: ou, onChange: onOu, placeholder: 'OU=Workstations,DC=corp,DC=example', mono: true }) : null,
       mode === 'all' ? jsx('div', { className: 'hs-muted hs-small', children: 'Every enabled workstation in the domain.' }) : null,
-      writes ? jsx(Callout, { tone: 'yellow', icon: '⚠', children: CATALOG_ESCALATION }) : null,
+      writes ? jsx(Callout, { tone: 'yellow', icon: Ico('warning'), children: CATALOG_ESCALATION }) : null,
     ],
   });
 }
@@ -5149,7 +5157,7 @@ function CatalogRunner({ entry, computers, inDialog }) {
       needsInstall
         ? jsx(Callout, {
             tone: 'yellow',
-            icon: '⚠',
+            icon: Ico('warning'),
             children: jsxs('div', { className: 'hs-toolbar', children: [jsx('span', { children: `Requires module ${catalogModuleLabel(entry)}, which is not installed.` }), jsx(Btn, { small: true, kind: 'primary', onClick: install, children: 'Install' })] }),
           })
         : null,
@@ -5239,7 +5247,7 @@ function CatalogEmptyPanel() {
     children: jsxs('div', {
       className: 'hs-cat-empty',
       children: [
-        jsx('div', { className: 'hs-cat-empty-icon', 'aria-hidden': 'true', children: '⌘' }),
+        jsx('div', { className: 'hs-cat-empty-icon', 'aria-hidden': 'true', children: Ico('terminal') }),
         jsx('b', { children: 'Pick a script to run it' }),
         jsx('p', { className: 'hs-muted hs-small hs-p', children: 'Read-only entries run straight away. Anything that changes a machine shows a preview of exactly what will change, and runs only after you approve it.' }),
         jsx(AskButton, { prompt: 'Look through the hermes-sysadmin catalog (catalog_search) and suggest the five most useful read-only checks for my domain right now, then run them and summarize the findings. Do not run anything that changes a machine.', label: 'Ask Hermes which to run' }),
@@ -5275,7 +5283,7 @@ function CatalogTab() {
   const entry = items.find((e) => e.id === picked) || null;
   return jsx(Pending, {
     q: cat,
-    label: 'Loading catalog…',
+    label: 'Reading the catalog…',
     children: () =>
       jsxs('div', {
         className: 'hs-stack',
@@ -5355,7 +5363,7 @@ function CatalogRunDialog({ seq, entry, computers }) {
         ? jsx(ErrorBox, { error: cat.res.error })
         : cat.res
           ? jsx('div', { className: 'hs-muted', children: `Catalog entry ${entry} was not found.` })
-          : jsx(Spinner, { label: 'Loading catalog…' }),
+          : jsx(Spinner, { label: 'Reading the catalog…' }),
   });
 }
 
@@ -5476,7 +5484,7 @@ function BackupsTab() {
             children: [
               jsx('span', { className: 'hs-muted hs-small', children: `${num(s.ok)} OK · ${num(s.bad)} need attention · ${num(s.running)} running · ${num(s.not_configured)} not configured · stale after ${d.stale_days} days` }),
               jsx('span', { className: 'hs-grow' }),
-              jsx(Btn, { small: true, kind: 'ghost', onClick: () => api.refresh().then(() => invalidateAll()), children: '↻ Recheck' }),
+              jsx(Btn, { small: true, kind: 'ghost', onClick: () => api.refresh().then(() => invalidateAll()), children: [Ico('refresh', 'i'), 'Recheck'] }),
             ],
           }),
           jsxs('div', {

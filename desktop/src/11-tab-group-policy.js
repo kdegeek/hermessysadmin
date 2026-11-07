@@ -44,7 +44,7 @@ function GpoTab() {
           jsx(Chip, { on: unlinked, onClick: () => setUnlinked(!unlinked), children: 'Unlinked' }),
           jsx(Chip, { on: enforced, onClick: () => setEnforced(!enforced), children: 'Enforced' }),
           jsx('span', { className: 'hs-grow' }),
-          jsx(Btn, { onClick: () => openDialog(GpUpdateDialog, {}), children: '⟳ Run gpupdate…' }),
+          jsx(Btn, { onClick: () => openDialog(GpUpdateDialog, {}), children: [Ico('sync', 'i'), 'Run gpupdate…'] }),
           jsx(Btn, { kind: 'primary', onClick: () => openDialog(NewGpoDialog, {}), children: '+ New GPO' }),
         ],
       }),
@@ -210,7 +210,7 @@ function GpoDetail({ gpo }) {
         list(g.health).length
           ? jsx('div', {
               className: 'hs-sec',
-              children: jsx(Callout, { tone: 'yellow', icon: '⚠', children: jsx('div', { children: list(g.health).map((h) => jsx('div', { children: h }, h)) }) }),
+              children: jsx(Callout, { tone: 'yellow', icon: Ico('warning'), children: jsx('div', { children: list(g.health).map((h) => jsx('div', { children: h }, h)) }) }),
             })
           : null,
         jsxs('div', {
@@ -402,7 +402,7 @@ function GpUpdateResultDialog({ seq, data }) {
             : jsx(EmptyRow, { cols: 3, text: 'No computers were targeted' }),
         }),
         errors.length
-          ? jsx(Callout, { tone: 'red', icon: '⚠', children: jsx('div', { children: errors.map((e, i) => jsx('div', { children: `${shortHost(e.host)}: ${e.message}` }, i)) }) })
+          ? jsx(Callout, { tone: 'red', icon: Ico('warning'), children: jsx('div', { children: errors.map((e, i) => jsx('div', { children: `${shortHost(e.host)}: ${e.message}` }, i)) }) })
           : null,
       ],
     }),

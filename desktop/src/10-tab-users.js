@@ -85,13 +85,13 @@ function UsersTab() {
           jsx(Chip, { on: f.expiring, onClick: () => set({ expiring: !f.expiring }), children: 'Expiring ≤7 d' }),
           jsx(Chip, { on: f.privileged, onClick: () => set({ privileged: !f.privileged }), children: 'Privileged' }),
           jsx('span', { className: 'hs-grow' }),
-          jsx(Btn, { onClick: () => openDialog(RecycleBinDialog, {}), children: '🗑 Recycle Bin' }),
+          jsx(Btn, { onClick: () => openDialog(RecycleBinDialog, {}), children: [Ico('trash', 'i'), 'Recycle Bin'] }),
           jsx(Btn, { kind: 'primary', onClick: () => openDialog(NewUserDialog, {}), children: '+ New user' }),
         ],
       }),
       jsx(Pending, {
         q,
-        label: 'Loading users…',
+        label: 'Reading users…',
         children: (d) => {
           const items = list(d.items);
           const total = typeof d.total === 'number' ? d.total : items.length;
@@ -140,7 +140,7 @@ function LockoutCallout({ u, lock, sessions }) {
   else source = 'No lockout events found on the PDC emulator in that time range.';
   return jsx(Callout, {
     tone: 'red',
-    icon: '🔒',
+    icon: Ico('lock'),
     children: jsxs('div', {
       children: [
         jsx('b', { children: 'Locked out' }),
@@ -219,11 +219,11 @@ function UserDrawer({ sam }) {
         children: [
           jsx('div', { className: 'hs-avatar', children: initials(name) }),
           jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [jsx('b', { children: name }), jsx('div', { className: 'hs-muted hs-mono', children: (u && u.upn) || sam })] }),
-          jsx('button', { type: 'button', className: 'hs-ghost', title: 'Close', onClick: () => $drawer.set(null), children: '✕' }),
+          jsx('button', { type: 'button', className: 'hs-ghost', title: 'Close', onClick: () => $drawer.set(null), children: Ico('close') }),
         ],
       }),
       !u
-        ? jsx('div', { className: 'hs-sec', children: jsx(Pending, { q, label: 'Loading user…', children: () => null }) })
+        ? jsx('div', { className: 'hs-sec', children: jsx(Pending, { q, label: 'Reading the account…', children: () => null }) })
         : jsxs('div', {
             children: [
               isProtected
@@ -231,7 +231,7 @@ function UserDrawer({ sam }) {
                     className: 'hs-sec',
                     children: jsx(Callout, {
                       tone: 'red',
-                      icon: '🛡',
+                      icon: Ico('shield'),
                       children: jsxs('div', { children: [jsx('b', { children: 'Protected object.' }), ' All write actions are blocked by policy for this account.'] }),
                     }),
                   })
@@ -282,7 +282,7 @@ function UserDrawer({ sam }) {
                                         confirmLabel: 'Remove',
                                         doneMessage: `${sam} removed from ${g}`,
                                       }),
-                                    children: '✕',
+                                    children: Ico('close'),
                                   }),
                             ],
                           }, g),

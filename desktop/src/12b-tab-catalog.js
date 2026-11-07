@@ -152,7 +152,7 @@ function CatalogResult({ entry, data }) {
   const errorStrip = errors.length
     ? jsx(Callout, {
         tone: 'red',
-        icon: '⚠',
+        icon: Ico('warning'),
         children: jsx('div', {
           children: errors.map((e, i) => jsx('div', { className: 'hs-small', children: e && typeof e === 'object' ? `${e.host || '?'}: ${e.message || JSON.stringify(e)}` : String(e) }, i)),
         }),
@@ -238,7 +238,7 @@ function CatalogTargetPicker({ mode, onMode, selected, onSelected, typed, onType
       mode === 'computers' ? jsx(TextInput, { value: typed, onChange: onTyped, placeholder: 'PC-01, PC-02', mono: true }) : null,
       mode === 'ou' ? jsx(TextInput, { value: ou, onChange: onOu, placeholder: 'OU=Workstations,DC=corp,DC=example', mono: true }) : null,
       mode === 'all' ? jsx('div', { className: 'hs-muted hs-small', children: 'Every enabled workstation in the domain.' }) : null,
-      writes ? jsx(Callout, { tone: 'yellow', icon: '⚠', children: CATALOG_ESCALATION }) : null,
+      writes ? jsx(Callout, { tone: 'yellow', icon: Ico('warning'), children: CATALOG_ESCALATION }) : null,
     ],
   });
 }
@@ -325,7 +325,7 @@ function CatalogRunner({ entry, computers, inDialog }) {
       needsInstall
         ? jsx(Callout, {
             tone: 'yellow',
-            icon: '⚠',
+            icon: Ico('warning'),
             children: jsxs('div', { className: 'hs-toolbar', children: [jsx('span', { children: `Requires module ${catalogModuleLabel(entry)}, which is not installed.` }), jsx(Btn, { small: true, kind: 'primary', onClick: install, children: 'Install' })] }),
           })
         : null,
@@ -415,7 +415,7 @@ function CatalogEmptyPanel() {
     children: jsxs('div', {
       className: 'hs-cat-empty',
       children: [
-        jsx('div', { className: 'hs-cat-empty-icon', 'aria-hidden': 'true', children: '⌘' }),
+        jsx('div', { className: 'hs-cat-empty-icon', 'aria-hidden': 'true', children: Ico('terminal') }),
         jsx('b', { children: 'Pick a script to run it' }),
         jsx('p', { className: 'hs-muted hs-small hs-p', children: 'Read-only entries run straight away. Anything that changes a machine shows a preview of exactly what will change, and runs only after you approve it.' }),
         jsx(AskButton, { prompt: 'Look through the hermes-sysadmin catalog (catalog_search) and suggest the five most useful read-only checks for my domain right now, then run them and summarize the findings. Do not run anything that changes a machine.', label: 'Ask Hermes which to run' }),
@@ -451,7 +451,7 @@ function CatalogTab() {
   const entry = items.find((e) => e.id === picked) || null;
   return jsx(Pending, {
     q: cat,
-    label: 'Loading catalog…',
+    label: 'Reading the catalog…',
     children: () =>
       jsxs('div', {
         className: 'hs-stack',
@@ -531,7 +531,7 @@ function CatalogRunDialog({ seq, entry, computers }) {
         ? jsx(ErrorBox, { error: cat.res.error })
         : cat.res
           ? jsx('div', { className: 'hs-muted', children: `Catalog entry ${entry} was not found.` })
-          : jsx(Spinner, { label: 'Loading catalog…' }),
+          : jsx(Spinner, { label: 'Reading the catalog…' }),
   });
 }
 

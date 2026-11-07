@@ -40,7 +40,7 @@ function UnreachableCallout({ errors, what }) {
   if (!errs.length) return null;
   return jsx(Callout, {
     tone: 'yellow',
-    icon: '⚠',
+    icon: Ico('warning'),
     children: jsxs('div', {
       className: 'hs-row',
       children: [
@@ -222,7 +222,7 @@ function HostsView() {
                                               onDone: warnDone,
                                               doneMessage: `${m} removed from Remote Desktop Users on ${shortHost(h.host)}`,
                                             }),
-                                          children: '✕',
+                                          children: Ico('close'),
                                         }),
                                       ],
                                     }, m),

@@ -12,7 +12,7 @@ function SectionErrors({ errors }) {
     children: entries.map(([key, e]) =>
       jsx(Callout, {
         tone: 'yellow',
-        icon: '⚠',
+        icon: Ico('warning'),
         children: jsxs('div', {
           children: [jsx('b', { children: `${SECTION_LABEL[key] || key}: ` }), `${e.type} · ${e.message}`, e.hint ? jsx('div', { className: 'hs-muted hs-small', children: e.hint }) : null],
         }),
@@ -274,7 +274,7 @@ function TrendsCard({ history }) {
     sub: 'last 30 days of inventory runs',
     children: jsx(Pending, {
       q: history,
-      label: 'Loading history…',
+      label: 'Reading change history…',
       children: (d) => {
         const rows = list(d.items)
           .map((r) => r.summary || {})
@@ -363,7 +363,7 @@ function MonitoringCard({ monitoring, cardRef }) {
         : null,
       children: jsx(Pending, {
         q: monitoring,
-        label: 'Loading monitoring status…',
+        label: 'Checking the monitoring job…',
         children: () =>
           jsxs('div', {
             className: 'hs-stack',
@@ -377,7 +377,7 @@ function MonitoringCard({ monitoring, cardRef }) {
                   jsx('span', { className: 'hs-muted hs-small', children: `Last run: ${m.last_run ? ago(m.last_run) : 'never'}` }),
                 ],
               }),
-              m.error ? jsx(Callout, { tone: 'yellow', icon: '⚠', children: m.error }) : null,
+              m.error ? jsx(Callout, { tone: 'yellow', icon: Ico('warning'), children: m.error }) : null,
               jsx(Table, {
                 head: ['Rule', 'Host', 'Message', 'First seen'],
                 children: alerts.length
@@ -486,7 +486,7 @@ function OverviewTab() {
   const alertsRef = useRef(null);
   return jsx(Pending, {
     q: ov,
-    label: 'Loading the domain overview…',
+    label: 'Reading the domain…',
     children: (d) =>
       jsxs('div', {
         className: 'hs-stack',

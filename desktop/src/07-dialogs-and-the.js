@@ -239,7 +239,7 @@ function BlockedDialog({ seq, o, dec, opts }) {
       children: [
         jsx(Callout, {
           tone: 'red',
-          icon: '🛡',
+          icon: Ico('shield'),
           children: jsxs('div', { children: [jsx('b', { children: 'Blocked. ' }), dec.reason] }),
         }),
         dec.target ? jsxs('div', { className: 'hs-muted hs-small', children: ['Target: ', jsx('span', { className: 'hs-mono', children: dec.target })] }) : null,
