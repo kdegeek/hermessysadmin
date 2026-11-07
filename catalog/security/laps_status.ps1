@@ -26,9 +26,13 @@ Invoke-Op {
         foreach ($s in $sources) {
             $k = Get-ItemProperty -LiteralPath $s.path -ErrorAction SilentlyContinue
             if (-not $k) { continue }
-            $any = $true
-            if ($null -ne $k.BackupDirectory) { $applied = $s.name; $dir = [int]$k.BackupDirectory; break }
-            if (-not $applied) { $applied = $s.name }
+            # The first root holding any value is the active policy; settings never merge across roots
+            # and a missing BackupDirectory there means 0 (disabled).
+            $vals = @($k.PSObject.Properties | Where-Object { $_.Name -notlike 'PS*' })
+            if ($vals.Count -eq 0) { continue }
+            $any = $true; $applied = $s.name
+            $dir = $(if ($null -ne $k.BackupDirectory) { [int]$k.BackupDirectory } else { 0 })
+            break
         }
         $dirName = switch ($dir) { 0 { 'Disabled' } 1 { 'Entra ID' } 2 { 'Active Directory' } default { 'not set' } }
         $win = 'not configured'

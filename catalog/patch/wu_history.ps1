@@ -29,7 +29,7 @@ Invoke-Op {
             }
             throw
         }
-        $results = @{ 1 = 'in_progress'; 2 = 'succeeded'; 3 = 'succeeded_with_errors'; 4 = 'failed'; 5 = 'aborted' }
+        $results = @{ 0 = 'not_started'; 1 = 'in_progress'; 2 = 'succeeded'; 3 = 'succeeded_with_errors'; 4 = 'failed'; 5 = 'aborted' }
         $ops = @{ 1 = 'install'; 2 = 'uninstall' }
         foreach ($h in $entries) {
             $t = "$($h.Title)"
@@ -37,7 +37,7 @@ Invoke-Op {
             if ($t -match '(KB\d{6,8})') { $kb = $Matches[1] }
             $rc = [int]$h.ResultCode; $op = [int]$h.Operation
             [pscustomobject]@{
-                date = $(if ($h.Date) { ([datetime]$h.Date).ToUniversalTime().ToString('o') } else { $null })
+                date = $(if ($h.Date) { [datetime]::SpecifyKind([datetime]$h.Date, 'Utc').ToString('o') } else { $null })
                 kb = $kb
                 title = $t.Substring(0, [math]::Min(300, $t.Length))
                 result = $(if ($results.ContainsKey($rc)) { $results[$rc] } else { "$rc" })

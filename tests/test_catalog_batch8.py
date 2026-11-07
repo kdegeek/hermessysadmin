@@ -116,3 +116,10 @@ def test_laps_checks_csp_then_gpo_then_local_and_reports_source():
 def test_rdp_nla_policy_override_and_source():
     code = body("security.rdp_nla")
     assert "Policies\\Microsoft\\Windows NT\\Terminal Services" in code and "'policy'" in code and "'local'" in code
+
+
+def test_laps_first_root_with_any_value_wins_and_missing_backup_means_disabled():
+    code = body("security.laps_status")
+    assert "-notlike 'PS*'" in code and "else { 0 }" in code
+    loop = code[code.index("foreach ($s in $sources)"):code.index("$dirName")]
+    assert loop.rstrip().endswith("break\n        }") or "break" in loop.split("$applied = $s.name")[1]
