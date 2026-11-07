@@ -99,6 +99,14 @@ def main(argv):
     _load_hermes_env()
     out_path = argv[argv.index("--out") + 1] if "--out" in argv else None
     base = load_settings()
+    # Optional overrides for testing each transport without editing config.yaml.
+    for flag, field, choices in (("--transport", "transport", ("local", "winrm")), ("--run-as", "run_as", ("account", "hermes_user"))):
+        if flag in argv:
+            value = argv[argv.index(flag) + 1]
+            if value not in choices:
+                print(f"{flag} must be one of {', '.join(choices)}")
+                return 2
+            base = replace(base, **{field: value})
     if not base.configured:
         print(f"Plugin is not configured for transport={base.transport} run_as={base.run_as} "
               "(winrm needs host/username/password; local+account needs username/password).")
