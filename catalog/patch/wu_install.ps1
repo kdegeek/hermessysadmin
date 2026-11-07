@@ -2,7 +2,7 @@
 id: patch.wu_install
 title: Install security and critical updates
 category: Patching
-description: Starts a one-shot SYSTEM scheduled task on each computer that downloads and installs security and/or critical updates with the Windows Update Agent. The preview lists the updates found. Progress is logged to C:\ProgramData\HermesSysadmin\WUInstall.log on each computer. A run is skipped on computers where an install is already running.
+description: Starts a one-shot SYSTEM scheduled task on each computer that downloads and installs security and/or critical updates with the Windows Update Agent. The preview lists the updates found. Progress is logged to C:\Windows\Logs\HermesSysadmin\WUInstall.log on each computer. A run is skipped on computers where an install is already running.
 module: inbox:ScheduledTasks
 target: endpoint
 tier: H
@@ -26,12 +26,24 @@ Invoke-Op {
 
     $bodyTemplate = @'
 $ErrorActionPreference = 'Stop'
-$dir = Join-Path $env:ProgramData 'HermesSysadmin'
+$dir = Join-Path $env:windir 'Logs\HermesSysadmin'
 $log = Join-Path $dir 'WUInstall.log'
-function Write-Log($m) { Add-Content -LiteralPath $log -Value ('{0} {1}' -f (Get-Date).ToString('o'), $m) }
+$safe = $false
+function Write-Log($m) { if ($safe) { Add-Content -LiteralPath $log -Value ('{0} {1}' -f (Get-Date).ToString('o'), $m) } }
+function Test-Reparse($p) { ((Get-Item -LiteralPath $p -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 }
+function Test-TrustedOwner($p) {
+    $sid = (Get-Acl -LiteralPath $p).GetOwner([Security.Principal.SecurityIdentifier]).Value
+    ($sid -eq 'S-1-5-32-544') -or ($sid -eq 'S-1-5-18')
+}
 try {
     if (-not (Test-Path -LiteralPath $dir)) { [void](New-Item -ItemType Directory -Path $dir -Force) }
-    if ((Test-Path -LiteralPath $log) -and (Get-Item -LiteralPath $log).Length -gt 1MB) { Remove-Item -LiteralPath $log -Force }
+    if (Test-Reparse $dir) { throw 'log folder is a reparse point' }
+    if (-not (Test-TrustedOwner $dir)) { throw 'log folder is not owned by Administrators or SYSTEM' }
+    if (Test-Path -LiteralPath $log) {
+        if (Test-Reparse $log) { throw 'log file is a reparse point' }
+        if ((Get-Item -LiteralPath $log).Length -gt 1MB) { Remove-Item -LiteralPath $log -Force }
+    }
+    $safe = $true
     Write-Log 'start'
     $session = New-Object -ComObject Microsoft.Update.Session
     $found = $session.CreateUpdateSearcher().Search('IsInstalled=0 and IsHidden=0')
@@ -109,7 +121,7 @@ try { Unregister-ScheduledTask -TaskName 'HermesSysadmin-WUInstall' -Confirm:$fa
         param($encoded)
         $ErrorActionPreference = 'Stop'
         $name = 'HermesSysadmin-WUInstall'
-        $log = Join-Path $env:ProgramData 'HermesSysadmin\WUInstall.log'
+        $log = Join-Path $env:windir 'Logs\HermesSysadmin\WUInstall.log'
         $existing = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
         if ($existing) {
             if ("$($existing.State)" -eq 'Running') {

@@ -69,7 +69,7 @@ def test_wu_install_uses_constant_encoded_task_body():
     code = body("patch.wu_install")
     for needle in ("Register-ScheduledTask", "New-ScheduledTaskAction -Execute 'powershell.exe'",
                    "-NoProfile -NonInteractive -EncodedCommand", "New-ScheduledTaskPrincipal -UserId 'SYSTEM' -RunLevel Highest",
-                   "Start-ScheduledTask", "HermesSysadmin-WUInstall", "$env:ProgramData", "WUInstall.log", "-AllowStartIfOnBatteries -DontStopIfGoingOnBatteries",
+                   "Start-ScheduledTask", "HermesSysadmin-WUInstall", "$env:windir 'Logs\\HermesSysadmin'", "WUInstall.log", "-AllowStartIfOnBatteries -DontStopIfGoingOnBatteries",
                    "IsDownloaded", "CanRequestUserInput", "Unregister-ScheduledTask -TaskName 'HermesSysadmin-WUInstall' -Confirm:$false", "an install is already running",
                    "0FA1201D-4330-4FA8-8AE9-B877473B6441", "E6CF1350-C01B-414D-A61F-263D14D133B4",
                    "[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($body))"):
@@ -78,6 +78,21 @@ def test_wu_install_uses_constant_encoded_task_body():
     assert "$bodyTemplate = @'" in code
     # Category is validated against the fixed set before use.
     assert "-notin @('security', 'critical', 'both')" in code
+
+
+def test_wu_install_log_is_under_windir_and_guarded_against_reparse_points():
+    code = body("patch.wu_install")
+    assert "ProgramData" not in code
+    assert code.count("Join-Path $env:windir 'Logs\\HermesSysadmin\\WUInstall.log'") == 1  # fan-out reader
+    tmpl = re.search(r"\$bodyTemplate = @'\n(.*?)\n'@", code, re.S).group(1)
+    assert "Join-Path $env:windir 'Logs\\HermesSysadmin'" in tmpl
+    for needle in ("ReparsePoint", "log folder is a reparse point", "log file is a reparse point", "S-1-5-32-544", "S-1-5-18",
+                   "GetOwner([Security.Principal.SecurityIdentifier])", "$safe = $true"):
+        assert needle in tmpl, needle
+    # Every check runs before the first log write, and Write-Log is inert until the checks pass.
+    assert tmpl.index("$safe = $true") < tmpl.index("Write-Log 'start'")
+    assert "if ($safe) { Add-Content" in tmpl
+    assert tmpl.index("Test-TrustedOwner $dir") < tmpl.index("$safe = $true")
 
 
 def test_pending_updates_reports_access_denied_per_host():
