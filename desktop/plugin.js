@@ -231,6 +231,17 @@ textarea.hs-input{min-height:64px;resize:vertical}
 .hs-ask.primary:hover{background:color-mix(in srgb,var(--ui-accent) 88%,var(--ui-text-primary))}
 .hs-ask-spark{font-size:11px}
 .hs-ask:focus-visible,.hs-attn-main:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
+.hs-catsum{display:flex;align-items:center;gap:22px;flex-wrap:wrap;padding:12px 16px;border-radius:10px;border:1px solid var(--ui-stroke-tertiary);background:radial-gradient(120% 160% at 0% 0%,color-mix(in srgb,var(--ui-accent) 9%,transparent),transparent 55%),var(--ui-bg-card);animation:hs-in .35s ease-out both}
+.hs-catstat{display:grid;line-height:1.15}
+.hs-catstat b{font-size:20px;font-weight:650;font-variant-numeric:tabular-nums}
+.hs-catstat span{font-size:11.5px;color:var(--ui-text-tertiary)}
+.hs-catsum-note{max-width:340px}
+.hs-cat-entry{max-width:0;width:100%}
+.hs-cat-desc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hs-cat-panel{position:sticky;top:0}
+.hs-card-pad{padding:14px}
+.hs-cat-empty{display:grid;justify-items:center;text-align:center;gap:8px;padding:34px 24px}
+.hs-cat-empty-icon{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:20px;color:var(--ui-accent);background:color-mix(in srgb,var(--ui-accent) 12%,transparent)}
 `;
 // ============================================================================
 // §3 API CLIENT AND HOST HELPERS
@@ -1759,7 +1770,7 @@ function OverviewKpis({ data, fleet, monitoring, alertsRef }) {
       jsx(StatTile, {
         label: 'Patch compliance',
         value: pct === null ? (fleet.res ? '—' : '…') : `${pct}%`,
-        sub: 'patched within 35 days',
+        sub: 'patched ≤ 35 days',
         tone: pct === null ? null : pct < 70 ? 'danger' : pct < 90 ? 'warning' : null,
         onClick: fleetGo('patch_old'),
       }),
@@ -1778,7 +1789,7 @@ function OverviewKpis({ data, fleet, monitoring, alertsRef }) {
         onClick: () => goTab('backups'),
       }),
       jsx(StatTile, {
-        label: 'GPOs needing attention',
+        label: 'GPO issues',
         value: num(k.gpos_needing_attention),
         sub: `of ${num(k.gpos)}`,
         tone: k.gpos_needing_attention ? 'warning' : null,
@@ -2424,7 +2435,7 @@ function AttentionCard({ data, fleet, monitoring, alertsRef }) {
       jsx('ol', {
         className: 'hs-attn',
         children: items.length
-          ? items.slice(0, 7).map((i) =>
+          ? items.slice(0, 10).map((i) =>
               jsxs('li', {
                 className: `hs-attn-row ${i.severity}`,
                 children: [
@@ -5113,6 +5124,7 @@ function CatalogEntryDetail({ entry }) {
         ],
       }),
       entry.description ? jsx('p', { className: 'hs-p', children: entry.description }) : null,
+      jsx('div', { className: 'hs-actions', children: jsx(AskButton, { prompt: catalogAskPrompt(entry), label: 'Ask Hermes to run this' }) }),
       jsx(KV, {
         rows: [
           ['Id', jsxs('span', { className: 'hs-nowrap', children: [jsx('span', { className: 'hs-mono', children: entry.id }), ' ', jsx(Btn, { small: true, kind: 'ghost', onClick: () => catalogCopy(entry.id, 'Id copied'), children: 'Copy' })] })],
@@ -5121,6 +5133,54 @@ function CatalogEntryDetail({ entry }) {
         ],
       }),
     ],
+  });
+}
+
+function catalogAskPrompt(entry) {
+  const where = entry.target === 'dc' ? 'against the domain' : 'on the endpoints I name (ask me which if unclear)';
+  const safety = entry.tier === 'R'
+    ? 'It is read-only, so run it and summarize what it found, worst first.'
+    : 'It changes things: show me the preview of exactly what will change and wait for my approval before running it.';
+  return `Use the hermes-sysadmin catalog entry ${entry.id} ("${entry.title}") ${where}. ${safety}`;
+}
+
+const CATALOG_SAFETY = {
+  R: { label: 'read-only', tone: 'green' },
+  W: { label: 'preview + approve', tone: 'yellow' },
+  H: { label: 'preview + approve', tone: 'red' },
+  P: { label: 'preview + approve', tone: 'red' },
+};
+
+function CatalogSummary({ items }) {
+  const reads = items.filter((e) => e.tier === 'R').length;
+  const writes = items.length - reads;
+  const endpoints = items.filter((e) => e.target !== 'dc').length;
+  const stat = (v, l) => jsxs('div', { className: 'hs-catstat', children: [jsx('b', { children: String(v) }), jsx('span', { children: l })] });
+  return jsxs('div', {
+    className: 'hs-catsum',
+    children: [
+      stat(items.length, 'vetted scripts'),
+      stat(reads, 'read-only'),
+      stat(writes, 'changes · preview first'),
+      stat(endpoints, 'fan out to endpoints'),
+      jsx('div', { className: 'hs-grow' }),
+      jsx('div', { className: 'hs-muted hs-small hs-catsum-note', children: 'Same scripts for you and the agent: typed parameters, policy gates, every run audited.' }),
+    ],
+  });
+}
+
+function CatalogEmptyPanel() {
+  return jsx(Card, {
+    className: 'hs-cat-panel',
+    children: jsxs('div', {
+      className: 'hs-cat-empty',
+      children: [
+        jsx('div', { className: 'hs-cat-empty-icon', 'aria-hidden': 'true', children: '⌘' }),
+        jsx('b', { children: 'Pick a script to run it' }),
+        jsx('p', { className: 'hs-muted hs-small hs-p', children: 'Read-only entries run straight away. Anything that changes a machine shows a preview of exactly what will change, and runs only after you approve it.' }),
+        jsx(AskButton, { prompt: 'Look through the hermes-sysadmin catalog (catalog_search) and suggest the five most useful read-only checks for my domain right now, then run them and summarize the findings. Do not run anything that changes a machine.', label: 'Ask Hermes which to run' }),
+      ],
+    }),
   });
 }
 
@@ -5154,6 +5214,10 @@ function CatalogTab() {
     label: 'Loading catalog…',
     children: () =>
       jsxs('div', {
+        className: 'hs-stack',
+        children: [
+      jsx(CatalogSummary, { items }),
+      jsxs('div', {
         className: 'hs-grid2',
         children: [
           jsxs('div', {
@@ -5168,7 +5232,7 @@ function CatalogTab() {
               jsx('div', { className: 'hs-toolbar', children: jsx(SearchBox, { value: query, onChange: setQuery, placeholder: 'Search id, title, tags, description' }) }),
               preset.length ? jsx(Callout, { tone: 'accent', children: `Selected devices: ${preset.join(', ')}` }) : null,
               jsx(Table, {
-                head: ['Entry', 'Tier', 'Target', 'Module'],
+                head: ['Entry', 'Tier', 'Target', 'Safety'],
                 children: rows.length
                   ? rows.map((e) =>
                       jsxs('tr', {
@@ -5182,10 +5246,10 @@ function CatalogTab() {
                           }
                         },
                         children: [
-                          jsx('td', { children: jsx('b', { children: e.title }) }),
+                          jsxs('td', { className: 'hs-cat-entry', children: [jsx('b', { children: e.title }), e.description ? jsx('div', { className: 'hs-muted hs-small hs-cat-desc', title: e.description, children: e.description }) : null] }),
                           jsx('td', { children: jsx(TierTag, { tier: e.tier }) }),
                           jsx('td', { children: jsx(Badge, { children: e.target === 'dc' ? 'DC' : 'Endpoints' }) }),
-                          jsx('td', { children: jsx(ModuleBadge, { e }) }),
+                          jsx('td', { children: e.module && String(e.module).startsWith('gallery:') ? jsx(ModuleBadge, { e }) : jsx(Badge, { tone: (CATALOG_SAFETY[e.tier] || CATALOG_SAFETY.W).tone, children: (CATALOG_SAFETY[e.tier] || CATALOG_SAFETY.W).label }) }),
                         ],
                       }, e.id),
                     )
@@ -5195,12 +5259,15 @@ function CatalogTab() {
           }),
           entry
             ? jsx(Card, {
+                className: 'hs-cat-panel',
                 children: jsxs('div', {
-                  className: 'hs-stack',
+                  className: 'hs-stack hs-card-pad',
                   children: [jsx(CatalogEntryDetail, { entry }), jsx(CatalogRunner, { entry, computers: preset }, entry.id)],
                 }),
               })
-            : jsx(Card, { children: jsx('div', { className: 'hs-muted', children: 'Select a catalog entry to see its parameters and run it.' }) }),
+            : jsx(CatalogEmptyPanel, {}),
+        ],
+      }),
         ],
       }),
   });

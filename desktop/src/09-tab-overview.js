@@ -58,7 +58,7 @@ function OverviewKpis({ data, fleet, monitoring, alertsRef }) {
       jsx(StatTile, {
         label: 'Patch compliance',
         value: pct === null ? (fleet.res ? '—' : '…') : `${pct}%`,
-        sub: 'patched within 35 days',
+        sub: 'patched ≤ 35 days',
         tone: pct === null ? null : pct < 70 ? 'danger' : pct < 90 ? 'warning' : null,
         onClick: fleetGo('patch_old'),
       }),
@@ -77,7 +77,7 @@ function OverviewKpis({ data, fleet, monitoring, alertsRef }) {
         onClick: () => goTab('backups'),
       }),
       jsx(StatTile, {
-        label: 'GPOs needing attention',
+        label: 'GPO issues',
         value: num(k.gpos_needing_attention),
         sub: `of ${num(k.gpos)}`,
         tone: k.gpos_needing_attention ? 'warning' : null,

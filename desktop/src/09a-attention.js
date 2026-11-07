@@ -217,7 +217,7 @@ function AttentionCard({ data, fleet, monitoring, alertsRef }) {
       jsx('ol', {
         className: 'hs-attn',
         children: items.length
-          ? items.slice(0, 7).map((i) =>
+          ? items.slice(0, 10).map((i) =>
               jsxs('li', {
                 className: `hs-attn-row ${i.severity}`,
                 children: [
