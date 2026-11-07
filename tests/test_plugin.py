@@ -73,8 +73,9 @@ from sysadmin.tools import EMOJI
 SKILL_NAMES = {
     "onboard-user", "offboard-user", "lockout-triage", "gpo-change",
     "domain-health-check", "access-review", "backup-recovery-guide",
+    "fleet-health-check", "endpoint-triage", "remote-assist",
 }
-TOOL_WORD = re.compile(r"\b(?:ad|gpo|rdp|backup|sysadmin)_[a-z_]+\b")
+TOOL_WORD = re.compile(r"(?<![.\w])(?:ad|gpo|rdp|backup|sysadmin|fleet|remote|catalog|monitoring)_[a-z_]+\b")
 
 
 def _frontmatter(text):
@@ -103,10 +104,34 @@ def test_register_hooks_are_the_real_gate_functions():
 
 
 def test_skills_are_well_formed_and_only_name_real_tools():
-    known = set(OPS) | set(EMOJI)
+    known = set(OPS) | set(EMOJI) | set(manifest()["provides_tools"])
     for name in SKILL_NAMES:
         meta, body = _frontmatter((ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8"))
         assert meta["name"] == name
         assert 20 <= len(meta["description"]) <= 1024
         unknown = sorted(set(TOOL_WORD.findall(body)) - known)
         assert not unknown, f"{name} mentions unknown tools: {unknown}"
+
+
+CATALOG_ID = re.compile(r"`((?:ad|certs|dhcp|dns|endpoint|events|files|gpo|maint|network|patch|printers|remote|security|sessions)\.[a-z0-9_]+)`")
+
+
+def test_skills_only_name_real_catalog_entries():
+    from sysadmin import catalog
+
+    real = {op.meta["id"] for op in catalog.entries()}
+    for name in SKILL_NAMES:
+        body = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+        assert not set(CATALOG_ID.findall(body)) - real, f"{name} names unknown catalog ids"
+
+
+def test_catalog_helper_lines_in_existing_skills():
+    for name in ("domain-health-check", "lockout-triage", "access-review", "gpo-change"):
+        body = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+        assert "Catalog entries that help" in body, name
+
+
+def test_version_is_0_2_0():
+    import sysadmin
+
+    assert sysadmin.__version__ == "0.2.0" and manifest()["version"] == "0.2.0"

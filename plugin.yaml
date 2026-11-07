@@ -1,6 +1,6 @@
 name: hermes-sysadmin
 label: "Sysadmin · Active Directory"
-version: 0.1.0
+version: 0.2.0
 manifest_version: 2
 description: >-
   Manage an on-prem Active Directory domain over WinRM: users, groups and lockouts, Group Policy,

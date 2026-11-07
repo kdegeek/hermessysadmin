@@ -20,3 +20,5 @@ Write the report as:
 - **Info:** counts and FSMO placement.
 
 Give each item the evidence (the numbers) and one concrete next action. Offer the matching skill (for example `gpo-change` or `backup-recovery-guide`) where it helps. Do not change anything during a health check.
+
+Catalog entries that help (use `catalog_run`, all read-only): `ad.replication_summary`, `ad.fsmo_available`, `ad.krbtgt_age`, `ad.last_backup`, `gpo.unlinked`, `gpo.version_mismatch`.

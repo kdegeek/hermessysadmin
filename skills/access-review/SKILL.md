@@ -14,3 +14,5 @@ description: 'Review who has privileged and remote access in Active Directory: p
    - Turning NLA on uses `rdp_set_nla` with `required: true`.
 
    Every change needs approval and is logged; `sysadmin_audit_log` shows them afterwards.
+
+Catalog entries that help (use `catalog_run`, all read-only): `ad.spn_accounts`, `ad.never_expiring_passwords`, `ad.stale_users`, `security.local_admins`.

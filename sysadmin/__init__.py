@@ -5,4 +5,4 @@ without a Hermes install and imported by the dashboard backend by path.
 """
 
 PLUGIN_ID = "hermes-sysadmin"
-__version__ = "0.1.0"
+__version__ = "0.2.0"

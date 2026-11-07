@@ -8,6 +8,9 @@ secret the same way the plugin does). Safety:
 - a few write operations are exercised with Service.preview() only: the script runs
   with -Preview and returns its planned changes before touching anything.
 
+Each call is reported as OK, SKIP (a Gallery module or server role is not installed, or the
+script has no safe sample parameters) or ERR. The exit code is non-zero only when there is an ERR.
+
 Usage (on the Hermes host, from the hermes-agent directory):
     <hermes venv python> <plugin>/scripts/verify_live.py [--out report.json]
 """
@@ -23,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sysadmin import ops  # noqa: E402,F401
+from sysadmin import catalog, ops  # noqa: E402,F401
 from sysadmin.audit import AuditLog  # noqa: E402
 from sysadmin.config import load_settings  # noqa: E402
 from sysadmin.registry import OPS  # noqa: E402
@@ -48,6 +51,39 @@ def shape(data):
     if isinstance(data, list):
         return f"[{len(data)}]"
     return str(data)[:80]
+
+
+def catalog_sample_params(op, ctx):
+    """Safe sample parameters for a read catalog entry, or None when a required one has no sample.
+
+    ctx holds dc, domain and ws (the first online workstation, or None). Entries that need
+    a parameter we cannot fill safely are skipped by the caller as NoSample, never guessed.
+    """
+    meta_id = op.meta["id"]
+    base = {"computers": [ctx["ws"]]} if op.meta["target"] == "endpoint" else {}
+    # files.* entries take a file server and a local path on it (Get-Acl runs there); the DC's SYSVOL always exists.
+    file_sample = {"Server": ctx["dc"], "Path": "C:\\Windows\\SYSVOL"}
+    samples = {
+        "network.test_port": {"Target": ctx["dc"], "Port": 389},
+        "events.search": {"Log": "System", "Id": 6005},
+        "dns.stale_records": {"Zone": ctx["domain"]},
+        "dhcp.leases_for_host": {"Name": (ctx["ws"] or "").split(".")[0]},
+        "files.ntfs_access": file_sample,
+        "files.ntfs_inheritance": file_sample,
+        "files.ntfs_orphaned_sids": file_sample,
+    }
+    extra = samples.get(meta_id, {})
+    params = {**base, **extra}
+    if any(v in (None, "") for v in params.values()):
+        return None
+    if any(p.required and p.name not in params for p in op.params):
+        return None
+    return params
+
+
+def first_online_workstation(inventory):
+    items = (inventory or {}).get("items") or []
+    return next((i.get("name") for i in items if i.get("online") and i.get("name")), None)
 
 
 def _load_hermes_env() -> None:
@@ -85,14 +121,22 @@ def main(argv):
         row = {"op": name, "mode": "preview" if preview else "read", "args": args or {}, "ok": res.get("ok"),
                "seconds": round(dt, 2)}
         if res.get("ok"):
+            row["status"] = "OK"
             row["shape"] = shape(res.get("data"))
         else:
             row["error"] = res.get("error")
+            # A Gallery module or server role that is not installed is an environment fact, not a failure.
+            row["status"] = "SKIP" if (row["error"] or {}).get("type") == "NotInstalled" else "ERR"
         results.append(row)
-        flag = "OK " if res.get("ok") else "ERR"
         detail = row.get("shape") if res.get("ok") else f"{row['error'].get('type')}: {row['error'].get('message')}"
+        flag = {"OK": "OK  ", "SKIP": "SKIP", "ERR": "ERR "}[row["status"]]
         print(f"{flag} {dt:6.1f}s {'P' if preview else 'R'} {name} {json.dumps(args or {})[:60]} -> {json.dumps(detail, default=str)[:400]}")
         return res.get("data") if res.get("ok") else None
+
+    def skip(name, args, reason):
+        results.append({"op": name, "mode": "read", "args": args, "ok": None, "status": "SKIP", "seconds": 0,
+                        "error": {"type": reason, "message": "not run"}})
+        print(f"SKIP    0.0s R {name} {json.dumps(args)[:60]} -> {reason}")
 
     run("ad_connection_test")
     dcs = run("ad_dc_list") or {}
@@ -126,17 +170,50 @@ def main(argv):
     run("backup_versions", {"host": dc})
     run("backup_jobs", {"host": dc})
     run("sysadmin_audit_log", {"limit": 5})
+
+    # v0.2: fleet, remote access, monitoring and the read-tier catalog.
+    inventory = run("fleet_inventory") or {}
+    ws = first_online_workstation(inventory)
+    run("fleet_history", {"days": 30})
+    run("catalog_module_status")
+    run("monitoring_status")
+    if ws:
+        run("fleet_device", {"computer": ws})
+        run("remote_sessions", {"computers": [ws]})
+        run("remote_access_check", {"computer": ws})
+    else:
+        for name in ("fleet_device", "remote_sessions", "remote_access_check"):
+            skip(name, {}, "NoOnlineWorkstation")
+    domain = dc.split(".", 1)[1] if "." in dc else (settings.host.split(".", 1)[1] if "." in settings.host else None)
+    ctx = {"dc": dc, "domain": domain, "ws": ws}
+    for entry in catalog.entries():
+        if entry.tier != "R":
+            continue
+        if entry.meta["target"] == "endpoint" and not ws:
+            skip(entry.name, {}, "NoOnlineWorkstation")
+            continue
+        params = catalog_sample_params(entry, ctx)
+        if params is None:
+            skip(entry.name, {}, "NoSample")
+            continue
+        run(entry.name, params)
+
     # Previews: each script returns its plan before any change.
     run("ad_group_add_member", {"group": "Domain Users", "members": [me]}, preview=True)
     run("rdp_set_enabled", {"hosts": [dc], "enabled": True}, preview=True)
     run("ad_user_unlock", {"identity": me}, preview=True)
+    if ws:
+        run("cat.remote.set_nla", {"computers": [ws], "Required": True}, preview=True)
+        run("cat.maint.gpupdate", {"computers": [ws]}, preview=True)
+        run("cat.remote.restart_computer", {"computers": [ws], "Reason": "verify"}, preview=True)
+    run("monitoring_enable", {"deliver": "origin"}, preview=True)
     transport.close()
 
-    ok = sum(1 for r in results if r["ok"])
-    print(f"\n{ok}/{len(results)} passed; sample user from list: {sample}")
+    counts = {k: sum(1 for r in results if r["status"] == k) for k in ("OK", "SKIP", "ERR")}
+    print(f"\n{counts['OK']} OK / {counts['SKIP']} SKIP / {counts['ERR']} ERR of {len(results)}; sample user from list: {sample}")
     if out_path:
         Path(out_path).write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
-    return 0 if ok == len(results) else 1
+    return 1 if counts["ERR"] else 0
 
 
 if __name__ == "__main__":

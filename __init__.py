@@ -17,6 +17,9 @@ SKILLS = (
     "domain-health-check",
     "access-review",
     "backup-recovery-guide",
+    "fleet-health-check",
+    "endpoint-triage",
+    "remote-assist",
 )
 
 

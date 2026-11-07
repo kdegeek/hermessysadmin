@@ -18,3 +18,5 @@ description: 'Find out why an Active Directory account keeps locking out, identi
    - Remove a mapped drive that uses old credentials.
 
    If lockouts continue after the fix, say that `ad_lockout_source` should be re-run.
+
+Catalog entries that help (use `catalog_run`, all read-only): `events.lockouts`, `events.failed_logons`, `sessions.logged_on`.
