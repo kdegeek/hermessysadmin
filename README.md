@@ -6,7 +6,7 @@
 hermes plugins install kdegeek/hermessysadmin --enable
 ```
 
-Or open `hermes://plugin/install?repo=kdegeek/hermessysadmin&enable=1` to install from Hermes Desktop. Screenshots are from a live domain; names, hosts and the domain are blurred.
+Or open `hermes://plugin/install?repo=kdegeek/hermessysadmin&enable=1` to install from Hermes Desktop. Screenshots are from a live domain; the company name, user names, web addresses and public IPs are blurred.
 
 Manage an on-prem Windows and Active Directory environment from Hermes Agent, with local PowerShell on a domain-joined Windows machine or over WinRM through a jump host. It covers users, groups and lockouts, Group Policy, RDP sessions and access, Windows Server Backup, and (new in 0.2) a desktop fleet with a catalog of 231 vetted PowerShell tasks, remote-access helpers and scheduled monitoring. Every change goes through typed tools with tiered approvals, protected objects and a local audit log. The plugin also ships workflow skills, `/ad` commands and a Hermes Desktop dashboard.
 
