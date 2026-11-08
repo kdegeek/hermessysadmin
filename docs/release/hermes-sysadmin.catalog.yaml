@@ -1,0 +1,21 @@
+# Entry for the Hermes plugin catalog (hermes-agent/plugin-catalog/hermes-sysadmin.yaml).
+# Replace __SHA__ with the release commit before opening the catalog PR.
+name: hermes-sysadmin
+title: Hermes Sysadmin · Active Directory
+repo: https://github.com/kdegeek/hermessysadmin
+sha: __SHA__
+description: "Windows and Active Directory RMM for Hermes Agent and Hermes Desktop: users, groups and lockouts, Group Policy, RDP, Windows Server Backup, a desktop fleet and 231 vetted PowerShell scripts, all behind tiered approvals with a preview before every change, protected objects and a local audit log. Disclosure — runs PowerShell on the Hermes machine (local transport on a domain-joined Windows host, optionally as a configured account via runas /netonly) or over WinRM to one configured jump host, and from there talks to your domain controllers and the computers you target (AD, SMB, RPC, WinRM). Reads the account password only through Hermes secret scope. While the dashboard is open a background collector in the gateway refreshes read-only snapshots; scheduled monitoring adds a Hermes cron job only when you turn it on. Writes a local SQLite audit log with passwords redacted. No telemetry and no other network calls; the raw PowerShell tool is off by default."
+maintainer: kdegeek
+tier: community
+category: desktop
+requires_hermes: ">=0.22.2"
+docs_url: https://github.com/kdegeek/hermessysadmin#readme
+version: "0.2.0"
+image: https://raw.githubusercontent.com/kdegeek/hermessysadmin/__SHA__/assets/banner.png
+screenshots:
+  - https://raw.githubusercontent.com/kdegeek/hermessysadmin/__SHA__/docs/screenshots/overview.png
+  - https://raw.githubusercontent.com/kdegeek/hermessysadmin/__SHA__/docs/screenshots/preview.png
+  - https://raw.githubusercontent.com/kdegeek/hermessysadmin/__SHA__/docs/screenshots/fleet-remote.png
+  - https://raw.githubusercontent.com/kdegeek/hermessysadmin/__SHA__/docs/screenshots/catalog.png
+  - https://raw.githubusercontent.com/kdegeek/hermessysadmin/__SHA__/docs/screenshots/ask-hermes.png
+  - https://raw.githubusercontent.com/kdegeek/hermessysadmin/__SHA__/docs/screenshots/gpo.png
