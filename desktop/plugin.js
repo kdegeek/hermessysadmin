@@ -1429,6 +1429,7 @@ function PreviewBody({ q, args }) {
   const lines = [p.summary, ...list(p.changes).map((c) => (typeof c === 'string' ? c : pretty(c)))].filter(Boolean);
   const blocks = [];
   if (lines.length) blocks.push(jsx('pre', { className: 'hs-whatif', children: lines.join('\n') }, 'changes'));
+  list(p.warnings).forEach((w, i) => blocks.push(jsx('div', { className: 'hs-small', style: { color: 'var(--ui-yellow)' }, children: String(w) }, `warn-${i}`)));
   if (p.current !== undefined && p.current !== null) {
     blocks.push(jsx('div', { className: 'hs-muted hs-small', children: 'Current state' }, 'cur-l'));
     blocks.push(jsx('pre', { className: 'hs-whatif', children: pretty(p.current) }, 'cur'));

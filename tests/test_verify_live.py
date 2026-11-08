@@ -95,7 +95,6 @@ def test_main_counts_ok_skip_err_and_exits_nonzero_only_on_err(monkeypatch, tmp_
     monkeypatch.setattr(vl, "make_transport", lambda s: _FakeTransport.made.append(s) or _FakeTransport())
     monkeypatch.setattr(vl, "Service", _FakeService)
     monkeypatch.setattr(vl, "Runner", lambda t: t)
-    monkeypatch.setattr(vl, "_load_hermes_env", lambda: None)
     out = tmp_path / "r.json"
     assert vl.main(["--out", str(out)]) == 1  # cat.dns.zones is an ERR
     rows = json.loads(out.read_text())
@@ -115,7 +114,6 @@ def test_main_uses_runtime_transport_selection_and_prints_it(monkeypatch, capsys
     monkeypatch.setattr(vl, "make_transport", lambda s: _FakeTransport.made.append(s) or _FakeTransport())
     monkeypatch.setattr(vl, "Service", _FakeService)
     monkeypatch.setattr(vl, "Runner", lambda t: t)
-    monkeypatch.setattr(vl, "_load_hermes_env", lambda: None)
     vl.main([])
     out = capsys.readouterr().out
     assert _FakeTransport.made and _FakeTransport.made[0].mode == "read-only"

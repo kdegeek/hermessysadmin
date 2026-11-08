@@ -10,7 +10,7 @@ tier: community
 category: desktop
 requires_hermes: ">=0.22.2"
 docs_url: https://github.com/kdegeek/hermessysadmin#readme
-version: "0.2.0"
+version: "0.2.1"
 image: https://raw.githubusercontent.com/kdegeek/hermessysadmin/__SHA__/assets/banner.png
 screenshots:
   - https://raw.githubusercontent.com/kdegeek/hermessysadmin/__SHA__/docs/screenshots/overview.png

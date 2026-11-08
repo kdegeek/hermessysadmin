@@ -140,4 +140,4 @@ def test_catalog_helper_lines_in_existing_skills():
 def test_version_is_0_2_0():
     import sysadmin
 
-    assert sysadmin.__version__ == "0.2.0" and manifest()["version"] == "0.2.0"
+    assert sysadmin.__version__ == "0.2.1" and manifest()["version"] == "0.2.1"

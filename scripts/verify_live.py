@@ -13,6 +13,9 @@ script has no safe sample parameters) or ERR. The exit code is non-zero only whe
 
 Usage (on the Hermes host, from the hermes-agent directory):
     <hermes venv python> <plugin>/scripts/verify_live.py [--out report.json]
+
+With run_as "hermes_user" no password is needed. Otherwise export SYSADMIN_WINRM_PASSWORD in this
+shell first; the script never reads .env or any other credential store.
 """
 
 from __future__ import annotations
@@ -135,17 +138,7 @@ def first_online_workstation(inventory):
     return next((i.get("name") for i in items if i.get("online") and i.get("name")), None)
 
 
-def _load_hermes_env() -> None:
-    """Outside the gateway nothing has loaded Hermes's .env yet; use Hermes's own loader."""
-    try:
-        from hermes_cli.env_loader import load_hermes_dotenv
-    except ImportError:
-        return
-    load_hermes_dotenv()
-
-
 def main(argv):
-    _load_hermes_env()
     out_path = argv[argv.index("--out") + 1] if "--out" in argv else None
     base = load_settings()
     # Optional overrides for testing each transport without editing config.yaml.

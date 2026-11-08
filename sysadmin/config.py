@@ -172,6 +172,19 @@ def _plugin_settings() -> Mapping[str, Any]:
     return entry.get("settings") or {}
 
 
+def env_passthrough() -> list[str]:
+    """Names listed under terminal.env_passthrough in the profile's config: what Hermes forwards to cron scripts."""
+    try:
+        from hermes_cli.config import load_config_readonly
+    except ImportError:
+        return []
+    try:
+        names = ((load_config_readonly() or {}).get("terminal") or {}).get("env_passthrough") or []
+    except Exception:
+        return []
+    return [str(n) for n in names] if isinstance(names, list) else []
+
+
 def _password() -> str:
     try:
         from agent.secret_scope import UnscopedSecretError, get_secret

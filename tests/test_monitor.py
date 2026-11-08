@@ -1,6 +1,7 @@
 import sqlite3
 import subprocess
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -526,3 +527,32 @@ def test_cron_cli_output_decoded_as_utf8(cron):
     _, kw = cron.calls[-1]
     assert kw["encoding"] == "utf-8" and kw["errors"] == "replace"
     assert kw["env"]["PYTHONIOENCODING"] == "utf-8" and kw["env"]["PYTHONUTF8"] == "1"
+
+
+def test_credential_warning_until_passthrough_declared(monkeypatch):
+    monkeypatch.setattr(monitoring.config, "env_passthrough", lambda: [])
+    warn = monitoring.credential_warnings(svc().settings)
+    assert len(warn) == 1 and "SYSADMIN_WINRM_PASSWORD" in warn[0] and "terminal.env_passthrough" in warn[0]
+    monkeypatch.setattr(monitoring.config, "env_passthrough", lambda: ["OTHER", "SYSADMIN_WINRM_PASSWORD"])
+    assert monitoring.credential_warnings(svc().settings) == []
+
+
+def test_no_credential_warning_for_hermes_user(monkeypatch):
+    monkeypatch.setattr(monitoring.config, "env_passthrough", lambda: [])
+    assert monitoring.credential_warnings(svc(transport="local", run_as="hermes_user").settings) == []
+
+
+def test_enable_preview_and_result_carry_warnings(cron, monkeypatch):
+    monkeypatch.setattr(monitoring.config, "env_passthrough", lambda: [])
+    op = OPS["monitoring_enable"]
+    assert op.local_preview(svc(), {"deliver": "origin", "mode": "watchdog"})["warnings"]
+    assert op.local(svc(), {"deliver": "origin", "mode": "watchdog"})["warnings"]
+
+
+def test_plugin_never_loads_dotenv():
+    """Catalog rule 11: credentials come through Hermes. Nothing in the plugin loads or parses .env."""
+    root = Path(__file__).resolve().parent.parent
+    files = [p for d in ("sysadmin", "scripts") for p in (root / d).rglob("*.py")] + [root / "__init__.py"]
+    offenders = [str(p.relative_to(root)) for p in files
+                 if "load_hermes_dotenv" in p.read_text(encoding="utf-8") or "dotenv" in p.read_text(encoding="utf-8")]
+    assert offenders == []

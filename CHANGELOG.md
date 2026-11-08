@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 — 2026-11-08
+
+- **Credentials only through Hermes:** the monitoring cron script and `scripts/verify_live.py` no longer call Hermes's `.env` loader. The cron script gets the password only through Hermes's `terminal.env_passthrough`; `monitoring_enable` (preview and result) and `monitoring_status` warn when the configured account needs a password and it is not declared there. A test keeps `.env` loading out of the plugin.
+
 ## 0.2.0 — 2026-11-06
 
 Windows/AD RMM release: fleet, catalog, remote access and monitoring.

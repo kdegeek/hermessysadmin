@@ -2,6 +2,10 @@
 
 Prints the new and resolved findings and nothing else: a clean run, an unconfigured plugin and any
 error all print nothing and exit 0, so the cron job stays silent. Never prints secrets.
+
+Hermes runs cron scripts with a sanitized environment. When the configured account needs a password,
+list SYSADMIN_WINRM_PASSWORD under terminal.env_passthrough in the profile's config.yaml and Hermes
+forwards it; this script never reads .env or any other credential store itself.
 """
 
 from __future__ import annotations
@@ -15,23 +19,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
-def _load_hermes_env() -> None:
-    """Under cron nothing has loaded Hermes's .env yet; use Hermes's own loader (as verify_live.py does)."""
-    try:
-        from hermes_cli.env_loader import load_hermes_dotenv
-    except ImportError:
-        return
-    try:
-        load_hermes_dotenv()
-    except Exception:
-        pass
-
-
 def main(argv: list[str] | None = None) -> int:
     """--state prints the currently open alerts instead of the delta (agent mode: output change wakes the agent)."""
     state_mode = "--state" in (sys.argv[1:] if argv is None else argv)
     try:
-        _load_hermes_env()
         from sysadmin import monitor, runtime
         from sysadmin.config import load_settings
 

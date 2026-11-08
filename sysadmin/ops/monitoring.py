@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping
 
-from .. import monitor
+from .. import config, monitor
 from ..errors import InvalidArguments, SysadminError
 from ..registry import Op, Param, register
 
@@ -119,6 +119,8 @@ def _status(service: Any, args: Mapping[str, Any]) -> Any:
             "alert_patch_age_days": int(getattr(settings, "alert_patch_age_days", 45)),
         },
     }
+    if job:
+        out["warnings"] = credential_warnings(settings)
     if error:
         out["error"] = error
     return out
@@ -139,6 +141,19 @@ def _check(args: Mapping[str, Any]) -> None:
         raise InvalidArguments("'deliver' must be a Hermes delivery target such as origin, local or telegram.")
 
 
+def credential_warnings(settings: Any) -> list[str]:
+    """Hermes strips secrets from cron scripts; the password reaches the job only through terminal.env_passthrough."""
+    if settings.transport == "local" and settings.run_as == "hermes_user":
+        return []
+    if config.PASSWORD_ENV in config.env_passthrough():
+        return []
+    return [
+        f"Scheduled runs will not get the password: Hermes strips secrets from cron scripts. Add "
+        f"{config.PASSWORD_ENV} under terminal.env_passthrough in this profile's config.yaml and Hermes "
+        f"forwards it to the job. Until then each run sees the plugin as unconfigured and stays silent."
+    ]
+
+
 def _enable(service: Any, args: Mapping[str, Any]) -> Any:
     _check(args)
     interval = service.settings.monitor_interval
@@ -155,6 +170,7 @@ def _enable(service: Any, args: Mapping[str, Any]) -> Any:
     return {
         "enabled": True, "job": JOB_NAME, "interval": interval, "deliver": args["deliver"],
         "mode": args.get("mode") or "watchdog", "stdout": _ANSI.sub("", proc.stdout or "").strip()[:500],
+        "warnings": credential_warnings(service.settings),
     }
 
 
@@ -170,6 +186,7 @@ def _enable_preview(service: Any, args: Mapping[str, Any]) -> Any:
             " ".join(f'"{a}"' if " " in a else a for a in ["hermes", "cron", "create", *_create_args(args, interval)]),
         ],
         "current": current,
+        "warnings": credential_warnings(service.settings),
     }
 
 
