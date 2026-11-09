@@ -8,7 +8,7 @@ import os
 import uuid
 from typing import Any
 
-from . import catalog, runtime
+from . import approvals, catalog, runtime
 from .audit import redact
 from .errors import InvalidArguments
 from .policy import decide
@@ -55,16 +55,18 @@ def pre_tool_call(tool_name: str = "", args: dict | None = None, **kwargs: Any) 
             return None  # the handler reports bad arguments
         op = OPS[name]
         title = (op.meta or {}).get("title", "")
-        return _gate(op, merged, f"catalog {(op.meta or {}).get('id')} ({title})", tool_name)
+        return _gate(op, merged, f"catalog {(op.meta or {}).get('id')} ({title})", tool_name, kwargs)
     op = OPS.get(tool_name)
     if op is None:
         return None
-    return _gate(op, args, op.name, tool_name)
+    return _gate(op, args, op.name, tool_name, kwargs)
 
 
-def _gate(op: Any, raw_args: dict | None, display: str, tool_name: str) -> dict | None:
+def _gate(op: Any, raw_args: dict | None, display: str, tool_name: str, ctx: dict | None = None) -> dict | None:
     if op.tier == "R" and op.escalate is None:
         return None
+    session = approvals.session_of(ctx or {})
+    approvals.grant(session, op.name, raw_args, None)  # a fresh decision replaces any earlier grant
     try:
         service = runtime.get_service()
         try:
@@ -95,6 +97,7 @@ def _gate(op: Any, raw_args: dict | None, display: str, tool_name: str) -> dict 
             if decision.tier == "W"
             else f"hermes-sysadmin:{op.name}:once:{uuid.uuid4().hex}"
         )
+        approvals.grant(session, op.name, raw_args, decision.tier)
         return {"action": "approve", "message": "\n".join(lines), "rule_key": rule_key}
     except Exception as exc:
         log.exception("hermes-sysadmin: pre_tool_call failed for %s", tool_name)

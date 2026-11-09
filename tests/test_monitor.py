@@ -556,3 +556,34 @@ def test_plugin_never_loads_dotenv():
     offenders = [str(p.relative_to(root)) for p in files
                  if "load_hermes_dotenv" in p.read_text(encoding="utf-8") or "dotenv" in p.read_text(encoding="utf-8")]
     assert offenders == []
+
+
+@pytest.mark.parametrize("op_name,args", [
+    ("monitoring_enable", {"deliver": "origin", "mode": "watchdog"}),
+    ("monitoring_disable", {}),
+])
+def test_cron_run_cannot_schedule_cron_jobs(cron, monkeypatch, op_name, args):
+    """Hermes's guard against cron jobs scheduling cron jobs holds in every mode."""
+    from sysadmin.errors import SysadminError
+
+    monkeypatch.setenv("HERMES_CRON_SESSION", "1")
+    monkeypatch.setattr(monitoring.config, "agent_scheduling_allowed", lambda: False)
+    op = OPS[op_name]
+    calls = len(cron.calls)
+    for fn in (op.local, op.local_preview):
+        with pytest.raises(SysadminError, match="allow_agent_scheduling"):
+            fn(svc(mode="permissive"), args)
+    assert len(cron.calls) == calls  # nothing reached `hermes cron`
+
+
+def test_cron_run_may_schedule_when_hermes_allows_it(cron, monkeypatch):
+    monkeypatch.setenv("HERMES_CRON_SESSION", "true")
+    monkeypatch.setattr(monitoring.config, "agent_scheduling_allowed", lambda: True)
+    assert OPS["monitoring_enable"].local(svc(), {"deliver": "origin", "mode": "watchdog"})["enabled"] is True
+
+
+def test_chat_and_dashboard_are_not_cron_runs(monkeypatch):
+    monkeypatch.delenv("HERMES_CRON_SESSION", raising=False)
+    assert monitoring._in_cron_run() is False
+    monkeypatch.setenv("HERMES_CRON_SESSION", "0")
+    assert monitoring._in_cron_run() is False

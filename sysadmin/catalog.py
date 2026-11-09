@@ -8,12 +8,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping
 
-try:  # PyYAML in dev/test environments
-    import yaml
-    _YAMLError: type[Exception] = yaml.YAMLError
-except ImportError:  # the Hermes runtime ships ruamel-backed hermes_yaml instead of PyYAML
-    import hermes_yaml as yaml  # type: ignore[no-redef]
-    from ruamel.yaml.error import YAMLError as _YAMLError
+import yaml  # PyYAML, a declared python_dependency
 
 from .errors import InvalidArguments
 from .policy import is_domain_controller_name, is_ip_or_loopback
@@ -95,7 +90,7 @@ def parse_entry(path: Path) -> dict[str, Any]:
         raise CatalogError(f"{path.name}: missing '<# hermes-catalog ... #>' header")
     try:
         meta = yaml.safe_load(m.group(1)) or {}
-    except _YAMLError as exc:
+    except yaml.YAMLError as exc:
         raise CatalogError(f"{path.name}: bad YAML header: {exc}") from exc
     where = f"{path.parent.name}/{path.name}"
     expected_id = f"{path.parent.name}.{path.stem}"

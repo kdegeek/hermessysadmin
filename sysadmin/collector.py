@@ -16,10 +16,11 @@ a dashboard request has. It works on the service the latest request resolved (to
 from __future__ import annotations
 
 import logging
-import os
 import threading
 import time
 from typing import Any, Callable
+
+from . import config
 
 log = logging.getLogger(__name__)
 
@@ -35,12 +36,14 @@ SCHEDULE: dict[str, tuple[float, float | None]] = {
     "devices": (1200.0, None),
 }
 ORDER = ("health", "overview", "monitoring", "fleet", "devices")
-DISABLE_ENV = "HERMES_SYSADMIN_COLLECTOR"
 
 
 class Collector:
-    def __init__(self, api: Any, *, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self, api: Any, *, clock: Callable[[], float] = time.monotonic, enabled: Callable[[], bool] | None = None,
+    ) -> None:
         self._api = api
+        self._enabled = enabled or config.collector_enabled
         self._clock = clock
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
@@ -60,8 +63,8 @@ class Collector:
             self._service = service
 
     def ensure_started(self) -> bool:
-        """Start the collector thread once (unless HERMES_SYSADMIN_COLLECTOR=0)."""
-        if os.environ.get(DISABLE_ENV, "1").strip().lower() in ("0", "false", "no", "off"):
+        """Start the collector thread once, unless the background_collector setting is off."""
+        if not self._enabled():
             return False
         with self._lock:
             if self._thread is not None and self._thread.is_alive():

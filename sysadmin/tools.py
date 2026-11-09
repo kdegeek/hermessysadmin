@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, Callable
 
-from . import catalog, runtime
+from . import approvals, catalog, runtime
 from .config import load_settings
 from .errors import error_result
 from .registry import OPS, schema_for
@@ -26,10 +26,12 @@ def make_handler(name: str) -> Callable[..., str]:
     def handler(args: dict | None = None, **kwargs: Any) -> str:
         try:
             service = runtime.get_service()
-            session = str(kwargs.get("session_id") or kwargs.get("task_id") or "")
-            # The pre_tool_call hook has already obtained any approval Hermes required;
-            # Service.call() still re-checks blocks (protected objects, read-only mode).
-            result = service.call(name, args or {}, actor="agent", session=session, approved=True)
+            session = approvals.session_of(kwargs)
+            # The tier the pre_tool_call hook had approved: Service.call() re-decides and refuses when the
+            # call now needs more (it escalated to high-risk, or nothing was approved), and still re-checks
+            # blocks (protected objects, read-only mode).
+            approved = approvals.take(session, name, args or {})
+            result = service.call(name, args or {}, actor="agent", session=session, approved=approved)
         except Exception as exc:
             result = error_result(exc)
         return json.dumps(result, default=str, ensure_ascii=False)
@@ -43,8 +45,9 @@ def make_catalog_run_handler() -> Callable[..., str]:
         try:
             name, merged = catalog.run_target(args)
             service = runtime.get_service()
-            session = str(kwargs.get("session_id") or kwargs.get("task_id") or "")
-            result = service.call(name, merged, actor="agent", session=session, approved=True)
+            session = approvals.session_of(kwargs)
+            approved = approvals.take(session, name, merged)
+            result = service.call(name, merged, actor="agent", session=session, approved=approved)
         except Exception as exc:
             result = error_result(exc)
         return json.dumps(result, default=str, ensure_ascii=False)

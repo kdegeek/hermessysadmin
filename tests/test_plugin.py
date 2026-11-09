@@ -48,7 +48,7 @@ def test_manifest_core_fields():
     assert m["name"] == "hermes-sysadmin"
     assert m["manifest_version"] == 2
     assert m["requires_hermes"] == ">=0.22.2"
-    assert m["python_dependencies"] == ["pypsrp>=0.8.1,<0.9"]
+    assert m["python_dependencies"] == ["pypsrp>=0.8.1,<0.9", "pyyaml>=6.0,<7"]
     assert m["config_schema"]["password"] == {
         "type": "secret", "env": "SYSADMIN_WINRM_PASSWORD", "label": "Password",
         "description": "Password for the account. Stored in Hermes secrets, never in config.yaml.",
@@ -140,4 +140,4 @@ def test_catalog_helper_lines_in_existing_skills():
 def test_version_is_0_2_0():
     import sysadmin
 
-    assert sysadmin.__version__ == "0.2.1" and manifest()["version"] == "0.2.1"
+    assert sysadmin.__version__ == "0.2.2" and manifest()["version"] == "0.2.2"

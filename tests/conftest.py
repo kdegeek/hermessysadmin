@@ -1,10 +1,8 @@
 """Shared test fixtures for hermes-sysadmin."""
 
-import os
 import sqlite3
 
-# Tests drive the dashboard routes directly; no background collector thread.
-os.environ["HERMES_SYSADMIN_COLLECTOR"] = "0"
+# No background collector thread in tests: it only starts inside Hermes (config.collector_enabled).
 
 import pytest
 

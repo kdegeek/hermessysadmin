@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.2 — 2026-11-09
+
+Catalog review fixes.
+
+- **Cron runs cannot schedule cron jobs:** `monitoring_enable` and `monitoring_disable` (and their previews) refuse inside a Hermes cron run (`HERMES_CRON_SESSION`) unless `cron.allow_agent_scheduling` is true, in every `mode` and whatever `approvals.cron_mode` says. An agent-mode monitoring job could otherwise create or replace cron jobs.
+- **Approval carries its tier:** the `pre_tool_call` hook records the tier it asked the human to approve, for that session, tool and exact arguments, and the tool handler passes that tier to the service instead of `approved=True`. A call that became high-risk after a write-tier approval, or that was never approved, is refused and must be approved again. A grant is used once.
+- **Collector setting:** the background collector is controlled by the `background_collector` plugin setting (default on) instead of the `HERMES_SYSADMIN_COLLECTOR` environment variable, and never starts outside Hermes.
+- **PyYAML is a declared dependency** (`pyyaml>=6.0,<7`); the fallback to Hermes's private `hermes_yaml` module is gone.
+
 ## 0.2.1 — 2026-11-08
 
 - **Credentials only through Hermes:** the monitoring cron script and `scripts/verify_live.py` no longer call Hermes's `.env` loader. The cron script gets the password only through Hermes's `terminal.env_passthrough`; `monitoring_enable` (preview and result) and `monitoring_status` warn when the configured account needs a password and it is not declared there. A test keeps `.env` loading out of the plugin.

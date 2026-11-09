@@ -141,6 +141,30 @@ def _check(args: Mapping[str, Any]) -> None:
         raise InvalidArguments("'deliver' must be a Hermes delivery target such as origin, local or telegram.")
 
 
+_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def _in_cron_run() -> bool:
+    """True inside a Hermes cron run (the session marker Hermes's own cronjob tool checks)."""
+    try:
+        from gateway.session_context import get_session_env
+    except ImportError:
+        value = os.environ.get("HERMES_CRON_SESSION", "")
+    else:
+        value = get_session_env("HERMES_CRON_SESSION", "")
+    return str(value or "").strip().lower() in _TRUTHY
+
+
+def _refuse_from_cron(action: str) -> None:
+    """Hermes does not let a cron run schedule cron jobs unless cron.allow_agent_scheduling is true; neither do we.
+    Applies in every mode and whatever approvals.cron_mode says."""
+    if _in_cron_run() and not config.agent_scheduling_allowed():
+        raise SysadminError(
+            f"monitoring_{action} cannot run from inside a Hermes cron job: Hermes does not let cron jobs "
+            "create or remove cron jobs unless cron.allow_agent_scheduling is true. Run it from a chat or the dashboard."
+        )
+
+
 def credential_warnings(settings: Any) -> list[str]:
     """Hermes strips secrets from cron scripts; the password reaches the job only through terminal.env_passthrough."""
     if settings.transport == "local" and settings.run_as == "hermes_user":
@@ -155,6 +179,7 @@ def credential_warnings(settings: Any) -> list[str]:
 
 
 def _enable(service: Any, args: Mapping[str, Any]) -> Any:
+    _refuse_from_cron("enable")
     _check(args)
     interval = service.settings.monitor_interval
     scripts = _hermes_home() / "scripts"
@@ -175,6 +200,7 @@ def _enable(service: Any, args: Mapping[str, Any]) -> Any:
 
 
 def _enable_preview(service: Any, args: Mapping[str, Any]) -> Any:
+    _refuse_from_cron("enable")
     _check(args)
     interval = service.settings.monitor_interval
     current = _status(service, {})
@@ -191,6 +217,7 @@ def _enable_preview(service: Any, args: Mapping[str, Any]) -> Any:
 
 
 def _disable(service: Any, args: Mapping[str, Any]) -> Any:
+    _refuse_from_cron("disable")
     jobs = _find_jobs()
     if not jobs:
         return {"enabled": False, "job": None, "removed": False}
@@ -199,6 +226,7 @@ def _disable(service: Any, args: Mapping[str, Any]) -> Any:
 
 
 def _disable_preview(service: Any, args: Mapping[str, Any]) -> Any:
+    _refuse_from_cron("disable")
     current = _status(service, {})
     job = current["job"]
     return {

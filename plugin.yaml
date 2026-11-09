@@ -1,6 +1,6 @@
 name: hermes-sysadmin
 label: "Sysadmin · Active Directory"
-version: 0.2.1
+version: 0.2.2
 manifest_version: 2
 description: >-
   Manage an on-prem Active Directory domain with local PowerShell or over WinRM: users, groups and lockouts, Group Policy,
@@ -13,6 +13,7 @@ tags: [active-directory, windows, winrm, group-policy, rdp, backup, sysadmin]
 requires_hermes: ">=0.22.2"
 python_dependencies:
   - "pypsrp>=0.8.1,<0.9"
+  - "pyyaml>=6.0,<7"
 provides_tools:
   - ad_connection_test
   - ad_dc_health
@@ -198,3 +199,8 @@ config_schema:
     default: true
     label: Alert on account lockouts
     description: Report accounts that are locked out.
+  background_collector:
+    type: bool
+    default: true
+    label: Keep dashboard views warm
+    description: While the dashboard is in use, a background thread in the gateway refreshes read-only snapshots so views open instantly. Turn off to collect only when you open a view.

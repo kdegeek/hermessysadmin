@@ -43,6 +43,7 @@ class Settings:
     alert_patch_age_days: int = 45
     alert_privileged_changes: bool = True
     alert_lockouts: bool = True
+    background_collector: bool = True
     #: Resolved transport: "local" (PowerShell on this machine) or "winrm" (jump host). Never "auto".
     transport: str = "winrm"
     #: Local transport only: "account" (runas /netonly with username + password) or "hermes_user".
@@ -159,30 +160,46 @@ def settings_from(raw: Mapping[str, Any] | None, password: str) -> Settings:
         alert_patch_age_days=_int(raw.get("alert_patch_age_days"), 45, 1, 365),
         alert_privileged_changes=_bool(raw.get("alert_privileged_changes"), True),
         alert_lockouts=_bool(raw.get("alert_lockouts"), True),
+        background_collector=_bool(raw.get("background_collector"), True),
     )
 
 
-def _plugin_settings() -> Mapping[str, Any]:
+def _hermes_config() -> Mapping[str, Any] | None:
+    """Hermes's config.yaml (read-only), or None outside Hermes (tests, standalone scripts)."""
     try:
         from hermes_cli.config import load_config_readonly
     except ImportError:
+        return None
+    try:
+        return load_config_readonly() or {}
+    except Exception:
+        log.exception("hermes-sysadmin: could not read the Hermes config")
         return {}
-    cfg = load_config_readonly() or {}
+
+
+def _plugin_settings() -> Mapping[str, Any]:
+    cfg = _hermes_config() or {}
     entry = ((cfg.get("plugins") or {}).get("entries") or {}).get(PLUGIN_ID) or {}
     return entry.get("settings") or {}
 
 
 def env_passthrough() -> list[str]:
     """Names listed under terminal.env_passthrough in the profile's config: what Hermes forwards to cron scripts."""
-    try:
-        from hermes_cli.config import load_config_readonly
-    except ImportError:
-        return []
-    try:
-        names = ((load_config_readonly() or {}).get("terminal") or {}).get("env_passthrough") or []
-    except Exception:
-        return []
+    names = ((_hermes_config() or {}).get("terminal") or {}).get("env_passthrough") or []
     return [str(n) for n in names] if isinstance(names, list) else []
+
+
+def agent_scheduling_allowed() -> bool:
+    """cron.allow_agent_scheduling: whether Hermes lets a cron run schedule more cron jobs (default false)."""
+    return _bool(((_hermes_config() or {}).get("cron") or {}).get("allow_agent_scheduling"), False)
+
+
+def collector_enabled() -> bool:
+    """The background_collector plugin setting. Off outside Hermes, where there is no dashboard to keep warm."""
+    cfg = _hermes_config()
+    if cfg is None:
+        return False
+    return _bool(_plugin_settings().get("background_collector"), True)
 
 
 def _password() -> str:
